@@ -18,9 +18,16 @@ class _HumanizerConfig(object):
 
 @dataclass
 @final
+class _AIDetectorConfig(object):
+    API_KEY = "5468ddc7-c691-42db-8d28-53e9b856d87d"
+
+
+@dataclass
+@final
 class _Config(object):
     AI_ENDPOINT = _AIEndpointConfig()
     HUMANIZER = _HumanizerConfig()
+    AI_DETECTOR = _AIDetectorConfig()
 
 
 CONFIG = _Config()
