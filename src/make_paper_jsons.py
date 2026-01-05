@@ -1,4 +1,5 @@
 import json
+import random
 import sys
 from argparse import ArgumentParser
 from typing import cast
@@ -9,46 +10,58 @@ aprs = ArgumentParser()
 aprs.add_argument("--papers", type=str, required=True, help="Input folder path")
 aprs.add_argument("--metadata", type=str, required=True, help="Paper metadata file")
 aprs.add_argument("--output", type=str, required=True, help="Output file path")
+aprs.add_argument(
+    "--samples",
+    type=int,
+    required=True,
+    help="How many papers for sample (<1 to sample all)",
+)
 args = aprs.parse_args()
 
 
+datas: list[dict[str, str]] = []
 with open(cast(str, args.metadata), "r", encoding="utf-8") as metafile:
     for line in metafile:
         data = cast(dict[str, str], json.loads(line))
-        paper_domain = data["domain"]
-        paper_id = data["id"]
+        datas.append(data)
 
-        paper_text_path = f"{cast(str, args.papers)}/{paper_domain}/text/{paper_id}.txt"
-        paper_abs_path = (
-            f"{cast(str, args.papers)}/{paper_domain}/abstracts/{paper_id}.txt"
-        )
+sample_size = cast(int, args.samples)
+if sample_size >= 1:
+    datas = random.sample(datas, k=sample_size)
 
-        try:
-            with open(paper_text_path, "r", encoding="utf-8") as textfile:
-                text = textfile.read().strip()
-        except FileNotFoundError:
-            print("Full text for paper with id", paper_id, "not found", file=sys.stderr)
-            continue
+for data in datas:
+    paper_domain = data["domain"]
+    paper_id = data["id"]
 
-        try:
-            with open(paper_abs_path, "r", encoding="utf-8") as absfile:
-                abstract = absfile.read().strip()
-        except FileNotFoundError:
-            print("Abstract for paper with id", paper_id, "not found", file=sys.stderr)
-            continue
+    paper_text_path = f"{cast(str, args.papers)}/{paper_domain}/text/{paper_id}.txt"
+    paper_abs_path = f"{cast(str, args.papers)}/{paper_domain}/abstracts/{paper_id}.txt"
 
-        new_data = {
-            "abstract": abstract,
-            "text": text,
-        }
+    try:
+        with open(paper_text_path, "r", encoding="utf-8") as textfile:
+            text = textfile.read().strip()
+    except FileNotFoundError:
+        print("Full text for paper with id", paper_id, "not found", file=sys.stderr)
+        continue
 
-        full_data = data | new_data
+    try:
+        with open(paper_abs_path, "r", encoding="utf-8") as absfile:
+            abstract = absfile.read().strip()
+    except FileNotFoundError:
+        print("Abstract for paper with id", paper_id, "not found", file=sys.stderr)
+        continue
 
-        with open(
-            f"{cast(str, args.output)}/{paper_id}.txt", "x", encoding="utf-8"
-        ) as outfile:
-            json.dump(full_data, outfile, ensure_ascii=True, indent=2)
-            outfile.write("\n")
+    new_data = {
+        "abstract": abstract,
+        "text": text,
+    }
 
-        print(".", end="", flush=True, file=sys.stderr)
+    full_data = data | new_data
+
+    with open(
+        f"{cast(str, args.output)}/{paper_id}.txt", "x", encoding="utf-8"
+    ) as outfile:
+        json.dump(full_data, outfile, ensure_ascii=True, indent=2)
+        outfile.write("\n")
+
+    print(".", end="", flush=True, file=sys.stderr)
 print("", file=sys.stderr)
