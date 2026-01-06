@@ -35,3 +35,6 @@ abstracts: ./workarea/Makefile.experiments
 
 pangram: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments pangram
+
+results: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments results

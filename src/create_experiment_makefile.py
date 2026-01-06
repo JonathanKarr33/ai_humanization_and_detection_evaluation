@@ -70,6 +70,21 @@ class EmptyMultiSourceRecipeTemplate(MakefileRecipeTemplate):
         return [self._target]
 
 
+class MultiSourceOneTargetRecipeTemplate(MakefileRecipeTemplate):
+    def __init__(self, target: str, commands: list[str]):
+        super().__init__()
+        self._target: str = target
+        self._commands: list[str] = commands
+
+    @override
+    def get_commands(self) -> list[str]:
+        return self._commands
+
+    @override
+    def srcs_to_tgts(self, srcs: list[str]) -> list[str]:
+        return [self._target]
+
+
 def simple_makefile_recipe_template_factory(
     name_transformer: Callable[[str], str],
     commands: list[str],
@@ -243,7 +258,25 @@ all_pangram_recs, _ = EmptyMultiSourceRecipeTemplate("pangram").generate_recipes
 all_recs.extend(all_pangram_recs)
 all_recs.append("\n\n")
 
-# Mark all JSONS as precious so they're not deleted
+all_pangram_tgts = (
+    pangram_original_tgts
+    + pangram_rewritten_tgts
+    + pangram_new_tgts
+    + pangram_improved_tgts
+)
+results_csv_rec, results_csv_tgt = MultiSourceOneTargetRecipeTemplate(
+    "./workarea/results.csv",
+    ["$(ENVPYTHON) ./src/pangram_to_csv.py --input $^ --output $@"],
+).generate_recipes(all_pangram_tgts + ["./src/pangram_to_csv.py"])
+all_recs.extend(results_csv_rec)
+all_real_tgts.extend(results_csv_tgt)
+result_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes(
+    results_csv_tgt
+)
+all_recs.extend(result_pseudo_rec)
+all_recs.append("\n\n")
+
+# Mark all real files as precious so they're not deleted
 precious_recs, _ = EmptyMultiSourceRecipeTemplate(".PRECIOUS").generate_recipes(
     all_real_tgts
 )
