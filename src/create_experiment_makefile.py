@@ -101,6 +101,28 @@ def parent_dir_name_replacer(new_dir: str) -> Callable[[str], str]:
     return _t
 
 
+def dir_to_dir_abstract_processor_recipes(
+    srcs: list[str],
+    new_dir: str,
+    commands: list[str],
+    common_name: str,
+    processor_files: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    ind_recs, original_tgts = simple_makefile_recipe_template_factory(
+        parent_dir_name_replacer(new_dir),
+        [
+            f"mkdir -p ./workarea/{new_dir}",
+            *commands,
+        ],
+        persistent_srcs=processor_files,
+    ).generate_recipes_for_single_sources(srcs, persistent_srcs=processor_files)
+    common_runner_rec, _ = EmptyMultiSourceRecipeTemplate(common_name).generate_recipes(
+        original_tgts
+    )
+    all_recs = ind_recs + common_runner_rec
+    return all_recs, original_tgts
+
+
 assert __name__ == "__main__", "Always run this as script"
 
 aprs = ArgumentParser()
@@ -117,21 +139,15 @@ all_recs: list[str] = []
 all_real_tgts: list[str] = []
 
 # Original abstracts thru pangram
-ORIGINAL_PANGRAM_OUTPUT_DIR = "original_pangram_results"
-pangram_original_recs, pangram_original_tgts = simple_makefile_recipe_template_factory(
-    parent_dir_name_replacer(ORIGINAL_PANGRAM_OUTPUT_DIR),
-    [
-        f"mkdir -p ./workarea/{ORIGINAL_PANGRAM_OUTPUT_DIR}",
-        "$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@",
-    ],
-    persistent_srcs=["./src/pangram_abstract.py"],
-).generate_recipes_for_single_sources(
-    paper_jsons, persistent_srcs=["./src/pangram_abstract.py"]
+all_pangram_original_recs, pangram_original_tgts = (
+    dir_to_dir_abstract_processor_recipes(
+        srcs=paper_jsons,
+        new_dir="original_pangram_results",
+        commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
+        processor_files=["./src/pangram_abstract.py"],
+        common_name="original_pangram",
+    )
 )
-run_all_original_pangram_recs, _ = EmptyMultiSourceRecipeTemplate(
-    "original_pangram"
-).generate_recipes(pangram_original_tgts)
-all_pangram_original_recs = pangram_original_recs + run_all_original_pangram_recs
 all_recs.extend(all_pangram_original_recs)
 all_recs.append("\n\n")
 all_real_tgts.extend(pangram_original_tgts)
