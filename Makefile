@@ -29,3 +29,9 @@ expmkf: ./workarea/Makefile.experiments
 
 original_pangram: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments original_pangram
+
+abstracts: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments abstracts
+
+pangram: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments pangram

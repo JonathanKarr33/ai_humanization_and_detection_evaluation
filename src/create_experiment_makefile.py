@@ -101,7 +101,7 @@ def parent_dir_name_replacer(new_dir: str) -> Callable[[str], str]:
     return _t
 
 
-def dir_to_dir_abstract_processor_recipes(
+def dir_to_dir_processor_recipes(
     srcs: list[str],
     new_dir: str,
     commands: list[str],
@@ -138,27 +138,116 @@ paper_jsons = glob(paper_glob)
 all_recs: list[str] = []
 all_real_tgts: list[str] = []
 
+
+### ABSTRACT REWRITING WITH AI
+# Rewrite with abstract only
+all_rewrite_abstract_recs, rewrite_abstract_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="rewritten_abstracts",
+    commands=[
+        "$(ENVPYTHON) ./src/rewrite_abstract.py --input $< --output $@ --mode rewriteabstract"
+    ],
+    processor_files=["./src/rewrite_abstract.py"],
+    common_name="rewritten_abstracts",
+)
+all_recs.extend(all_rewrite_abstract_recs)
+all_real_tgts.extend(rewrite_abstract_tgts)
+all_recs.append("\n\n")
+
+# Generate new abstract from text
+all_new_abstract_recs, new_abstract_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="new_abstracts",
+    commands=[
+        "$(ENVPYTHON) ./src/rewrite_abstract.py --input $< --output $@ --mode newabstract"
+    ],
+    processor_files=["./src/rewrite_abstract.py"],
+    common_name="new_abstracts",
+)
+all_recs.extend(all_new_abstract_recs)
+all_real_tgts.extend(new_abstract_tgts)
+all_recs.append("\n\n")
+
+# Improve abstract based on old abstract and text
+all_improved_abstract_recs, improved_abstract_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="improved_abstracts",
+    commands=[
+        "$(ENVPYTHON) ./src/rewrite_abstract.py --input $< --output $@ --mode improveabstract"
+    ],
+    processor_files=["./src/rewrite_abstract.py"],
+    common_name="improved_abstracts",
+)
+all_recs.extend(all_improved_abstract_recs)
+all_real_tgts.extend(improved_abstract_tgts)
+all_recs.append("\n\n")
+
+all_abstracts_recs, _ = EmptyMultiSourceRecipeTemplate("abstracts").generate_recipes(
+    ["rewritten_abstracts", "new_abstracts", "improved_abstracts"]
+)
+all_recs.extend(all_abstracts_recs)
+all_recs.append("\n\n")
+
+### Pangram AI detection
 # Original abstracts thru pangram
-all_pangram_original_recs, pangram_original_tgts = (
-    dir_to_dir_abstract_processor_recipes(
-        srcs=paper_jsons,
-        new_dir="original_pangram_results",
-        commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
-        processor_files=["./src/pangram_abstract.py"],
-        common_name="original_pangram",
-    )
+all_pangram_original_recs, pangram_original_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="original_pangram_results",
+    commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
+    processor_files=["./src/pangram_abstract.py"],
+    common_name="original_pangram",
 )
 all_recs.extend(all_pangram_original_recs)
-all_recs.append("\n\n")
 all_real_tgts.extend(pangram_original_tgts)
+all_recs.append("\n\n")
 
+# Rewritten abstracts thru pangram
+all_pangram_rewritten_recs, pangram_rewritten_tgts = dir_to_dir_processor_recipes(
+    srcs=rewrite_abstract_tgts,
+    new_dir="rewritten_pangram_results",
+    commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
+    processor_files=["./src/pangram_abstract.py"],
+    common_name="rewritten_pangram",
+)
+all_recs.extend(all_pangram_rewritten_recs)
+all_real_tgts.extend(pangram_rewritten_tgts)
+all_recs.append("\n\n")
+
+# New abstracts thru pangram
+all_pangram_new_recs, pangram_new_tgts = dir_to_dir_processor_recipes(
+    srcs=new_abstract_tgts,
+    new_dir="new_pangram_results",
+    commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
+    processor_files=["./src/pangram_abstract.py"],
+    common_name="new_pangram",
+)
+all_recs.extend(all_pangram_new_recs)
+all_real_tgts.extend(pangram_new_tgts)
+all_recs.append("\n\n")
+
+# Improved abstracts thru pangram
+all_pangram_improved_recs, pangram_improved_tgts = dir_to_dir_processor_recipes(
+    srcs=improved_abstract_tgts,
+    new_dir="improved_pangram_results",
+    commands=["$(ENVPYTHON) ./src/pangram_abstract.py --input $< --output $@"],
+    processor_files=["./src/pangram_abstract.py"],
+    common_name="improved_pangram",
+)
+all_recs.extend(all_pangram_improved_recs)
+all_real_tgts.extend(pangram_improved_tgts)
+all_recs.append("\n\n")
+
+all_pangram_recs, _ = EmptyMultiSourceRecipeTemplate("pangram").generate_recipes(
+    ["original_pangram", "rewritten_pangram", "new_pangram", "improved_pangram"]
+)
+all_recs.extend(all_pangram_recs)
+all_recs.append("\n\n")
 
 # Mark all JSONS as precious so they're not deleted
 precious_recs, _ = EmptyMultiSourceRecipeTemplate(".PRECIOUS").generate_recipes(
     all_real_tgts
 )
 all_recs.extend(precious_recs)
-
 
 # Write all to the output file
 all_recs_str = "\n".join(all_recs)
