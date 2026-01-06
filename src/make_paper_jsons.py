@@ -58,7 +58,7 @@ for data in datas:
     full_data = data | new_data
 
     with open(
-        f"{cast(str, args.output)}/{paper_id}.txt", "x", encoding="utf-8"
+        f"{cast(str, args.output)}/{paper_id}.json", "x", encoding="utf-8"
     ) as outfile:
         json.dump(full_data, outfile, ensure_ascii=True, indent=2)
         outfile.write("\n")
