@@ -10,6 +10,9 @@ all:
 	@echo "Do not run this target for now"
 	@echo "Available targets: env, preprocess"
 
+clean:
+	rm -rf ./workarea
+
 env:
 	rm -rf ./env
 	conda create --yes --prefix ./env python=3.12 pip
