@@ -63,5 +63,4 @@ for data in datas:
         json.dump(full_data, outfile, ensure_ascii=True, indent=2)
         outfile.write("\n")
 
-    print(".", end="", flush=True, file=sys.stderr)
 print("", file=sys.stderr)
