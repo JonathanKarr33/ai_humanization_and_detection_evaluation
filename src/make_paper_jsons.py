@@ -29,9 +29,15 @@ sample_size = cast(int, args.samples)
 if sample_size >= 1:
     datas = random.sample(datas, k=sample_size)
 
+seen_ids = set()
+
 for data in datas:
     paper_domain = data["domain"]
     paper_id = data["id"]
+
+    if paper_id in seen_ids:
+        print("Duplicated ID", paper_id, file=sys.stderr)
+        continue
 
     paper_text_path = f"{cast(str, args.papers)}/{paper_domain}/text/{paper_id}.txt"
     paper_abs_path = f"{cast(str, args.papers)}/{paper_domain}/abstracts/{paper_id}.txt"
@@ -62,5 +68,7 @@ for data in datas:
     ) as outfile:
         json.dump(full_data, outfile, ensure_ascii=True, indent=2)
         outfile.write("\n")
+
+    seen_ids.add(paper_id)
 
 print("", file=sys.stderr)
