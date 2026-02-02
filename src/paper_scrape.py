@@ -42,8 +42,17 @@ CONCEPTS = {
 }
 
 MAX_PAPERS_PER_DOMAIN = 100  # Target number of papers to collect per domain
+# Abstracts must be at least 25 words.
+MIN_ABSTRACT_WORDS = 25
 PER_PAGE = 200
 YEAR_CUTOFF = 2020
+MAX_WORKERS = 10
+# How many candidate papers to download/process per batch.
+# Bigger = fewer OpenAlex roundtrips; smaller = less wasted work when many PDFs fail.
+PROCESS_BATCH_SIZE = 80
+# Full-text extraction is expensive and not needed for "abstracts-only" workflows.
+# We still download PDFs when required to recover abstracts, but we skip full-text extraction.
+EXTRACT_FULLTEXT = False
 
 # ==========================
 # SETUP
@@ -58,6 +67,10 @@ api_headers = {
     "Accept": "application/json"
 }
 
+# Reuse sessions for better performance (connection pooling).
+openalex_session = requests.Session()
+openalex_session.headers.update(api_headers)
+
 # Browser-like headers for PDF downloads to avoid 403 errors
 pdf_headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -71,6 +84,13 @@ pdf_headers = {
 # ==========================
 # HELPERS
 # ==========================
+def abstract_word_count(text: str) -> int:
+    if not text:
+        return 0
+    # Count "word-like" tokens.
+    return len(re.findall(r"\b\w+\b", text))
+
+
 def fetch_openalex(concept_id):
     cursor = "*"
     page_count = 0
@@ -80,11 +100,16 @@ def fetch_openalex(concept_id):
         params = {
             "filter": f"concepts.id:{concept_id},publication_year:<{YEAR_CUTOFF},open_access.is_oa:true,language:en",
             "per-page": PER_PAGE,
-            "cursor": cursor
+            "cursor": cursor,
+            "mailto": EMAIL,  # polite pool
         }
 
         try:
-            r = requests.get(OPENALEX_API, params=params, headers=api_headers, timeout=30)
+            r = openalex_session.get(OPENALEX_API, params=params, timeout=30)
+            if r.status_code == 429:
+                # Back off and retry this page (do not advance cursor).
+                time.sleep(5)
+                continue
             r.raise_for_status()
             
             # Check if response is actually JSON
@@ -116,7 +141,9 @@ def fetch_openalex(concept_id):
             if not cursor:
                 break
             page_count += 1
-            time.sleep(1)
+            # OpenAlex limit is 10 req/sec; this endpoint is one request per page.
+            # Keep a small sleep to be polite without making large skips unbearably slow.
+            time.sleep(0.12)
             
         except requests.exceptions.RequestException as e:
             print(f"API request failed: {e}")
@@ -428,6 +455,34 @@ def process_paper_download(work_data):
     pdf_path = os.path.join(pdf_dir, f"{pid}.pdf")
     txt_path = os.path.join(text_dir, f"{pid}.txt")
     
+    # Prefer OpenAlex-provided abstracts first to avoid unnecessary PDF downloads.
+    # Many works include `abstract_inverted_index`; reconstructing it is fast.
+    abstract = work.get("abstract")
+    if not abstract:
+        inverted_index = work.get("abstract_inverted_index")
+        if inverted_index:
+            abstract = reconstruct_abstract_from_inverted_index(inverted_index)
+
+    if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
+        # Save abstract and return without downloading/extracting full text.
+        try:
+            abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
+            with open(abstract_path, "w", encoding="utf-8") as f:
+                f.write(abstract.strip())
+        except Exception:
+            pass
+
+        return {
+            "id": pid,
+            "openalex_id": work.get("id"),
+            "domain": domain,
+            "title": work.get("display_name"),
+            "year": work.get("publication_year"),
+            "doi": work.get("doi"),
+            "abstract": abstract.strip(),
+            "pdf_url": pdf_url,
+        }
+
     # Check if already processed
     pdf_exists = os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     if pdf_exists and os.path.exists(txt_path) and os.path.getsize(txt_path) > 0:
@@ -439,7 +494,14 @@ def process_paper_download(work_data):
                 abstract = reconstruct_abstract_from_inverted_index(inverted_index)
         if not abstract:
             abstract = extract_abstract_from_pdf(pdf_path)
-        if abstract and abstract.strip():
+        if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
+            # Ensure abstract file exists and is up to date
+            try:
+                abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
+                with open(abstract_path, "w", encoding="utf-8") as f:
+                    f.write(abstract.strip())
+            except Exception:
+                pass
             return {
                 "id": pid,
                 "openalex_id": work.get("id"),
@@ -459,7 +521,7 @@ def process_paper_download(work_data):
         if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
             return None
     
-    # Get abstract
+    # Get abstract (fallback to PDF only if OpenAlex didn't provide one)
     abstract = work.get("abstract")
     if not abstract:
         inverted_index = work.get("abstract_inverted_index")
@@ -468,6 +530,8 @@ def process_paper_download(work_data):
     if not abstract:
         abstract = extract_abstract_from_pdf(pdf_path)
     if not abstract or not abstract.strip():
+        return None
+    if abstract_word_count(abstract) < MIN_ABSTRACT_WORDS:
         return None
     
     # Save abstract
@@ -479,7 +543,7 @@ def process_paper_download(work_data):
         pass
     
     # Extract text
-    if not os.path.exists(txt_path) or os.path.getsize(txt_path) == 0:
+    if EXTRACT_FULLTEXT and (not os.path.exists(txt_path) or os.path.getsize(txt_path) == 0):
         tei_xml = grobid_extract(pdf_path)
         if tei_xml:
             with open(txt_path, "w", encoding="utf-8") as f:
@@ -520,9 +584,13 @@ def scrape_papers():
         print("\nExiting due to API connection issues.")
         return False
     
-    # Check existing papers in metadata.jsonl
-    existing_papers = {}
-    existing_by_domain = {}
+    def _is_valid_existing(paper: dict) -> bool:
+        # Count only papers whose abstract meets the minimum word requirement.
+        abs_text = paper.get("abstract") or ""
+        return abstract_word_count(abs_text) >= MIN_ABSTRACT_WORDS
+
+    # Check existing papers in metadata.jsonl (dedup by paper id; count only valid abstracts)
+    existing_papers: dict = {}
     if os.path.exists(META_FILE):
         print("Checking existing papers in metadata.jsonl...")
         with open(META_FILE, "r", encoding="utf-8") as f:
@@ -531,22 +599,28 @@ def scrape_papers():
                     try:
                         paper = json.loads(line)
                         paper_id = paper.get("id")
-                        domain = paper.get("domain")
-                        if paper_id and domain:
+                        if paper_id:
                             existing_papers[paper_id] = paper
-                            existing_by_domain[domain] = existing_by_domain.get(domain, 0) + 1
                     except:
                         pass
-        
-        if existing_by_domain:
-            print(f"Found existing papers:")
-            for domain, count in existing_by_domain.items():
-                print(f"  {domain}: {count} papers")
-            print(f"Total existing: {len(existing_papers)} papers\n")
+
+    # Compute valid counts by domain from the de-duplicated mapping
+    existing_by_domain = {}
+    for paper in existing_papers.values():
+        domain = paper.get("domain")
+        if domain and _is_valid_existing(paper):
+            existing_by_domain[domain] = existing_by_domain.get(domain, 0) + 1
+
+    if existing_by_domain:
+        print("Found existing papers (counting only abstracts >= "
+              f"{MIN_ABSTRACT_WORDS} words):")
+        for domain, count in existing_by_domain.items():
+            print(f"  {domain}: {count} papers")
+        print(f"Total existing (unique ids): {len(existing_papers)} papers\n")
     
     # Process each domain separately to ensure we get 100 per domain
     print("Step 1: Collecting and processing papers where domain is #1 concept...")
-    total_processed = len(existing_papers)
+    total_processed = sum(existing_by_domain.values())
     
     # Write mode - we'll append new papers as we process them
     with open(META_FILE, "a" if existing_papers else "w", encoding="utf-8") as meta_out:
@@ -559,122 +633,44 @@ def scrape_papers():
                 print(f"\n📚 {domain}: Already have {existing_count}/{MAX_PAPERS_PER_DOMAIN} papers (from earlier run). Skipping.")
                 continue
             
-            print(f"\n📚 Processing {domain} papers (target: {MAX_PAPERS_PER_DOMAIN}, have: {existing_count}, need: {needed})...")
-            domain_papers_to_process = []
-            domain_processed = existing_count  # Start with existing count
-            
-            # First: collect papers for this domain (collect 3x needed to account for failures)
-            collect_target = needed * 3
-            print(f"  Collecting {domain} papers (collecting {collect_target} to account for failures)...")
-            pbar_collect = tqdm(total=collect_target, desc=f"{domain} collected", unit="hit")
-            processed_ids = set(existing_papers.keys())  # Track already processed IDs to avoid duplicates
-            papers_seen_count = 0  # Track total papers seen (for skipping ahead later)
-            
-            for work in fetch_openalex(concept_id):
-                papers_seen_count += 1
-                if len(domain_papers_to_process) >= collect_target:
-                    break
-                concepts = work.get("concepts", [])
-                if not is_domain_first_concept(concepts, domain):
-                    continue
-                oa = work.get("open_access", {})
-                pdf_url = oa.get("oa_url")
-                if not pdf_url:
-                    continue
-                openalex_id = extract_openalex_id(work)
-                if not openalex_id:
-                    import hashlib
-                    title = work.get("display_name", "")
-                    year = work.get("publication_year", "")
-                    fallback_id = hashlib.md5(f"{title}_{year}".encode()).hexdigest()[:12]
-                    openalex_id = f"fallback_{fallback_id}"
-                
-                # Skip if already collected
-                if openalex_id in processed_ids:
-                    continue
-                processed_ids.add(openalex_id)
-                
-                domain_papers_to_process.append((work, domain, openalex_id, pdf_url))
-                pbar_collect.update(1)
-            pbar_collect.close()
-            
-            print(f"  Collected {len(domain_papers_to_process)} {domain} papers (seen {papers_seen_count} total results)")
-            
-            # Second: process downloads and extraction in parallel until we have 100 successful
-            print(f"  Processing {domain} papers (downloading PDFs, extracting text)...")
-            pbar_process = tqdm(total=needed, initial=existing_count, desc=f"{domain} processed", unit="paper")
-            
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(process_paper_download, paper_data): paper_data 
-                          for paper_data in domain_papers_to_process}
-                
-                for future in as_completed(futures):
-                    if domain_processed >= MAX_PAPERS_PER_DOMAIN:
-                        # Cancel remaining futures if we have enough
-                        for f in futures:
-                            if not f.done():
-                                f.cancel()
-                        break
-                    
+            print(
+                f"\n📚 Processing {domain} papers (target: {MAX_PAPERS_PER_DOMAIN}, "
+                f"have: {existing_count}, need: {needed}; abstracts must be >= {MIN_ABSTRACT_WORDS} words)..."
+            )
+
+            # Avoid reprocessing IDs that already meet the abstract-length requirement.
+            # BUT allow reprocessing of IDs that exist but have too-short abstracts, so we can
+            # potentially recover a longer abstract from the PDF and upgrade them to "valid".
+            processed_ids = set(
+                pid for pid, paper in existing_papers.items() if _is_valid_existing(paper)
+            )
+            domain_processed = existing_count
+
+            print(f"  Processing {domain} papers (streaming from OpenAlex; downloading PDFs as needed)...")
+            pbar_process = tqdm(total=MAX_PAPERS_PER_DOMAIN, initial=existing_count, desc=f"{domain}", unit="paper")
+
+            stream = fetch_openalex(concept_id)
+            exhausted = False
+
+            while domain_processed < MAX_PAPERS_PER_DOMAIN and not exhausted:
+                batch = []
+                # Collect a batch of candidates
+                while len(batch) < PROCESS_BATCH_SIZE:
                     try:
-                        metadata = future.result()
-                        if metadata:
-                            # Check if we already have this paper
-                            if metadata["id"] not in existing_papers:
-                                meta_out.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-                                meta_out.flush()
-                                existing_papers[metadata["id"]] = metadata
-                                domain_processed += 1
-                                total_processed += 1
-                                pbar_process.update(1)
-                    except Exception as e:
-                        paper_data = futures[future]
-                        # Silently skip errors - we'll collect more if needed
-                        pass
-            
-            pbar_process.close()
-            
-            # If we didn't get enough from initial batch, collect more from a different part of results
-            # Use multiple retry rounds with progressively larger skips
-            total_papers_seen = papers_seen_count
-            retry_round = 0
-            max_retry_rounds = 3
-            
-            while domain_processed < MAX_PAPERS_PER_DOMAIN and retry_round < max_retry_rounds:
-                still_needed = MAX_PAPERS_PER_DOMAIN - domain_processed
-                retry_round += 1
-                
-                # Skip much more aggressively: skip past what we've seen + progressively larger amounts
-                # Round 1: +2000, Round 2: +5000, Round 3: +10000
-                skip_increment = [2000, 5000, 10000][min(retry_round - 1, 2)]
-                skip_threshold = total_papers_seen + skip_increment
-                
-                print(f"  Need {still_needed} more papers. Retry round {retry_round}: Collecting from different part (skipping past {total_papers_seen} + {skip_increment} = {skip_threshold} results)...")
-                
-                # Collect additional papers (skip ahead by skipping past what we've already seen)
-                additional_papers = []
-                skip_count = 0
-                collect_additional = still_needed * 5  # Collect 5x what we need
-                
-                pbar_collect2 = tqdm(total=collect_additional, desc=f"{domain} round{retry_round}", unit="hit")
-                
-                for work in fetch_openalex(concept_id):
-                    if len(additional_papers) >= collect_additional:
+                        work = next(stream)
+                    except StopIteration:
+                        exhausted = True
                         break
-                    
-                    # Skip ahead: don't collect until we've skipped enough
-                    if skip_count < skip_threshold:
-                        skip_count += 1
-                        total_papers_seen += 1
-                        continue
-                    
+
                     concepts = work.get("concepts", [])
                     if not is_domain_first_concept(concepts, domain):
                         continue
+
                     oa = work.get("open_access", {})
                     pdf_url = oa.get("oa_url")
                     if not pdf_url:
                         continue
+
                     openalex_id = extract_openalex_id(work)
                     if not openalex_id:
                         import hashlib
@@ -682,58 +678,63 @@ def scrape_papers():
                         year = work.get("publication_year", "")
                         fallback_id = hashlib.md5(f"{title}_{year}".encode()).hexdigest()[:12]
                         openalex_id = f"fallback_{fallback_id}"
-                    
-                    # Skip if already collected or processed
-                    if openalex_id in processed_ids or openalex_id in existing_papers:
+
+                    if openalex_id in processed_ids:
                         continue
+
+                    # Quick pre-filter: if OpenAlex provides an abstract and it's too short, skip.
+                    abstract = work.get("abstract")
+                    if not abstract:
+                        inverted_index = work.get("abstract_inverted_index")
+                        if inverted_index:
+                            abstract = reconstruct_abstract_from_inverted_index(inverted_index)
+                    if abstract and abstract.strip() and abstract_word_count(abstract) < MIN_ABSTRACT_WORDS:
+                        processed_ids.add(openalex_id)
+                        continue
+
                     processed_ids.add(openalex_id)
-                    
-                    additional_papers.append((work, domain, openalex_id, pdf_url))
-                    pbar_collect2.update(1)
-                    total_papers_seen += 1
-                
-                pbar_collect2.close()
-                
-                if additional_papers:
-                    print(f"  Collected {len(additional_papers)} additional {domain} papers from different part of results")
-                    print(f"  Processing additional {domain} papers (round {retry_round})...")
-                    
-                    with ThreadPoolExecutor(max_workers=10) as executor:
-                        futures = {executor.submit(process_paper_download, paper_data): paper_data 
-                                  for paper_data in additional_papers}
-                        
-                        for future in as_completed(futures):
-                            if domain_processed >= MAX_PAPERS_PER_DOMAIN:
-                                # Cancel remaining futures if we have enough
-                                for f in futures:
-                                    if not f.done():
-                                        f.cancel()
-                                break
-                            try:
-                                metadata = future.result()
-                                if metadata:
-                                    # Check if we already have this paper
-                                    if metadata["id"] not in existing_papers:
-                                        meta_out.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-                                        meta_out.flush()
-                                        existing_papers[metadata["id"]] = metadata
-                                        domain_processed += 1
-                                        total_processed += 1
-                                        pbar_process.update(1)
-                            except Exception:
-                                pass
-                else:
-                    # No more papers found, break out of retry loop
-                    print(f"  No more {domain} papers found after skipping {skip_threshold} results")
+                    batch.append((work, domain, openalex_id, pdf_url))
+
+                if not batch:
                     break
-            
+
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    futures = [executor.submit(process_paper_download, paper_data) for paper_data in batch]
+                    for future in as_completed(futures):
+                        if domain_processed >= MAX_PAPERS_PER_DOMAIN:
+                            break
+                        try:
+                            metadata = future.result()
+                        except Exception:
+                            metadata = None
+
+                        if not metadata:
+                            continue
+
+                        # Only count papers that meet abstract-length requirement (enforced in process_paper_download).
+                        existing = existing_papers.get(metadata["id"])
+                        if (existing is None) or (not _is_valid_existing(existing)):
+                            meta_out.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+                            meta_out.flush()
+                            existing_papers[metadata["id"]] = metadata
+                            domain_processed += 1
+                            total_processed += 1
+                            pbar_process.update(1)
+                            if domain_processed % 5 == 0 or domain_processed == MAX_PAPERS_PER_DOMAIN:
+                                print(f"  {domain}: {domain_processed}/{MAX_PAPERS_PER_DOMAIN} valid abstracts")
+
+            pbar_process.close()
+
             if domain_processed < MAX_PAPERS_PER_DOMAIN:
-                print(f"  Warning: Could not process enough {domain} papers. Got {domain_processed}/{MAX_PAPERS_PER_DOMAIN}")
-                print(f"  (This may be due to papers missing abstracts or PDF download failures)")
+                print(
+                    f"  Warning: Could not reach {MAX_PAPERS_PER_DOMAIN} valid papers for {domain}. "
+                    f"Got {domain_processed}/{MAX_PAPERS_PER_DOMAIN}."
+                )
             else:
-                print(f"  ✅ {domain}: Reached target of {MAX_PAPERS_PER_DOMAIN} papers ({existing_count} from earlier run, {domain_processed - existing_count} new)")
-            
-            print(f"  ✅ {domain}: {domain_processed}/{MAX_PAPERS_PER_DOMAIN} papers processed")
+                print(
+                    f"  ✅ {domain}: Reached target of {MAX_PAPERS_PER_DOMAIN} papers "
+                    f"({existing_count} from earlier run, {domain_processed - existing_count} new)"
+                )
     
     print(f"\n✅ Done! Total processed: {total_processed} papers across all domains.")
     return True
