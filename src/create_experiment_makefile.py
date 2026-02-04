@@ -429,6 +429,21 @@ all_results_recs, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes
 all_recs.extend(all_results_recs)
 all_recs.append("\n\n")
 
+all_final_csv_tgts = (
+    results_pangram_csv_tgt + results_gptzero_csv_tgt + results_llm_aid_csv_tgt
+)
+results_rec, results_tgt = MultiSourceOneTargetRecipeTemplate(
+    "./workarea/results.csv",
+    ["$(ENVPYTHON) ./src/merge_results.py --input $^ --output $@"],
+).generate_recipes(all_final_csv_tgts + ["./src/merge_results.py"])
+all_recs.extend(results_rec)
+all_real_tgts.extend(results_tgt)
+results_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes(
+    results_tgt
+)
+all_recs.extend(results_pseudo_rec)
+all_recs.append("\n\n")
+
 # Mark all real files as precious so they're not deleted
 precious_recs, _ = EmptyMultiSourceRecipeTemplate(".PRECIOUS").generate_recipes(
     all_real_tgts
