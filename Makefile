@@ -18,6 +18,9 @@ env:
 	conda create --yes --prefix ./env python=3.12 pip
 	$(ENVRUN) pip install -r ./requirements.txt
 
+backup:
+	/bin/bash ./backup_work_area.sh
+
 preprocess:
 	@test -d ./env || (echo "Create the python environment first" && false)
 	mkdir -p ./workarea/paper_jsons
