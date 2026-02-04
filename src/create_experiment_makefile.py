@@ -350,8 +350,81 @@ result_gptzero_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate(
 all_recs.extend(result_gptzero_pseudo_rec)
 all_recs.append("\n\n")
 
+### LLM-Based AI detection
+# Original abstracts thru llm_aid
+all_llm_aid_original_recs, llm_aid_original_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="original_llm_aid_results",
+    commands=["$(ENVPYTHON) ./src/llm_aid_abstract.py --input $< --output $@"],
+    processor_files=["./src/llm_aid_abstract.py"],
+    common_name="original_llm_aid",
+)
+all_recs.extend(all_llm_aid_original_recs)
+all_real_tgts.extend(llm_aid_original_tgts)
+all_recs.append("\n\n")
+
+# Rewritten abstracts thru llm_aid
+all_llm_aid_rewritten_recs, llm_aid_rewritten_tgts = dir_to_dir_processor_recipes(
+    srcs=rewrite_abstract_tgts,
+    new_dir="rewritten_llm_aid_results",
+    commands=["$(ENVPYTHON) ./src/llm_aid_abstract.py --input $< --output $@"],
+    processor_files=["./src/llm_aid_abstract.py"],
+    common_name="rewritten_llm_aid",
+)
+all_recs.extend(all_llm_aid_rewritten_recs)
+all_real_tgts.extend(llm_aid_rewritten_tgts)
+all_recs.append("\n\n")
+
+# New abstracts thru llm_aid
+all_llm_aid_new_recs, llm_aid_new_tgts = dir_to_dir_processor_recipes(
+    srcs=new_abstract_tgts,
+    new_dir="new_llm_aid_results",
+    commands=["$(ENVPYTHON) ./src/llm_aid_abstract.py --input $< --output $@"],
+    processor_files=["./src/llm_aid_abstract.py"],
+    common_name="new_llm_aid",
+)
+all_recs.extend(all_llm_aid_new_recs)
+all_real_tgts.extend(llm_aid_new_tgts)
+all_recs.append("\n\n")
+
+# Improved abstracts thru llm_aid
+all_llm_aid_improved_recs, llm_aid_improved_tgts = dir_to_dir_processor_recipes(
+    srcs=improved_abstract_tgts,
+    new_dir="improved_llm_aid_results",
+    commands=["$(ENVPYTHON) ./src/llm_aid_abstract.py --input $< --output $@"],
+    processor_files=["./src/llm_aid_abstract.py"],
+    common_name="improved_llm_aid",
+)
+all_recs.extend(all_llm_aid_improved_recs)
+all_real_tgts.extend(llm_aid_improved_tgts)
+all_recs.append("\n\n")
+
+all_llm_aid_recs, _ = EmptyMultiSourceRecipeTemplate("llm_aid").generate_recipes(
+    ["original_llm_aid", "rewritten_llm_aid", "new_llm_aid", "improved_llm_aid"]
+)
+all_recs.extend(all_llm_aid_recs)
+all_recs.append("\n\n")
+
+all_llm_aid_tgts = (
+    llm_aid_original_tgts
+    + llm_aid_rewritten_tgts
+    + llm_aid_new_tgts
+    + llm_aid_improved_tgts
+)
+results_llm_aid_csv_rec, results_llm_aid_csv_tgt = MultiSourceOneTargetRecipeTemplate(
+    "./workarea/results_llm_aid.csv",
+    ["$(ENVPYTHON) ./src/llm_aid_to_csv.py --input $^ --output $@"],
+).generate_recipes(all_llm_aid_tgts + ["./src/llm_aid_to_csv.py"])
+all_recs.extend(results_llm_aid_csv_rec)
+all_real_tgts.extend(results_llm_aid_csv_tgt)
+result_llm_aid_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate(
+    "results_llm_aid"
+).generate_recipes(results_llm_aid_csv_tgt)
+all_recs.extend(result_llm_aid_pseudo_rec)
+all_recs.append("\n\n")
+
 all_results_recs, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes(
-    ["results_pangram", "results_gptzero"]
+    ["results_pangram", "results_gptzero", "results_llm_aid"]
 )
 all_recs.extend(all_results_recs)
 all_recs.append("\n\n")

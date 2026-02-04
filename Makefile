@@ -42,11 +42,17 @@ pangram: ./workarea/Makefile.experiments
 gptzero: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments gptzero
 
+llm_aid: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments llm_aid
+
 results_pangram: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments results_pangram
 
 results_gptzero: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments results_gptzero
+
+results_llm_aid: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments results_llm_aid
 
 results: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments results
