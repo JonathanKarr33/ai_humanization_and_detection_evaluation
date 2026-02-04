@@ -264,16 +264,96 @@ all_pangram_tgts = (
     + pangram_new_tgts
     + pangram_improved_tgts
 )
-results_csv_rec, results_csv_tgt = MultiSourceOneTargetRecipeTemplate(
-    "./workarea/results.csv",
+results_pangram_csv_rec, results_pangram_csv_tgt = MultiSourceOneTargetRecipeTemplate(
+    "./workarea/results_pangram.csv",
     ["$(ENVPYTHON) ./src/pangram_to_csv.py --input $^ --output $@"],
 ).generate_recipes(all_pangram_tgts + ["./src/pangram_to_csv.py"])
-all_recs.extend(results_csv_rec)
-all_real_tgts.extend(results_csv_tgt)
-result_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes(
-    results_csv_tgt
+all_recs.extend(results_pangram_csv_rec)
+all_real_tgts.extend(results_pangram_csv_tgt)
+result_pangram_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate(
+    "results_pangram"
+).generate_recipes(results_pangram_csv_tgt)
+all_recs.extend(result_pangram_pseudo_rec)
+all_recs.append("\n\n")
+
+
+### GPTZERO AI detection
+# Original abstracts thru pangram
+all_gptzero_original_recs, gptzero_original_tgts = dir_to_dir_processor_recipes(
+    srcs=paper_jsons,
+    new_dir="original_gptzero_results",
+    commands=["$(ENVPYTHON) ./src/gptzero_abstract.py --input $< --output $@"],
+    processor_files=["./src/gptzero_abstract.py"],
+    common_name="original_gptzero",
 )
-all_recs.extend(result_pseudo_rec)
+all_recs.extend(all_gptzero_original_recs)
+all_real_tgts.extend(gptzero_original_tgts)
+all_recs.append("\n\n")
+
+# Rewritten abstracts thru gptzero
+all_gptzero_rewritten_recs, gptzero_rewritten_tgts = dir_to_dir_processor_recipes(
+    srcs=rewrite_abstract_tgts,
+    new_dir="rewritten_gptzero_results",
+    commands=["$(ENVPYTHON) ./src/gptzero_abstract.py --input $< --output $@"],
+    processor_files=["./src/gptzero_abstract.py"],
+    common_name="rewritten_gptzero",
+)
+all_recs.extend(all_gptzero_rewritten_recs)
+all_real_tgts.extend(gptzero_rewritten_tgts)
+all_recs.append("\n\n")
+
+# New abstracts thru gptzero
+all_gptzero_new_recs, gptzero_new_tgts = dir_to_dir_processor_recipes(
+    srcs=new_abstract_tgts,
+    new_dir="new_gptzero_results",
+    commands=["$(ENVPYTHON) ./src/gptzero_abstract.py --input $< --output $@"],
+    processor_files=["./src/gptzero_abstract.py"],
+    common_name="new_gptzero",
+)
+all_recs.extend(all_gptzero_new_recs)
+all_real_tgts.extend(gptzero_new_tgts)
+all_recs.append("\n\n")
+
+# Improved abstracts thru gptzero
+all_gptzero_improved_recs, gptzero_improved_tgts = dir_to_dir_processor_recipes(
+    srcs=improved_abstract_tgts,
+    new_dir="improved_gptzero_results",
+    commands=["$(ENVPYTHON) ./src/gptzero_abstract.py --input $< --output $@"],
+    processor_files=["./src/gptzero_abstract.py"],
+    common_name="improved_gptzero",
+)
+all_recs.extend(all_gptzero_improved_recs)
+all_real_tgts.extend(gptzero_improved_tgts)
+all_recs.append("\n\n")
+
+all_gptzero_recs, _ = EmptyMultiSourceRecipeTemplate("gptzero").generate_recipes(
+    ["original_gptzero", "rewritten_gptzero", "new_gptzero", "improved_gptzero"]
+)
+all_recs.extend(all_gptzero_recs)
+all_recs.append("\n\n")
+
+all_gptzero_tgts = (
+    gptzero_original_tgts
+    + gptzero_rewritten_tgts
+    + gptzero_new_tgts
+    + gptzero_improved_tgts
+)
+results_gptzero_csv_rec, results_gptzero_csv_tgt = MultiSourceOneTargetRecipeTemplate(
+    "./workarea/results_gptzero.csv",
+    ["$(ENVPYTHON) ./src/gptzero_to_csv.py --input $^ --output $@"],
+).generate_recipes(all_gptzero_tgts + ["./src/gptzero_to_csv.py"])
+all_recs.extend(results_gptzero_csv_rec)
+all_real_tgts.extend(results_gptzero_csv_tgt)
+result_gptzero_pseudo_rec, _ = EmptyMultiSourceRecipeTemplate(
+    "results_gptzero"
+).generate_recipes(results_gptzero_csv_tgt)
+all_recs.extend(result_gptzero_pseudo_rec)
+all_recs.append("\n\n")
+
+all_results_recs, _ = EmptyMultiSourceRecipeTemplate("results").generate_recipes(
+    ["results_pangram", "results_gptzero"]
+)
+all_recs.extend(all_results_recs)
 all_recs.append("\n\n")
 
 # Mark all real files as precious so they're not deleted

@@ -39,5 +39,14 @@ abstracts: ./workarea/Makefile.experiments
 pangram: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments pangram
 
+gptzero: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments gptzero
+
+results_pangram: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments results_pangram
+
+results_gptzero: ./workarea/Makefile.experiments
+	$(MAKE) -f ./workarea/Makefile.experiments results_gptzero
+
 results: ./workarea/Makefile.experiments
 	$(MAKE) -f ./workarea/Makefile.experiments results
