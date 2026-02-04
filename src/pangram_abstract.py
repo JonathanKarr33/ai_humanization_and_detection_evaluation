@@ -12,6 +12,8 @@ from pangram import Pangram
 
 from config import CONFIG
 
+N_RETRIES = 5
+
 
 def get_pangram_result(text: str, client: Pangram) -> dict[str, Any]:
     """
@@ -19,8 +21,15 @@ def get_pangram_result(text: str, client: Pangram) -> dict[str, Any]:
     Returns the full API response as a dictionary, or None if failed.
     """
     assert text and text.strip()
-    result = client.predict(text)
-    return result
+    g_e = None
+    for _ in range(N_RETRIES):
+        try:
+            result = client.predict(text)
+            return result
+        except ValueError as e:
+            g_e = e
+    assert g_e
+    raise g_e
 
 
 def process_abstracts(
