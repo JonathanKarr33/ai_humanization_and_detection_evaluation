@@ -1,0 +1,556 @@
+arXiv:cond-mat/0309488v2  [cond-mat.stat-mech]  27 Feb 2004
+Deﬁning and identifying communities in networks
+Filippo Radicchi,1 Claudio Castellano,2 Federico Cecconi,3 Vittorio Loreto,2, ∗and Domenico Parisi3
+1Dipartimento di Fisica, Universit`a di Roma “Tor Vergata”,
+Via della Ricerca Scientiﬁca 1, 00133 Roma, Italy
+2Dipartimento di Fisica, Universit`a di Roma “La Sapienza” and INFM-SMC,
+Unit`a di Roma 1, P.le A. Moro 5, 00185 Roma, Italy
+3Institute of Cognitive Sciences and Technologies C.N.R., Viale Marx, 15, 00137, Roma, Italy
+The investigation of community structures in networks is an important issue in many domains
+and disciplines. This problem is relevant for social tasks (objective analysis of relationships on the
+web), biological inquiries (functional studies in metabolic and protein networks) or technological
+problems (optimization of large infrastructures).
+Several types of algorithms exist for revealing
+the community structure in networks, but a general and quantitative deﬁnition of community is
+not implemented in the algorithms, leading to an intrinsic diﬃculty in the interpretation of the
+results without any additional non-topological information. In this paper we deal with this problem
+by showing how quantitative deﬁnitions of community are implemented in practice in the existing
+algorithms. In this way the algorithms for the identiﬁcation of the community structure become
+fully self-contained. Furthermore, we propose a new local algorithm to detect communities which
+outperforms the existing algorithms with respect to computational cost, keeping the same level of
+reliability. The new algorithm is tested on artiﬁcial and real-world graphs. In particular we show
+how the new algorithm applies to a network of scientiﬁc collaborations, which, for its size, can
+not be attacked with the usual methods. This new type of local algorithm could open the way to
+applications to large-scale technological and biological applications.
+I.
+INTRODUCTION
+Evidence has rapidly grown in the past few years that very diverse systems in many diﬀerent ﬁelds can be described
+as complex networks, i. e. assemblies of nodes and edges with nontrivial topological properties [1, 2]. Examples
+range from technological systems (the Internet and the web [3, 4]) to biological (epidemiology [5, 6], metabolic
+networks [7, 8, 9], ecological webs [10, 11, 12, 13]) and social systems [14, 15] (scientiﬁc collaborations, structure of
+large organizations).
+In this paper we deal with a topological property of networks, the community structure, that has attracted a great
+deal of interest very recently. The concept of community is very common and it is linked to the classiﬁcation of
+objects in categories for the sake of memorization or retrieval of information. From this point of view the notion of
+community is very general and, depending on the context, can be synonymous of module, class, group, cluster, etc.
+Among the many contexts where this notion is relevant it is worth mentioning the problem of modularity in metabolic
+or cellular networks [9, 16] or the problem of the identiﬁcation of communities in the web [17]. This last issue is
+relevant for the implementation of search engines of new generation, content ﬁltering, automatic classiﬁcation or the
+automatic realization of ontologies.
+Given the relevance of the problem it is crucial to construct eﬃcient procedures and algorithms for the identiﬁcation
+of the community structure in a generic network. This, however, is a highly nontrivial task.
+Qualitatively, a community is deﬁned as a subset of nodes within the graph such that connections between the nodes
+are denser than connections with the rest of the network. The detection of the community structure in a network
+is generally intended as a procedure for mapping the network into a tree (Fig. 1). In this tree (called dendrogram
+in social sciences) the leaves are the nodes while the branches join nodes or (at higher level) groups of nodes, thus
+identifying a hierarchical structure of communities nested within each other.
+Several algorithms to perform this mapping are known in the literature. The traditional method is the so-called
+hierarchical clustering [18]. For every pair i, j of nodes in the network one calculates a weight Wi,j, which measures how
+closely connected the vertices are. Starting from the set of all nodes and no edges, links are iteratively added between
+pairs of nodes in order of decreasing weight. In this way nodes are grouped into larger and larger communities and
+the tree is built up to the root, which represents the whole network. Algorithms of this kind are called agglomerative.
+∗Electronic address: loreto@roma1.infn.it
+
+2
+For the other class of algorithms, called divisive, the order of construction of the tree is reversed: one starts with
+the whole graph and iteratively cuts the edges, thus dividing the network progressively into smaller and smaller
+disconnected sub-networks identiﬁed as the communities. The crucial point in a divisive algorithm is the selection of
+the edges to be cut, which have to be those connecting communities and not those within them. Very recently, Girvan
+and Newman (GN) have introduced a divisive algorithm where the selection of the edges to be cut is based on the
+value of their “edge betweenness” [19], a generalization of the centrality betweenness introduced by Anthonisse [20]
+and Freeman [21]. Consider the shortest paths between all pairs of nodes in a network. The betweenness of an edge
+is the number of these paths running through it. It is clear that when a graph is made of tightly bound clusters,
+loosely interconnected, all shortest paths between nodes in diﬀerent clusters have to go through the few inter-clusters
+connections, which therefore have a large betweenness value. The single step of the GN detection algorithm consists in
+the computation of the edge betweenness for all edges in the graph and in the removal of those with the highest score.
+The iteration of this procedure leads to the splitting of the network into disconnected subgraphs that in their turn
+undergo the same procedure, until the whole graph is divided in a set of isolated nodes. In this way the dendrogram
+is built, from the root to the leaves.
+The GN algorithm represents a major step forward for the detection of communities in networks, since it avoids
+many of the shortcomings of traditional methods [19, 22]. This explains why it has been quickly adopted in the past
+year as a sort of standard for the analysis of community structure in networks [23, 24, 25, 26, 27].
+This paper follows a diﬀerent track by proposing an alternative strategy for the identiﬁcation of the community
+structure. This complementary approach follows from the need of addressing the two following issues.
+1. In general algorithms deﬁne communities operationally as what the they ﬁnds. A dendrogram, i. e. a community
+structure, is always produced by the algorithms down to the level of single nodes, independently from the type
+of graph analyzed.
+This is due to the lack of explicit prescriptions to discriminate between networks that
+are actually endowed with a community structure and those that are not.
+As a consequence, in practical
+applications one needs additional, non topological, information on the nature of the network to understand
+which of the branches of the tree have a real signiﬁcance. Without such information it is not clear at all whether
+the identiﬁcation of a community is reliable or not. There have been two noticeable proposals to solve this
+problem. In particular it is worth mentioning the approach proposed by Wilkinson and Huberman [24], which
+is limited to the lowest level of the community structure and speciﬁc to algorithms based on betweenness. More
+recently [22], Newman and Girvan have introduced an a posteriori measure of the strength of the community
+structure, which they called modularity. More precisely, the modularity estimates the fraction of inward links in
+a community minus the expectation value of the same quantity in a network with the same community divisions
+but random connections between the nodes. This quantity deﬁnitely gives an indication of the strength of the
+community structure, even though the lack of the implementation of a quantitative deﬁnition of community
+does not allow to discriminate in an objective way meaningful communities.
+2. The “edge betweenness algorithm” is computationally costly, as already remarked by Girvan and Newman [19,
+22]. Evaluating the score for all edges requires a time of the order of MN, where M is the number of edges and
+N the number of nodes. The iteration of the procedure for all M edges leads in the worst case to a total scaling
+of the computational time as M 2N, which makes the analysis practically unfeasible already for moderately large
+networks (of the order of N = 10000 [22]).
+In this paper we propose solutions to both these problems. First we introduce a general criterion for deciding
+which of the subgraphs singled out by the detection algorithms are actual communities. We discuss in detail the case
+of two quantitative deﬁnitions of community. In this way we transform the GN algorithm in a self-contained tool.
+Secondly we present an alternative algorithm, based on the computation of local quantities, which gives, in controlled
+cases, results of accuracy comparable to the GN method, while largely outperforming it from the point of view of the
+computational speed.1
+The outline of the paper is as follows. In section II we introduce the deﬁnitions of community. In section III we
+show how these deﬁnitions can be implemented in a generic divisive algorithm in order to make it self-contained and
+we present tests on some computer-generated and real networks. In section IV we present a new and fast algorithm
+for the detection of communities and we compare its performance with the GN algorithm. Section V is devoted to the
+application of the new algorithm to a network of scientiﬁc collaborations which, because of its size, is hard to analyze
+with the Girvan-Newman method. We ﬁnally draw some conclusions and discuss the perspectives of this work.
+1 It is worth mentioning that after the completion of this work Newman has proposed a new agglomerative algorithm to address the issue
+of the computational eﬃciency [28].
+
+3
+II.
+QUANTITATIVE DEFINITIONS OF COMMUNITY
+The idea to solve the ﬁrst of the problems discussed above is very simple: the algorithm that builds the tree just
+selects subgraphs that are candidate to be considered communities. One has then to check whether they are actually
+such by using a precise deﬁnition. If the subgraph does not meet the criterion, the subgraph isolated from the network
+is not a community and the corresponding branch in the dendrogram should not be drawn.
+As mentioned above, a community is generally thought as a part of a network where internal connections are denser
+than external ones. To sharpen the use of detection algorithms a more precise deﬁnition is needed. Many possible
+deﬁnitions of communities exist in the literature [18]. Here we consider explicitly the implementation in the algorithms
+of two plausible deﬁnitions of community which translate into formulas the sentence above.
+The basic quantity to consider is ki, the degree of a generic node i, which in terms of the adjacency matrix Ai,j of
+the network G is ki = P
+j Ai,j 2. If we consider a subgraph V ⊂G, to which node i belongs, we can split the total
+degree in two contributions: ki(V ) = kin
+i (V ) + kout
+i
+(V ). kin
+i (V ) = P
+j∈V Ai,j is the number of edges connecting node
+i to other nodes belonging to V . kout
+i
+(V ) = P
+j /∈V Ai,j is clearly the number of connections toward nodes in the rest
+of the network.
+Deﬁnition of community in a strong sense
+The subgraph V is a community in a strong sense if
+kin
+i (V ) > kout
+i
+(V ), ∀i ∈V.
+(1)
+In a strong community each node has more connections within the community than with the rest of the graph.
+This deﬁnition coincides with the one proposed in [17] in the framework of the identiﬁcation of web communities.
+Deﬁnition of community in a weak sense
+The subgraph V is a community in a weak sense if
+X
+i∈V
+kin
+i (V ) >
+X
+i∈V
+kout
+i
+(V ).
+(2)
+In a weak community the sum of all degrees within V is larger than the sum of all degrees toward the rest of the
+network.
+Clearly a community in a strong sense is also a community in a weak sense, while the converse is not true.
+It is worth mentioning that our deﬁnitions of community, though very natural, do not represent the only possible
+choice. Several other possible deﬁnitions, possibly more appropriate in some cases, exist and are described in [18].
+Among them for instance the deﬁnition of the so-called LS −set goes in the direction of our strong deﬁnition even
+though extremely more stringent. An LS −set is a set of nodes such that each of its proper subsets has more ties
+to its complement within the set than outside. On the other hand the deﬁnition of k-core is roughly, although not
+exactly, equivalent to our weak deﬁnition. A k-core is deﬁned as a subgraph in which each node is adjacent to at least
+a minimum number, k, of the other nodes in the subgraph.
+III.
+SELF-CONTAINED ALGORITHMS
+From the deﬁnitions given above, it is apparent that, if a network is randomly split in two parts, one very large
+and the other with only few nodes, the very large part almost always fulﬁlls the deﬁnition of community. In order
+to deal with this problem, let us consider the Erd¨os-Renyi random graph [29]. If we cut at random the graph in two
+parts containing αN and (1 −α)N nodes, respectively, it is easy to evaluate analytically the probability P(α) that
+the subgraph containing αN nodes fulﬁlls the weak or the strong deﬁnition (details will be given in a forthcoming
+publication). It turns out that, as soon as N is suﬃciently large, the probability is very close to a step function
+around α = 0.5. Hence it is extremely likely that, in a random graph randomly cut in two parts, the largest one
+2 The adjacency matrix fully speciﬁes the topology of the network. In the simplest case of an unweighted, undirected network, it is equal
+to 1 if i and j are directly connected, zero otherwise.
+
+4
+is a community according to the previous deﬁnitions. However it is extremely unlikely that both subgraphs fulﬁll
+simultaneously the deﬁnitions: therefore if we accept divisions only if both groups fulﬁll the deﬁnition of community,
+we correctly ﬁnd that a random graph has no community structure. We extend this criterion to the general case: if
+less than two subgraphs obtained from the cut satisfy the deﬁnitions, then the splitting is considered to be an artifact
+and disregarded.
+We can now summarize the improved self-contained version of the GN algorithm.
+1. Choose a deﬁnition of community;
+2. Compute the edge betweenness for all edges and remove those with the highest score;
+3. If the removal does not split the (sub-)graph go to point 2;
+4. If the removal splits the (sub-)graph, test if at least two of the resulting subgraphs fulﬁll the deﬁnition. If they
+do, draw the corresponding part of the dendrogram;
+5. Iterate the procedure (going back to point 2) for all the sub-graphs until no edges are left in the network.
+It is important to remark that the quantities appearing in Eqs. (1) and (2) must always be evaluated with respect
+to the full adjacency matrix. The application of this procedure to a network produces a tree, where every branch
+splitting represents a meaningful (with respect to the deﬁnition) separation in communities.
+It is now possible to blindly test the eﬀectiveness of the GN algorithm. We have considered the “artiﬁcial” graph
+already discussed by Girvan and Newman. It is a simple network with N nodes divided into four groups: connections
+between pairs within a group are present with probability pin, while pairs of nodes in diﬀerent groups are connected
+with probability pout. As the probability pout grows from zero, the community structure in the network becomes less
+well deﬁned.
+For every realization of the artiﬁcial graph the application of the detection algorithm generates a tree. We consider
+the algorithm to be successful if the four communities are detected, each node is classiﬁed in the right community
+and the communities are not further subdivided.
+Fig. 2 presents the comparison of the fraction of successes for the modiﬁed GN algorithm with the expected value
+computed analytically. We see that the GN algorithm captures very well the existence of communities in a strong
+sense, while it performs less well for the weak deﬁnition. However, one should not be misguided by the quantity
+presented in Fig. 2. By looking at a softer measure of success, the fraction f of nodes not correctly classiﬁed, one
+realizes that, when the algorithm with weak deﬁnition seems to fail, it correctly identiﬁes the four communities and
+it misclassiﬁes only a few nodes up to much higher values of pout. The deviations from the theoretical behaviour
+observed for small values of pout are due to the possibility that one or more of the four communities are further split
+in smaller sub-communities. This event, not taken into account in the analytical calculation, becomes very unlikely
+as the size of the system increases.
+IV.
+A NEW FAST ALGORITHM
+The Girvan-Newman algorithm is computationally expensive because it requires the repeated evaluation, for each
+edge in the system, of a global quantity, the betweenness, whose value depends on the properties of the whole system.
+Despite smart methods to compute the edge betweenness simultaneously for all edges [30, 31], the evaluation of such
+quantity is the time consuming part of the procedure. As a consequence the time to analyze completely a network
+turns out to grow fast with its size, making the analysis unfeasible for networks of size larger than around 10000
+nodes [22].
+In order to overcome this problem we introduce a new kind of divisive algorithm which requires the consideration
+of local quantities only, and is therefore much faster than the GN algorithm. The fundamental ingredient of a divisive
+algorithm is a quantity which can single out edges connecting nodes belonging to diﬀerent communities. We consider
+the edge clustering coeﬃcient, deﬁned, in analogy with the usual node clustering coeﬃcient, as the number of triangles
+to which a given edge belongs, divided by the number of triangles that might potentially include it, given the degrees
+of the adjacent nodes. More formally, for the edge connecting node i to node j, the edge clustering coeﬃcient is
+C(3)
+i,j =
+z(3)
+i,j
+min[(ki −1), (kj −1)],
+(3)
+where z(3)
+i,j is the number of triangles built on that edge and min[(ki −1), (kj −1)] is the maximal possible number of
+them.
+
+5
+The idea behind the use of this quantity in a divisive algorithm is that edges connecting nodes in diﬀerent commu-
+nities are included in few or no triangles, and tend to have small values of C(3)
+i,j . On the other hand many triangles
+exist within clusters. Hence the coeﬃcient C(3)
+i,j is a measure of how inter-communitarian a link is. A problem arises
+when the number of triangles is zero, because C(3)
+i,j = 0, irrespective of ki and kj, (or even C(3)
+i,j is indeterminate,
+when min[(ki −1), (kj −1)] = 0). To remove this degeneracy we consider a slightly modiﬁed quantity by using, at the
+numerator, the number of triangles plus one:
+˜C(3)
+i,j =
+z(3)
+i,j + 1
+min[(ki −1), (kj −1)].
+(4)
+By considering higher order cycles we can deﬁne, in much the same way, coeﬃcients of order g as:
+˜C(g)
+i,j =
+z(g)
+i,j + 1
+s(g)
+i,j
+,
+(5)
+where z(g)
+i,j is the number of cyclic structures of order g the edge (i, j) belongs to, while s(g)
+i,j is the number of possible
+cyclic structures of order g that can be built given the degrees of the nodes.
+We can now deﬁne, for every g, a detection algorithm that works exactly as the GN method with the diﬀerence
+that, at every step, the removed edges are those with the smallest value of ˜C(g)
+i,j . By considering increasing values
+of g, one can smoothly interpolate between a local and a non local algorithm. Notice that the deﬁnition of ˜C(g)
+i,j
+guarantees that nodes with only one connection are not considered as isolated communities by the algorithm, since
+for their unique edge ˜C(g)
+i,j is inﬁnite.
+We have checked the accuracy of this new algorithm by comparing its performance with the GN method. Fig. 2
+reports the results for the artiﬁcial test graph with four communities. It turns out that, with respect to the strong
+deﬁnition, the new algorithm is as accurate as the GN one, both in the case of cycles of order g = 3 (triangles) and
+g = 4 (squares).
+On the other hand, for the weak deﬁnition the best accuracy is achieved with the new algorithm with g = 4.
+Another test is performed by considering the examples of social networks already studied by GN. Fig. 3 shows the
+trees resulting from the application of the GN algorithm and of the g = 4 algorithm to the network of college football
+teams. Again the results are very similar, indicating that the local algorithm captures well the presence of communities
+in that network.
+Additional insight into the relationship between the GN algorithm and this new algorithm based on edge clustering
+is provided by Fig. 4, where the edge betweenness is plotted versus ˜C(4)
+i,j for each edge of the graph of scientiﬁc
+collaborations studied in Ref. [15]. It is clear that an anticorrelation exists between the two quantities: edges with low
+values of ˜C(4)
+i,j tend to have high values of betweenness. The anticorrelation is not perfect: the edge with minimum
+˜C(4)
+i,j is not the one with maximal betweenness. Therefore we expect the two algorithms to yield similar community
+structures though not perfectly coinciding.
+In this framework it is important to recall the parallel drawn by Ronald S. Burt [32] between betweenness centrality
+and the so-called redundancy. The deﬁnition of redundancy is very close to that of node clustering and, much in the
+spirit of our work, Burt ﬁrst pointed out that nodes that belong to few loops are central in the betweenness sense.
+Let us now turn our attention to the question of the computational eﬃciency of our local algorithm. One can roughly
+estimate the scaling of the computational time as follows. When an edge is removed one has to check whether the
+whole system has been separated in disconnected components and update the value of ˜C(g)
+i,j in a small neighborhood
+of the removed edge. The ﬁrst operation requires a time of the order of M, the total number of edges present in
+the network, while the time required by the second operation does not scale with M. Since this operation has to be
+repeated for all edges we can estimate the scaling of the total time as aM + bM 2. We thus expect computational time
+to be linearly dependent on M for small systems and to cross over to an M 2 regime for large sizes.
+We have measured the velocity of the new algorithm by computing the time needed to generate the whole tree for
+a random graph of increasing size N and ﬁxed average degree (M ∼N). Results, reported in Fig. 5, conﬁrm that
+the algorithm based on the computation of the edge clustering coeﬃcient is much faster than the one based on edge
+betweenness, both for g = 3 and g = 4. The crossover between the initial linear dependence on N to the N 2 growth
+for the local algorithm is evident for g = 3.
+
+6
+V.
+COMMUNITY STRUCTURE IN A NETWORK OF SCIENTIFIC COLLABORATIONS
+In this section we consider an application of the fast algorithm discussed in the previous section to a
+network of scientiﬁc collaborations.
+In particular we have considered the network of scientists who signed
+at least one paper submitted to the E-print Archive relative to Condensed Matter in the period 1995-1999
+(http://xxx.lanl.gov/archive/cond-mat). Data have been kindly provided by Mark Newman.
+The network includes 15616 nodes (scientists) but it has a giant connected component which includes only N =
+12722 scientists. We have focused our attention on this giant component and we have applied to it our algorithm for
+g = 3 and g = 4. The time needed for the generation of the dendrogram for g = 3 is about 3 minutes on a desktop
+computer with 800 MHz CPU. The algorithm detects at the same time the communities satisfying the weak and the
+strong criteria. At the end of the procedure one obtains, for every value of g, a list of communities identiﬁed in a
+weak sense and another list of communities identiﬁed in a strong sense. By deﬁnition the second list is a subset of
+the ﬁrst one. Figure 6 reports the size distributions (for g = 3 and g = 4) of all the communities identiﬁed in a weak
+sense. These distributions feature a power-law behaviour P(S) ∼S−τ with τ ≃2, an indication of the self-similar
+community structure of this network [33]. It is worth mentioning that the exponent we observe coincides with the one
+obtained, using the GN algorithm, in the framework of a recently proposed model of social network formation [34].
+For what concerns a more detailed analysis of the communities found, validation of the results is far from trivial,
+since there is no quantitative criterion to assess their accuracy. One may directly inspect the dendrogram in order to
+answer questions like: are the communities representative of real collaborations between the corresponding scientists?
+Do they identify speciﬁc research areas?
+Would a generic scientist agree about his or her belonging to a given
+community? Obviously all these questions cannot be answered in a deﬁnitive and quantitative way. We have partially
+followed this path and we have checked several subsets of the network at diﬀerent levels in the hierarchy. To the best
+of our knowledge the results seem to us reasonable. Of course this does not represent a proof of the eﬃciency of the
+algorithm. We refer the reader to the detailed results of our analysis that we make available as additional supporting
+information 3.
+VI.
+CONCLUSIONS
+The detection of the community structure in large complex networks is a promising ﬁeld of research with many
+open challenges. The concept of community is qualitatively intuitive. However, to analyze a network it is necessary to
+specify quantitatively and unambiguously what a community is. Once a deﬁnition is given it is in principle possible to
+determine all subgraphs of a given network that fulﬁll the deﬁnition. However this task is in practice computationally
+out of reach even for small systems. Therefore the search for the community structure has generally a more limited
+goal: selecting, among all possible communities, a subset of them organized hierarchically, a dendrogram. Divisive
+and agglomerative algorithms carry out this task. A comparison of the performances of such algorithms is non trivial.
+In some simple cases, as the artiﬁcial graph with four subsets considered above, it is possible to assess quantitatively
+the validity of the results. In other cases, like the network of scientiﬁc collaborations, no quantitative measure exists
+to decide, given a precise deﬁnition of community, how good a dendrogram is. Typically, one may check whether the
+results appear sensible. However this is far from objective, being mediated by the observer’s own perception and by
+his/her intuitive concept of community.
+In this work we have proposed two improvements in the construction of the dendrogram. First, we have devised
+a way to implement, in a generic divisive algorithm, a quantitative deﬁnition of community. In this way algorithms
+become fully self-contained, i.e.
+they do not need non-topological input to generate the dendrogram.
+Then we
+have introduced a new divisive algorithm, which is based on local quantities, and therefore extremely fast. Both
+these improvements have been tested successfully in controlled cases. The analysis of the large network of scientiﬁc
+collaborations gives results that appear reasonable. However, it is clear that, as discussed above, this statement
+is subjective and cannot be made at present more precise. Deﬁnitely, a quantitative measure for the evaluation of
+dendrograms would be a major step forward in this ﬁeld.
+At this point a remark is in order. So far we have only discussed examples of the so-called social networks. It
+has been shown [35] that social networks substantially diﬀer from other types of networks, namely technological or
+biological networks.
+Among other diﬀerences, they exhibit a positive correlation between the degree of adjacent
+vertices (assortativity) while most non-social networks are disassortative. While these results are consistent with our
+3 The list of all the communities found with our algorithm for the scientiﬁc collaboration network is available on request
+(castella@pil.phys.uniroma1.it)
+
+7
+and other’s ﬁndings about community structures in social networks, they put into question the very existence of a
+community structure in non-social networks and the possibility of detecting it with the existing algorithms. From
+the perspective of our local algorithm, which relies on the existence of closed loops, disassortative networks could
+be in principle problematic, due to the small number of short cycles. However, interesting insight comes from the
+study of the loops of arbitrary order [36].
+In particular for four diﬀerent types of networks (two of them social
+and assortative and two non-social and disassortative) measured values for the so-called average grid coeﬃcient (the
+extension of the concept of clustering coeﬃcient to cycles of order four) are two to four order of magnitude larger
+than the corresponding coeﬃcients of a random graph with the same average degree and size N. This argues in favor
+of the presence of some sort of hierarchical structure and well-deﬁned communities also in disassortative networks. It
+also hints that our algorithm could be fruitfully applied also to non-social (disassortative) networks, although future
+work will be needed in this direction.
+We believe that the new elements presented in this paper can be of great help in the analysis of networks. On the
+one hand, the implementation of a quantitative deﬁnition of community makes algorithms self-contained and allows
+the analysis of the community structure based only on the network topology. On the other hand, the introduction of
+a new class of local and fast algorithms could open the way for applications to large-scale systems.
+Acknowledgments: The authors are very grateful to Mark Newman for providing data on the networks of college
+football teams and of scientiﬁc collaborations.
+They also wish to thank Alain Barrat for useful suggestions and
+discussions.
+[1] Albert, R. & Barab´asi, A.-L. (2002), Rev. Mod. Phys. 74, 47-97.
+[2] Newman, M. E. J. (2003), SIAM Review 45, 167-256.
+[3] Albert, R.,Jeong, H. & and Barab´asi, A.-L. (1999), Nature 401, 130-131.
+[4] Broder, A., Kumar, R., Maghoul, F., Raghavan, P., Rajagopalan, S., Stata, R., Tomkins, A. & Wiener, J. (2000), Computer
+Networks 33, 309-320.
+[5] Moore, C. & Newman, M. E. J. (2000), Phys. Rev. E 61, 5678-5682.
+[6] Pastor-Satorras, R. & Vespignani, A. (2001), Phys. Rev. Lett. 86, 3200-3203.
+[7] Jeong, H., Tombor, B., Albert, R., Oltvai, Z.N. & Barab´asi, A.-L. (2000), Nature 407, 651-654.
+[8] Wagner, A. & Fell, D. A. (2001), Proc. R. Soc. London B 268, 1803-1810.
+[9] Ravasz, E., Somera, A., Mongru, D. A., Oltvai, Z. N. & Barab´asi A.-L., (2002), Science 297, 1551-1555.
+[10] Montoya, J. M., & Sol´e, R. V. (2002), J. Theor. Biol. 214, 405-412.
+[11] Dunne, J. A., Williams, R. J. & Martinez, N. D. (2002), Proc. Natl. Acad. Sci. USA 99, 12917-12922.
+[12] Camacho, J., Guimer`a, R. & Amaral, L. A. N. (2002), Phys. Rev. Lett. 88, 228102.
+[13] Garlaschelli, D., Caldarelli, G. & Pietronero, L. (2003), Nature 423, 165-168.
+[14] Redner, S. (1998), Eur. Phys. J. B 4, 131-134.
+[15] Newman, M. E. J. (2001), Proc. Natl. Acad. Sci. USA 98, 404-409.
+[16] Rives, A. & Galitski, T. (2003), Proc. Natl. Acad. Sci. USA 100, 1128-1133.
+[17] Flake, G. W., Lawrence, S. R., Giles, C. L. & Coetzee, F. M. (2002), IEEE Computer 35(3), 66-71.
+[18] Wasserman, S. & Faust, K. (1994), Social Network Analysis (Cambridge Univ. Press, Cambridge, U.K.).
+[19] Girvan, M. & Newman, M. E .J. (2002), Proc. Natl. Acad. Sci. USA 99, 7821-7826.
+[20] Anthonisse, J. M. (1971), Technical Report BN 9/71, Stichting Mathematisch Centrum, Amsterdam.
+[21] Freeman, L. (1977), Sociometry 40, 35-41.
+[22] Newman, M. E .J. & Girvan, M. (2003), cond-mat/0308217.
+[23] Holme, P., Huss, M. & Jeong, H. (2003), Bioinformatics 19, 532-538.
+[24] Wilkinson, D. & Huberman, B. A. (2002), cond-mat/0210147.
+[25] Gleiser, P. & Danon, L. (2003), cond-mat/0307434.
+[26] Guimer`a, R., Danon, L., D´iaz-Guilera, A., Giralt, F. & Arenas, A. (2002), cond-mat/0211498.
+[27] Tyler, J. R., Wilkinson, D. M. & Huberman, B. A. (2003), cond-mat/0303264.
+[28] Newman, M. E .J. (2003), cond-mat/0309508.
+[29] Bollobas, B. (1985), Random Graphs (Academic Press, New York).
+[30] Newman, M. E. J. (2001), Phys. Rev. 64, 016131.
+[31] Brandes U. (2001), Journal of Mathematical Sociology 25, 163-177.
+[32] Burt R.S. (1992), Structural Holes (Harward University Press, Cambridge, MA).
+[33] Caldarelli G., Caretta Cartozo C., De Los Rios P. & Servedio V.D.P., cond-mat/0311486.
+[34] Bogu˜na M., Pastor-Satorras R., D´iaz-Guilera A. & Arenas A. (2003), cond-mat/0309263.
+[35] Newman, M.E.J. & Park, J. (2003) Phys. Rev. E 68, 036122.
+[36] Caldarelli, G., Pastor-Satorras, R. & Vespignani A. (2002), cond-mat/0212026.
+
+8
+Figure legends
+Fig.1 A simple network (left) and the corresponding dendrogram (right).
+Fig.2 Test of the eﬃciency of the diﬀerent algorithms in the analysis of the artiﬁcial graph with four communities.
+The construction of the graph is described in text. Here N = 128 and pin is changed with pout in order to
+keep the average degree equal to 16. (Left) Strong deﬁnition: fraction of successes for the diﬀerent algorithms
+compared with the analytical probability that four communities are actually deﬁned. (Right) Weak deﬁnition:
+in addition to the same quantities plotted in the left graph, here we report, for every algorithm, the fraction f
+of nodes not correctly classiﬁed.
+Fig.3 Plot of the dendrograms for the network of college football teams, obtained using the Girvan-Newman algorithm
+(left) and our new algorithm with g = 4 (right). Diﬀerent symbols denote teams belonging to diﬀerent confer-
+ences. In both cases the observed communities perfectly correspond to the conferences, with the exception of
+the 6 members of the Independent conference, which are misclassiﬁed.
+Fig.4 Edge betweenness vs. the modiﬁed edge clustering coeﬃcient ˜C(4)
+i,j , for the network of scientiﬁc collaborations
+considered in section V. Each dot represents an edge in the network. See section V for details.
+Fig.5 Plot of the average time (in seconds) needed to analyze a random graph of N nodes and ﬁxed average degree
+⟨k⟩= 5. The time refers to the construction of the full tree down to single nodes (Fig. 1). No criterion to
+validate the communities was imposed. The runs are performed on a desktop computer with a 800 MHz CPU.
+Fig.6 Normalized size distribution of all the communities of scientists identiﬁed in a weak sense by the algorithm
+described in section IV for g = 3 (circles) and g = 4 (squares). In both cases the behaviour is well reproduced
+by a power law with exponent −2.
+
+9
+FIG. 1:
+
+10
+0
+0.02
+0.04
+0.06
+0.08
+0.1
+pout
+0
+0.2
+0.4
+0.6
+0.8
+1
+R0
+Analytical
+g = 3
+g = 4
+GN
+Strong definition
+0
+0.02
+0.04
+0.06
+0.08
+0.1
+pout
+0
+0.2
+0.4
+0.6
+0.8
+1
+R0, f
+R0 Analytical
+R0   g = 3
+R0   g = 4
+R0   GN
+f   g = 3
+f   g = 4
+f   GN
+Weak definition
+FIG. 2:
+
+11
+FIG. 3:
+
+12
+0.01
+0.1
+1
+Modified Edge clustering coefficient (g=4) 
+10
+0
+10
+2
+10
+4
+10
+6
+Edge betwenness
+FIG. 4:
+
+13
+10
+100
+1000
+10000
+N
+0.01
+1
+100
+Time (sec)
+GN
+Local, g=3
+Local, g=4
+FIG. 5:
+
+14
+10
+0
+10
+1
+10
+2
+10
+3
+10
+4
+S
+10
+-6
+10
+-4
+10
+-2
+10
+0
+P(S)
+Distribution of (weak) community sizes (g=3)
+Distribution of (weak) community sizes (g=4)
+Fit with a power law with exponent -2
+FIG. 6:

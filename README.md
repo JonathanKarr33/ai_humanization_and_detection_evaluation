@@ -43,14 +43,38 @@ This will:
 - Fetch papers from OpenAlex API
 - Filter for papers where the domain is the #1 concept
 - Download PDFs and extract text
-- Save metadata to `papers/metadata.jsonl`
-- Save abstracts to `papers/{domain}/abstracts/{paper_id}.txt`
+- Save metadata to `papers/{collection}/metadata_{collection}.jsonl` (default collection: `2020_back`)
+- Save abstracts to `papers/{collection}/{domain}/abstracts/{paper_id}.txt`
 
 **Note**: The script will automatically resume from previous runs and only collect the remaining papers needed to reach 100 per domain.
 
 ## Step 2: PANGRAM Abstracts
 
 Process all paper abstracts through PANGRAM API for AI detection.
+
+If you scraped into a non-default collection folder, pass `--collection` to match:
+
+```bash
+python src/paper_scrape.py --collection 2020_back
+```
+
+To scrape a specific publication date range (inclusive), use:
+
+```bash
+python src/paper_scrape.py --collection 2025_to_2023 --from-date 2023-01-01 --to-date 2025-12-31
+```
+
+## Visualize abstract coverage
+
+Create a summary figure (counts by domain + by month) for any collection:
+
+```bash
+python src/visualize_abstracts.py --collection 2020_back --min-words 25
+```
+
+This writes to:
+
+- `results/figures/{collection}/abstract_counts_min{min_words}.png`
 
 ```bash
 python src/pangram_abstracts.py
@@ -93,11 +117,12 @@ This will display:
 ```
 .
 ├── papers/
-│   ├── metadata.jsonl              # Paper metadata
-│   ├── {domain}/
-│   │   ├── abstracts/              # Abstract text files
-│   │   ├── pdfs/                   # PDF files
-│   │   └── text/                   # Extracted text files
+│   ├── {collection}/
+│   │   ├── metadata_{collection}.jsonl  # Paper metadata
+│   │   ├── {domain}/
+│   │   │   ├── abstracts/          # Abstract text files
+│   │   │   ├── pdfs/               # PDF files
+│   │   │   └── text/               # Extracted text files
 ├── pangram_abstracts_results.json  # PANGRAM detection results
 ├── src/
 │   ├── paper_scrape.py             # Step 1: Scrape papers

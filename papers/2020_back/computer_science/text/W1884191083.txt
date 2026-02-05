@@ -1,0 +1,1956 @@
+Brain Tumor Segmentation with Deep Neural Networks$
+Mohammad Havaeia,1, Axel Davyb, David Warde-Farleyc, Antoine Biardc,d, Aaron Courvillec, Yoshua Bengioc, Chris Palc,e,
+Pierre-Marc Jodoina, Hugo Larochellea,f
+aUniversit´e de Sherbrooke, Sherbrooke, Qc, Canada
+b ´Ecole Normale sup´erieure, Paris, France
+cUniversit´e de Montr´eal, Montr´eal, Canada
+d ´Ecole polytechnique, Palaiseau, France
+e ´Ecole Polytechnique de Montr´eal , Canada
+fTwitter, USA
+Abstract
+In this paper, we present a fully automatic brain tumor segmentation method based on Deep Neural Networks (DNNs). The
+proposed networks are tailored to glioblastomas (both low and high grade) pictured in MR images. By their very nature, these
+tumors can appear anywhere in the brain and have almost any kind of shape, size, and contrast. These reasons motivate our
+exploration of a machine learning solution that exploits a ﬂexible, high capacity DNN while being extremely eﬃcient. Here, we
+give a description of diﬀerent model choices that we’ve found to be necessary for obtaining competitive performance. We explore
+in particular diﬀerent architectures based on Convolutional Neural Networks (CNN), i.e. DNNs speciﬁcally adapted to image data.
+We present a novel CNN architecture which diﬀers from those traditionally used in computer vision. Our CNN exploits both local
+features as well as more global contextual features simultaneously. Also, diﬀerent from most traditional uses of CNNs, our networks
+use a ﬁnal layer that is a convolutional implementation of a fully connected layer which allows a 40 fold speed up. We also describe
+a 2-phase training procedure that allows us to tackle diﬃculties related to the imbalance of tumor labels. Finally, we explore a
+cascade architecture in which the output of a basic CNN is treated as an additional source of information for a subsequent CNN.
+Results reported on the 2013 BRATS test dataset reveal that our architecture improves over the currently published state-of-the-art
+while being over 30 times faster.
+Keywords:
+Brain tumor segmentation, deep neural networks
+1. Introduction
+In the United States alone, it is estimated that 23,000 new
+cases of brain cancer will be diagnosed in 20152.
+While
+gliomas are the most common brain tumors, they can be less
+aggressive (i.e. low grade) in a patient with a life expectancy of
+several years, or more aggressive (i.e. high grade) in a patient
+with a life expectancy of at most 2 years.
+Although surgery is the most common treatment for brain
+tumors, radiation and chemotherapy may be used to slow the
+growth of tumors that cannot be physically removed. Magnetic
+resonance imaging (MRI) provides detailed images of the brain,
+and is one of the most common tests used to diagnose brain tu-
+mors. All the more, brain tumor segmentation from MR im-
+ages can have great impact for improved diagnostics, growth
+rate prediction and treatment planning.
+While some tumors such as meningiomas can be easily seg-
+mented, others like gliomas and glioblastomas are much more
+diﬃcult to localize. These tumors (together with their surround-
+ing edema) are often diﬀused, poorly contrasted, and extend
+$Accepted in Medical Image Analysis.
+1mohammad.havaei@gmail.com
+2cancer.org
+tentacle-like structures that make them diﬃcult to segment. An-
+other fundamental diﬃculty with segmenting brain tumors is
+that they can appear anywhere in the brain, in almost any shape
+and size. Furthermore, unlike images derived from X-ray com-
+puted tomography (CT) scans, the scale of voxel values in MR
+images is not standardized. Depending on the type of MR ma-
+chine used (1.5, 3 or 7 tesla) and the acquisition protocol (ﬁeld
+of view value, voxel resolution, gradient strength, b0 value,
+etc.), the same tumorous cells may end up having drastically
+diﬀerent grayscale values when pictured in diﬀerent hospitals.
+Healthy brains are typically made of 3 types of tissues: the
+white matter, the gray matter, and the cerebrospinal ﬂuid. The
+goal of brain tumor segmentation is to detect the location and
+extension of the tumor regions, namely active tumorous tissue
+(vascularized or not), necrotic tissue, and edema (swelling near
+the tumor). This is done by identifying abnormal areas when
+compared to normal tissue. Since glioblastomas are inﬁltra-
+tive tumors, their borders are often fuzzy and hard to distin-
+guish from healthy tissues. As a solution, more than one MRI
+modality is often employed, e.g. T1 (spin-lattice relaxation),
+T1-contrasted (T1C), T2 (spin-spin relaxation), proton density
+(PD) contrast imaging, diﬀusion MRI (dMRI), and ﬂuid atten-
+uation inversion recovery (FLAIR) pulse sequences. The con-
+Preprint submitted to Medical Image Analysis
+May 23, 2016
+arXiv:1505.03540v3  [cs.CV]  20 May 2016
+
+trast between these modalities gives almost a unique signature
+to each tissue type.
+Most automatic brain tumor segmentation methods use hand-
+designed features [15, 32]. These methods implement a clas-
+sical machine learning pipeline according to which features
+are ﬁrst extracted and then given to a classiﬁer whose train-
+ing procedure does not aﬀect the nature of those features. An
+alternative approach for designing task-adapted feature repre-
+sentations is to learn a hierarchy of increasingly complex fea-
+tures directly from in-domain data. Deep neural networks have
+been shown to excel at learning such feature hierarchies [7]. In
+this work, we apply this approach to learn feature hierarchies
+adapted speciﬁcally to the task of brain tumor segmentation that
+combine information across MRI modalities.
+Speciﬁcally, we investigate several choices for training Con-
+volutional Neural Networks (CNNs), which are Deep Neural
+Networks (DNNs) adapted to image data.
+We report their
+advantages, disadvantages and performance using well estab-
+lished metrics. Although CNNs ﬁrst appeared over two decades
+ago [29], they have recently become a mainstay of the com-
+puter vision community due to their record-shattering perfor-
+mance in the ImageNet Large-Scale Visual Recognition Chal-
+lenge [27]. While CNNs have also been successfully applied
+to segmentation problems [1, 31, 21, 8], most of the previous
+work has focused on non-medical tasks and many involve ar-
+chitectures that are not well suited to medical imagery or brain
+tumor segmentation in particular. Our preliminary work on us-
+ing convolutional neural networks for brain tumor segmentation
+together with two other methods using CNNs was presented in
+BRATS‘14 workshop. However, those results were incomplete
+and required more investigation (More on this in chapter 2).
+In this paper, we propose a number of speciﬁc CNN architec-
+tures for tackling brain tumor segmentation. Our architectures
+exploit the most recent advances in CNN design and training
+techniques, such as Maxout [18] hidden units and Dropout [42]
+regularization. We also investigate several architectures which
+take into account both the local shape of tumors as well as their
+context.
+One problem with many machine learning methods is that
+they perform pixel classiﬁcation without taking into account the
+local dependencies of labels (i.e. segmentation labels are con-
+ditionally independent given the input image). To account for
+this, one can employ structured output methods such as condi-
+tional random ﬁelds (CRFs), for which inference can be com-
+putationally expensive. Alternatively, one can model label de-
+pendencies by considering the pixel-wise probability estimates
+of an initial CNN as additional input to certain layers of a sec-
+ond DNN, forming a cascaded architecture. Since convolutions
+are eﬃcient operations, this approach can be signiﬁcantly faster
+than implementing a CRF.
+We focus our experimental analysis on the fully-annotated
+MICCAI brain tumor segmentation (BRATS) challenge 2013
+dataset [15] using the well deﬁned training and testing splits,
+thereby allowing us to compare directly and quantitatively to a
+wide variety of other methods.
+Our contributions in this work are four fold:
+1. We propose a fully automatic method with results cur-
+rently ranked second on the BRATS 2013 scoreboard;
+2. To segment a brain, our method takes between 25 seconds
+and 3 minutes, which is one order of magnitude faster than
+most state-of-the-art methods.
+3. Our CNN implements a novel two-pathway architecture
+that learns about the local details of the brain as well as
+the larger context. We also propose a two-phase training
+procedure which we have found is critical to deal with im-
+balanced label distributions. Details of these contributions
+are described in Sections 3.1.1 and 3.2.
+4. We employ a novel cascaded architecture as an eﬃcient
+and conceptually clean alternative to popular structured
+output methods. Details on those models are presented
+in Section 3.1.2.
+2. Related work
+As noted by Menze et al. [32], the number of publications
+devoted to automated brain tumor segmentation has grown ex-
+ponentially in the last several decades. This observation not
+only underlines the need for automatic brain tumor segmenta-
+tion tools, but also shows that research in that area is still a work
+in progress.
+Brain tumor segmentation methods (especially those devoted
+to MRI) can be roughly divided in two categories: those based
+on generative models and those based on discriminative mod-
+els [32, 5, 2].
+Generative models rely heavily on domain-speciﬁc prior
+knowledge about the appearance of both healthy and tumor-
+ous tissues. Tissue appearance is challenging to characterize,
+and existing generative models usually identify a tumor as be-
+ing a shape or a signal which deviates from a normal (or av-
+erage) brain [9]. Typically, these methods rely on anatomical
+models obtained after aligning the 3D MR image on an at-
+las or a template computed from several healthy brains [12].
+A typical generative model of MR brain images can be found
+in Prastawa et al. [37]. Given the ICBM brain atlas, the method
+aligns the brain to the atlas and computes posterior probabilities
+of healthy tissues (white matter, gray matter and cerebrospinal
+ﬂuid) . Tumorous regions are then found by localizing vox-
+els whose posterior probability is below a certain threshold. A
+post-processing step is then applied to ensure good spatial reg-
+ularity. Prastawa et al. [38] also register brain images onto an
+atlas in order to get a probability map for abnormalities. An
+active contour is then initialized on this map and iterated until
+the change in posterior probability is below a certain threshold.
+Many other active-contour methods along the same lines have
+been proposed [25, 10, 36], all of which depend on left-right
+brain symmetry features and/or alignment-based features. Note
+that since aligning a brain with a large tumor onto a template
+can be challenging, some methods perform registration and tu-
+mor segmentation at the same time [28, 34].
+Other approaches for brain tumor segmentation employ dis-
+criminative models. Unlike generative modeling approaches,
+these approaches exploit little prior knowledge on the brain’s
+2
+
+anatomy and instead rely mostly on the extraction of [a large
+number of] low level image features, directly modeling the
+relationship between these features and the label of a given
+voxel. These features may be raw input pixels values [22, 20],
+local histograms [26, 39] texture features such as Gabor ﬁl-
+terbanks [44, 43], or alignment-based features such as inter-
+image gradient, region shape diﬀerence, and symmetry anal-
+ysis [33].
+Classical discriminative learning techniques such
+as SVMs [4, 41, 30] and decision forests [48] have also been
+used. Results from the 2012, 2013 and 2014 editions of the
+MICCAI-BRATS Challenge suggest that methods relying on
+random forests are among the most accurate [32, 19, 26].
+One common aspect with discriminative models is their im-
+plementation of a conventional machine learning pipeline rely-
+ing on hand-designed features. For these methods, the classiﬁer
+is trained to separate healthy from non-heatlthy tissues assum-
+ing that the input features have a suﬃciently high discriminative
+power since the behavior the classiﬁer is independent from na-
+ture of those features. One diﬃculty with methods based on
+hand-designed features is that they often require the computa-
+tion of a large number of features in order to be accurate when
+used with many traditional machine learning techniques. This
+can make them slow to compute and expensive memory-wise.
+More eﬃcient techniques employ lower numbers of features,
+using dimensionality reduction or feature selection methods,
+but the reduction in the number of features is often at the cost
+of reduced accuracy.
+By their nature, many hand-engineered features exploit very
+generic edge-related information, with no speciﬁc adaptation to
+the domain of brain tumors. Ideally, one would like to have
+features that are composed and reﬁned into higher-level, task-
+adapted representations. Recently, preliminary investigations
+have shown that the use of deep CNNs for brain tumor segmen-
+tation makes for a very promising approach (see the BRATS
+2014 challenge workshop papers of Davy et al. [11], Zikic et al.
+[49], Urban et al. [45]). All three methods divide the 3D MR
+images into 2D [11, 49] or 3D patches [45] and train a CNN to
+predict its center pixel class. Urban et al. [45] as well as Zikic
+et al. [49] implemented a fairly common CNN, consisting of a
+series of convolutional layers, a non-linear activation function
+between each layer and a softmax output layer. Our work here3
+extends our preliminary results presented in Davy et al. [11] us-
+ing a two-pathway architecture, which we use here as a building
+block.
+In computer vision, CNN-based segmentation models have
+typically been applied to natural scene labeling. For these tasks,
+the inputs to the model are the RGB channels of a patch from
+a color image. The work in Pinheiro and Collobert [35] uses a
+basic CNN to make predictions for each pixel and further im-
+proves the predictions by using them as extra information in
+the input of a second CNN model. Other work [13] involves
+several distinct CNNs processing the image at diﬀerent resolu-
+tions. The ﬁnal per-pixel class prediction is made by integrating
+3 It is important to note that while we did participate in the BRATS 2014
+challenge, we could not report complete and fair experiments for it at the time
+of submitting this manuscript. See Section 5 for a discussion on this point.
+information learned from all CNNs. To produce a smooth seg-
+mentation, these predictions are regularized using a more global
+superpixel segmentation of the image. Like our work, other re-
+cent work has exploited convolution operations in the ﬁnal layer
+of a network to extend traditional CNN architectures for seman-
+tic scene segmentation [31]. In the medical imaging domain in
+general there has been comparatively less work using CNNs for
+segmentation. However, some notable recent work by Huang
+and Jain [23] has used CNNs to predict the boundaries of neu-
+ral tissue in electron microscopy images. Here we explore an
+approach with similarities to the various approaches discussed
+above, but in the context of brain tumor segmentation.
+3. Our Convolutional Neural Network Approach
+Since the brains in the BRATS dataset lack resolution in the
+third dimension, we consider performing the segmentation slice
+by slice from the axial view. Thus, our model processes sequen-
+tially each 2D axial image (slice) where each pixel is associ-
+ated with diﬀerent image modalities namely; T1, T2, T1C and
+FLAIR. Like most CNN-based segmentation models [35, 13],
+our method predicts the class of a pixel by processing the M×M
+patch centered on that pixel. The input X of our CNN model is
+thus an M × M 2D patch with several modalities.
+The main building block used to construct a CNN architec-
+ture is the convolutional layer. Several layers can be stacked
+on top of each other forming a hierarchy of features. Each
+layer can be understood as extracting features from its preced-
+ing layer into the hierarchy to which it is connected. A single
+convolutional layer takes as input a stack of input planes and
+produces as output some number of output planes or feature
+maps. Each feature map can be thought of as a topologically
+arranged map of responses of a particular spatially local non-
+linear feature extractor (the parameters of which are learned),
+applied identically to each spatial neighborhood of the input
+planes in a sliding window fashion. In the case of a ﬁrst con-
+volutional layer, the individual input planes correspond to dif-
+ferent MRI modalities (in typical computer vision applications,
+the individual input planes correspond to the red, green and blue
+color channels). In subsequent layers, the input planes typically
+consist of the feature maps of the previous layer.
+Computing a feature map in a convolutional layer (see Fig-
+ure 1 ) consists of the following three steps:
+1. Convolution of kernels (ﬁlters): Each feature map Os is
+associated with one kernel (or several, in the case of Max-
+out). The feature map Os is computed as follows:
+Os = bs +
+X
+r
+Wsr ∗Xr
+(1)
+where Xr is the rth input channel, Wsr is the sub-kernel
+for that channel, ∗is the convolution operation and bs is
+a bias term4. In other words, the aﬃne operation being
+4Since the convolutional layer is associated to R input channels, X contains
+M × M × R gray-scale values and thus each kernel Ws contains N × N × R
+weights. Accordingly, the number of parameters in a convolutional block of
+consisting of S feature maps is equal to R × M × M × S .
+3
+
+max
+Maxout,  
+K = 2
+convolution, 
+N = 3
+max pooling, 
+p = 2
+5x5
+4x4
+5x5
+7x7
+7x7
+Hs
+Zs
+Os
+Os+1
+X
+X
+X
+Figure 1: A single convolution layer block showing computa-
+tions for a single feature map. The input patch (here 7 × 7), is
+convolved with series of kernels (here 3 × 3) followed by Max-
+out and max-pooling.
+performed for each feature map is the sum of the appli-
+cation of R diﬀerent 2-dimensional N × N convolution
+ﬁlters (one per input channel/modality), plus a bias term
+which is added pixel-wise to each resulting spatial posi-
+tion. Though the input to this operation is a M × M × R
+3-dimensional tensor, the spatial topology being consid-
+ered is 2-dimensional in the X-Y axial plane of the original
+brain volume.
+Whereas traditional image feature extraction methods rely
+on a ﬁxed recipe (sometimes taking the form of convo-
+lution with a linear e.g. Gabor ﬁlter bank), the key to
+the success of convolutional neural networks is their abil-
+ity to learn the weights and biases of individual feature
+maps, giving rise to data-driven, customized, task-speciﬁc
+dense feature extractors. These parameters are adapted
+via stochastic gradient descent on a surrogate loss function
+related to the misclassiﬁcation error, with gradients com-
+puted eﬃciently via the backpropagation algorithm [40].
+Special attention must be paid to the treatment of border
+pixels by the convolution operation. Throughout our archi-
+tecture, we employ the so-called valid-mode convolution,
+meaning that the ﬁlter response is not computed for pixel
+positions that are less than ⌊N/2⌋pixels away from the im-
+age border. An N ×N ﬁlter convolved with an M×M input
+patch will result in a Q × Q output, where Q = M −N + 1.
+In Figure 1, M = 7, N = 3 and thus Q = 5. Note that the
+size (spatial width and height) of the kernels are hyper-
+parameters that must be speciﬁed by the user.
+2. Non-linear activation function: To obtain features that are
+non-linear transformations of the input, an element-wise
+non-linearity is applied to the result of the kernel convo-
+lution. There are multiple choices for this non-linearity,
+such as the sigmoid, hyperbolic tangent and rectiﬁed lin-
+ear functions [24], [16].
+Recently, Goodfellow et al. [18] proposed a Maxout non-
+linearity, which has been shown to be particularly eﬀec-
+tive at modeling useful features. Maxout features are as-
+sociated with multiple kernels Ws.
+This implies each
+Maxout map Zs is associated with K feature maps :
+{Os, Os+1, ..., Os+K−1}. Note that in Figure 1, the Maxout
+maps are associated with K = 2 feature maps. Maxout fea-
+tures correspond to taking the max over the feature maps
+O, individually for each spatial position:
+Zs,i,j = max
+n
+Os,i,j, Os+1,i, j, ..., Os+K−1,i,j
+o
+(2)
+where i, j are spatial positions. Maxout features are thus
+equivalent to using a convex activation function, but whose
+shape is adaptive and depends on the values taken by the
+kernels.
+3. Max pooling: This operation consists of taking the maxi-
+mum feature (neuron) value over sub-windows within each
+feature map. This can be formalized as follows:
+Hs,i, j = max
+p
+Zs,i+p, j+p,
+(3)
+where p determines the max pooling window size. The
+sub-windows can be overlapping or not (Figure 1 shows
+an overlapping conﬁguration). The max-pooling operation
+shrinks the size of the feature map. This is controlled by
+the pooling size p and the stride hyper-parameter, which
+corresponds to the horizontal and vertical increments at
+which pooling sub-windows are positioned. Let S be the
+stride value and Q × Q be the shape of the feature map
+before max-pooling. The output of the max-pooling oper-
+ation would be of size D × D, where D = (Q −p)/S + 1.
+In Figure 1, since Q = 5, p = 2, S = 1, the max-pooling
+operation results into a D = 4 output feature map. The
+motivation for this operation is to introduce invariance to
+local translations. This subsampling procedure has been
+found beneﬁcial in other applications [27].
+Convolutional networks have the ability to extract a hierar-
+chy of increasingly complex features which makes them very
+appealing. This is done by treating the output feature maps of a
+convolutional layer as input channels to the subsequent convo-
+lutional layer.
+From the neural network perspective, feature maps corre-
+spond to a layer of hidden units or neurons. Speciﬁcally, each
+coordinate within a feature map corresponds to an individual
+neuron, for which the size of its receptive ﬁeld corresponds to
+the kernel’s size. A kernel’s value also represents the weights of
+the connections between the layer’s neurons and the neurons in
+the previous layer. It is often found in practice that the learned
+kernels resemble edge detectors, each kernel being tuned to a
+diﬀerent spatial frequency, scale and orientation, as is appropri-
+ate for the statistics of the training data.
+Finally, to perform a prediction of the segmentation labels,
+we connect the last convolutional hidden layer to a convolu-
+tional output layer followed by a non-linearity (i.e. no pool-
+ing is performed). It is necessary to note that, for segmenta-
+tion purposes, a conventional CNN will not yield an eﬃcient
+test time since the output layer is typically fully connected.
+By using a convolution at the end, for which we have an ef-
+ﬁcient implementation, the prediction at test time for a whole
+brain will be 45 times faster. The convolution uses as many
+kernels as there are diﬀerent segmentation labels (in our case
+ﬁve). Each kernel thus acts as the ultimate detector of tissue
+from one of the segmentation labels. We use the softmax non-
+linearity which normalizes the result of the kernel convolutions
+4
+
+into a multinominal distribution over the labels. Speciﬁcally, let
+a be the vector of values at a given spatial position, it computes
+softmax(a) = exp(a)/Z where Z = P
+c exp(ac) is a normaliza-
+tion constant. More details will be discussed in Section 4.
+Noting Y as the segmentation label ﬁeld over the input patch
+X, we can thus interpret each spatial position of the convolu-
+tional output layer as providing a model for the likelihood dis-
+tribution p(Yij|X), where Yij is the label at position i, j. We
+get the probability of all labels simply by taking the product
+of each conditional p(Y|X) = Q
+ij p(Yij|X). Our approach thus
+performs a multiclass labeling by assigning to each pixel the
+label with the largest probability.
+3.1. The Architectures
+Our description of CNNs so far suggests a simple architec-
+ture corresponding to a single stack of several convolutional
+layers. This conﬁguration is the most commonly implemented
+architecture in the computer vision literature. However, one
+could imagine other architectures that might be more appropri-
+ate for the task at hand.
+In this work, we explore a variety of architectures by using
+the concatenation of feature maps from diﬀerent layers as an-
+other operation when composing CNNs. This operation allows
+us to construct architectures with multiple computational paths,
+which can each serve a diﬀerent purpose. We now describe the
+two types of architectures that we explore in this work.
+3.1.1. Two-pathway architecture
+This architecture is made of two streams: a pathway with
+smaller 7 × 7 receptive ﬁelds and another with larger 13 × 13
+receptive ﬁelds. We refer to these streams as the local pathway
+and the global pathway, respectively. The motivation for this
+architectural choice is that we would like the prediction of the
+label of a pixel to be inﬂuenced by two aspects: the visual de-
+tails of the region around that pixel and its larger “context”, i.e.
+roughly where the patch is in the brain.
+The full architecture along with its details is illustrated in
+Figure 2. We refer to this architecture as the TwoPathCNN.
+To allow for the concatenation of the top hidden layers of both
+pathways, we use two layers for the local pathway, with 3 × 3
+kernels for the second layer. While this implies that the eﬀective
+receptive ﬁeld of features in the top layer of each pathway is the
+same, the global pathway’s parametrization more directly and
+ﬂexibly models features in that same area. The concatenation
+of the feature maps of both pathways is then fed to the output
+layer.
+3.1.2. Cascaded architectures
+One disadvantage of the CNNs described so far is that they
+predict each segmentation label separately from each other.
+This is unlike a large number of segmentation methods in the
+literature, which often propose a joint model of the segmen-
+tation labels, eﬀectively modeling the direct dependencies be-
+tween spatially close labels. One approach is to deﬁne a con-
+ditional random ﬁeld (CRF) over the labels and perform mean-
+ﬁeld message passing inference to produce a complete segmen-
+tation. In this case, the ﬁnal label at a given position is eﬀec-
+tively inﬂuenced by the models beliefs about what the label is
+in the vicinity of that position.
+On the other hand, inference in such joint segmentation
+methods is typically more computationally expensive than a
+simple feed-forward pass through a CNN. This is an impor-
+tant aspect that one should take into account if automatic brain
+tumor segmentation is to be used in a day-to-day practice.
+Here, we describe CNN architectures that both exploit the
+eﬃciency of CNNs, while also more directly model the depen-
+dencies between adjacent labels in the segmentation. The idea
+is simple: since we’d like the ultimate prediction to be inﬂu-
+enced by the model’s beliefs about the value of nearby labels,
+we propose to feed the output probabilities of a ﬁrst CNN as
+additional inputs to the layers of a second CNN. Again, we do
+this by relying on the concatenation of convolutional layers. In
+this case, we simply concatenate the output layer of the ﬁrst
+CNN with any of the layers in the second CNN. Moreover, we
+use the same two-pathway structure for both CNNs. This eﬀec-
+tively corresponds to a cascade of two CNNs, thus we refer to
+such models as cascaded architectures.
+In this work, we investigated three cascaded architectures
+that concatenate the ﬁrst CNN’s output at diﬀerent levels of the
+second CNN:
+• Input concatenation: In this architecture, we provide the
+ﬁrst CNN’s output directly as input to the second CNN.
+They are thus simply treated as additional image channels
+of the input patch. The details are illustrated in Figure 3a.
+We refer to this model as InputCascadeCNN.
+• Local pathway concatenation: In this architecture, we
+move up one layer in the local pathway and perform con-
+catenation to its ﬁrst hidden layer, in the second CNN. The
+details are illustrated in Figure 3b. We refer to this model
+as LocalCascadeCNN.
+• Pre-output concatenation: In this last architecture, we
+move to the very end of the second CNN and perform con-
+catenation right before its output layer. This architecture
+is interesting, as it is similar to the computations made by
+one pass of mean-ﬁeld inference [46] in a CRF whose pair-
+wise potential functions are the weights in the output ker-
+nels. From this view, the output of the ﬁrst CNN is the
+ﬁrst iteration of mean-ﬁeld, while the output of the sec-
+ond CNN would be the second iteration. The diﬀerence
+with regular mean-ﬁeld however is that our CNN allows
+the output at one position to be inﬂuenced by its previ-
+ous value, and the convolutional kernels are not the same
+in the ﬁrst and second CNN. The details are illustrated in
+Figure 3c. We refer to this model as MFCascadeCNN.
+3.2. Training
+Gradient Descent. By interpreting the output of the convolu-
+tional network as a model for the distribution over segmentation
+labels, a natural training criteria is to maximize the probability
+of all labels in our training set or, equivalently, to minimize the
+5
+
+  
+Conv 3x3 +
+Maxout + 
+Pooling 2x2
+Conv 7x7 +
+Maxout + 
+Pooling 4x4
+Conv 13x13 +
+Maxout 
+Input
+4x33x33
+Concatenation
+Conv 21x21 +
+Softmax
+Output
+5x1x1
+64x21x21
+64x24x24
+160x21x21
+                                        
+224x21x21
+# Parameters  651,488
+Figure 2: Two-pathway CNN architecture (TwoPathCNN). The ﬁgure shows the input patch going through two paths of convolu-
+tional operations. The feature-maps in the local and global paths are shown in yellow and orange respectively. The convolutional
+layers used to produce these feature-maps are indicated by dashed lines in the ﬁgure. The green box embodies the whole model
+which in later architectures will be used to indicate the TwoPathCNN.
+negative log-probability −log p(Y|X) = P
+ij −log p(Yi j|X) for
+each labeled brain.
+To do this, we follow a stochastic gradient descent ap-
+proach by repeatedly selecting labels Yij at a random subset
+of patches within each brain, computing the average negative
+log-probabilities for this mini-batch of patches and performing
+a gradient descent step on the CNNs parameters (i.e. the kernels
+at all layers).
+Performing updates based only on a small subset of patches
+allows us to avoid having to process a whole brain for each
+update, while providing reliable enough updates for learning.
+In practice, we implement this approach by creating a dataset
+of mini-batches of smaller brain image patches, paired with the
+corresponding center segmentation label as the target.
+To further improve optimization, we implemented a so-called
+momentum strategy which has been shown successful in the
+past [27]. The idea of momentum is to use a temporally av-
+eraged gradient in order to damp the optimization velocity:
+Vi+1
+=
+µ ∗Vi −α ∗∇Wi
+Wi+1
+=
+Wi + Vi+1
+where Wi stands for the CNNs parameters at iteration i, ∇Wi
+the gradient of the loss function at Wi, V is the integrated ve-
+locity initialized at zero, α is the learning rate, and µ the mo-
+mentum coeﬃcient. We deﬁne a schedule for the momentum µ
+where the momentum coeﬃcient is gradually increased during
+training. In our experiments the initial momentum coeﬃcient
+was set to µ = 0.5 and the ﬁnal value was set to µ = 0.9.
+Also, the learning rate α is decreased by a factor at every
+epoch. The initial learning rate was set to α = 0.005 and the
+decay factor to 10−1.
+Two-phase training. Brain tumor segmentation is a highly data
+imbalanced problem where the healthy voxels (i.e. label 0)
+comprise 98% of total voxels. From the remaining 2% patho-
+logical voxels, 0.18% belongs to necrosis (label 1), 1.1% to
+edema (label 2), 0.12% to non-enhanced (label 3) and 0.38% to
+enhanced tumor (label 4). Selecting patches from the true dis-
+tribution would cause the model to be overwhelmed by healthy
+patches and causing problem when training out CNN models.
+Instead, we initially construct our patches dataset such that all
+labels are equiprobable. This is what we call the ﬁrst training
+phase. Then, in a second phase, we account for the un-balanced
+nature of the data and re-train only the output layer (i.e. keep-
+ing the kernels of all other layers ﬁxed) with a more represen-
+tative distribution of the labels. This way we get the best of
+both worlds: most of the capacity (the lower layers) is used in
+a balanced way to account for the diversity in all of the classes,
+while the output probabilities are calibrated correctly (thanks to
+the re-training of the output layer with the natural frequencies
+of classes in the data).
+Regularization. Successful CNNs tend to be models with a lot
+of capacity, making them vulnerable to overﬁtting in a setting
+like ours where there clearly are not enough training examples.
+Accordingly, we found that regularization is important in ob-
+taining good results. Here, regularization took several forms.
+First, in all layers, we bounded the absolute value of the kernel
+weights and applied both L1 and L2 regularization to prevent
+overﬁtting.
+This is done by adding the regularization terms
+to the negative log-probability (i.e. −log p(Y|X) + λ1∥W∥1 +
+λ2∥W∥2, where λ1 and λ2 are coeﬃcients for L1 and L2 regu-
+larization terms respectively). L1 and L2 aﬀect the parameters
+of the model in diﬀerent ways, while L1 encourages sparsity, L2
+encourages small values. We also used a validation set for early
+stopping, i.e. stop training when the validation performance
+stopped improving. The validation set was also used to tune the
+other hyper-parameters of the model. The reader shall note that
+the hyper-parameters of the model which includes using or not
+L2 and/or L1 coeﬃcients were selected by doing a grid search
+over range of parameters. The chosen hyper-parameters were
+the ones for which the model performed best on a validation
+set.
+Moreover, we used Dropout [42], a recent regularization
+method that works by stochastically adding noise in the com-
+putation of the hidden layers of the CNN. This is done by mul-
+tiplying each hidden or input unit by 0 (i.e. masking) with a
+certain probability (e.g. 0.5), independently for each unit and
+training update. This encourages the neural network to learn
+6
+
+Input
+4x33x33
+Output
+5x1x1
+64x21x21
+64x24x24
+160x21x21
+Input
+4x65x65
+224x21x21
+Conv 7x7 +
+Maxout + 
+Pooling 4x4
+Conv 3x3 +
+Maxout + 
+Pooling 2x2
+Conv 21x21 +
+Softmax
+Conv 13x13 +
+Maxout 
+5x33x33
+# Parameters 802,368
+9x33x33
+(a) Cascaded architecture, using input concatenation (InputCascadeCNN).
+Input
+4x33x33
+Output
+5x1x1
+64x21x21
+69x24x24
+160x21x21
+5x24x24
+224x21x21
+Conv 7x7 +
+Maxout +
+Pooling 4x4
+Conv 3x3 +
+Maxout + 
+Pooling 2x2
+Conv 21x21 +
+Softmax
+Conv 13x13 +
+Maxout 
+Input
+4x56x56
+# Parameters 654,368
+(b) Cascaded architecture, using local pathway concatenation (LocalCascadeCNN).
+Input
+4x33x33
+Output
+5x1x1
+64x21x21
+64x24x24
+160x21x21
+Input
+4x53x53
+5x21x21
+229x21x21
+Conv 7x7 +
+Maxout + 
+Pooling 4x4
+Conv 3x3 +
+Maxout + 
+Pooling 2x2
+Conv 21x21 +
+Softmax
+Conv 13x13 +
+Maxout 
+# Parameters 662,513
+(c) Cascaded architecture, using pre-output concatenation, which is an architecture with properties similar to that of learning using a limited number of
+mean-ﬁeld inference iterations in a CRF (MFCascadeCNN).
+Figure 3: Cascaded architectures.
+7
+
+features that are useful “on their own”, since each unit cannot
+assume that other units in the same layer won’t be masked as
+well and co-adapt its behavior. At test time, units are instead
+multiplied by one minus the probability of being masked. For
+more details, see Srivastava et al. [42].
+Considering the large number of parameters our model has,
+one might think that even with our regularization strategy, the
+30 training brains from BRATS 2013 are too few to prevent
+overﬁtting. But as will be shown in the results section, our
+model generalizes well and thus do not overﬁt. One reason for
+this is the fact that each brain comes with 200 2d slices and
+thus, our model has approximately 6000 2D images to train on.
+We shall also mention that by their very nature, MRI images
+of brains are very similar from one patient to another. Since
+the variety of those images is much lower than those in real-
+image datasets such as CIFAR and ImageNet, a fewer number
+of training samples is thus needed.
+Cascaded Architectures. To train a cascaded architecture, we
+start by training the TwoPathCNN with the two phase stochas-
+tic gradient descent procedure described previously. Then, we
+ﬁx the parameters of the TwoPathCNN and include it in the
+cascaded architecture (be it the InputCascadeCNN, the Local-
+CascadeCNN, or the MFCascadeCNN) and move to training
+the remaining parameters using a similar procedure. It should
+be noticed however that for the spatial size of the ﬁrst CNN’s
+output and the layer of the second CNN to match, we must feed
+to the ﬁrst CNN a much larger input. Thus, training of the sec-
+ond CNN must be performed on larger patches. For example
+in the InputCascadeCNN (Figure 3a), the input size to the ﬁrst
+model is of size 65 × 65 which results into an output of size
+33 × 33. Only in this case the outputs of the ﬁrst CNN can be
+concatenated with the input channels of the second CNN.
+4. Implementation details
+Our implementation is based on the Pylearn2 library [17].
+Pylearn2 is an open-source machine learning library special-
+izing in deep learning algorithms. It also supports the use of
+GPUs, which can greatly accelerate the execution of deep learn-
+ing algorithms.
+Since CNN’s are able to learn useful features from scratch,
+we applied only minimal pre-processing.
+We employed the
+same pre-processing as Tustison et al., the winner of the 2013
+BRATS challenge [32]. The pre-processing follows three steps.
+First, the 1% highest and lowest intensities are removed. Then,
+we apply an N4ITK bias correction [3] to T1 and T1C modali-
+ties. The data is then normalized within each input channel by
+subtracting the channel’s mean and dividing by the channel’s
+standard deviation.
+As for post-processing, a simple method based on connected
+components was implemented to remove ﬂat blobs which might
+appear in the predictions due to bright corners of the brains
+close to the skull.
+The hyper-parameters of the diﬀerent architectures (kernel
+and max pooling size for each layer and the number of layers)
+can be seen in Figure 3. Hyper-parameters were tuned using
+grid search and cross-validation on a validation set (see Bengio
+[6]). The chosen hyper-parameters were the ones for which the
+model performed best on the validation set. For max pooling,
+we always use a stride of 1. This is to keep per-pixel accuracy
+during full image prediction. We observed in practice that max
+pooling in the global path does not improve accuracy. We also
+found that adding additional layers to the architectures or in-
+creasing the capacity of the model by adding additional feature
+maps to the convolutional blocks do not provide any meaning-
+ful performance improvement.
+Biases are initialized to zero except for the softmax layer for
+which we initialized them to the log of the label frequencies.
+The kernels are randomly initialized from U (−0.005, 0.005).
+Training takes about 3 minutes per epoch for the TwoPathCNN
+model on an NVIDIA Titan black card.
+At test time, we run our code on a GPU in order to exploit
+its computational speed. Moreover, the convolutional nature of
+the output layer allows us to further accelerate computations at
+test time. This is done by feeding as input a full image and not
+individual patches. Therefore, convolutions at all layers can be
+extended to obtain all label probabilities p(Yi j|X) for the entire
+image. With this implementation, we are able to produce a seg-
+mentation in 25 seconds per brain on the Titan black card with
+the TwoPathCNN model. This turns out to be 45 times faster
+than when we extracted a patch at each pixel and processed
+them individually for the entire brain.
+Predictions for the MFCascadeCNN model, the LocalCas-
+cadeCNN model, and InputCascadeCNN model take on aver-
+age 1.5 minutes, 1.7 minutes and 3 minutes respectively.
+5. Experiments and Results
+The experiments were carried out on real patient data ob-
+tained from the 2013 brain tumor segmentation challenge
+(BRATS2013), as part of the MICCAI conference [15]. The
+BRATS2013 dataset is comprised of 3 sub-datasets. The train-
+ing dataset, which contains 30 patient subjects all with pixel-
+accurate ground truth (20 high grade and 10 low grade tumors);
+the test dataset which contains 10 (all high grade tumors) and
+the leaderboard dataset which contains 25 patient subjects (21
+high grade and 4 low grade tumors). There is no ground truth
+provided for the test and leaderboard datasets. All brains in
+the dataset have the same orientation. For each brain there ex-
+ists 4 modalities, namely T1, T1C, T2 and Flair which are co-
+registered. The training brains come with groundtruth for which
+5 segmentation labels are provided, namely non-tumor, necro-
+sis, edema, non-enhancing tumor and enhancing tumor. Fig-
+ure 4 shows an example of the data as well as the ground truth.
+In total, the model iterates over about 2.2 million examples of
+tumorous patches (this consists of all the 4 sub-tumor classes)
+and goes through 3.2 million of the healthy patches. As men-
+tioned before during the ﬁrst phase training, the distribution of
+examples introduced to the model from all 5 classes is uniform.
+Please note that we could not use the BRATS 2014 dataset
+due to problems with both the system performing the evalu-
+ation and the quality of the labeled data. For these reasons
+8
+
+T1
+T2
+T1-enhanced
+Flair
+GT
+Figure 4: The ﬁrst four images from left to right show the MRI
+modalities used as input channels to various CNN models and
+the ﬁfth image shows the ground truth labels where ■edema,
+■enhanced tumor, ■necrosis, ■non-enhanced tumor.
+the old BRATS 2014 dataset has been removed from the of-
+ﬁcial website and, at the time of submitting this manuscript,
+the BRATS website still showed: “Final data for BRATS 2014
+to be released soon”. Furthermore, we have even conducted
+an experiment where we trained our model with the old 2014
+dataset and made predictions on the 2013 test dataset; however,
+the performance was worse than our results mentioned in this
+paper. For these reasons, we decided to focus on the BRATS
+2013 data.
+As mentioned in Section 3, we work with 2D slices due to
+the fact that the MRI volumes in the dataset do not posses an
+isotropic resolution and the spacing in the third dimension is
+not consistent across the data. We explored the use of 3D infor-
+mation (by treating the third dimension as extra input channels
+or by having an architecture which takes orthogonal slices from
+each view and makes the prediction on the intersecting cen-
+ter pixel), but that didn’t improve performance and made our
+method very slow.
+Note that as suggested by Krizhevsky et al. [27], we applied
+data augmentation by ﬂipping the input images. Unlike what
+was reported by Zeiler and Fergus [47], it did not improve the
+overall accuracy of our model.
+Quantitative evaluation of the models performance on the test
+set is achieved by uploading the segmentation results to the on-
+line BRATS evaluation system [14]. The online system pro-
+vides the quantitative results as follows: The tumor structures
+are grouped in 3 diﬀerent tumor regions. This is mainly due
+to practical clinical applications. As described by Menze et al.
+[32], tumor regions are deﬁned as:
+a) The complete tumor region (including all four tumor
+structures).
+b) The core tumor region (including all tumor structures
+exept “edema”).
+c) The enhancing tumor region (including the “enhanced
+tumor” structure).
+For each tumor region, Dice (identical to F measure), Sensi-
+tivity and Speciﬁcity are computed as follows :
+Dice(P, T)
+=
+|P1 ∧T1|
+(|P1| + |T1|)/2,
+S ensitivity(P, T)
+=
+|P1 ∧T1|
+|T1|
+,
+S peci ficity(P, T)
+=
+|P0 ∧T0|
+|T0|
+,
+where P represents the model predictions and T represents
+the ground truth labels. We also note as T1 and T0 the sub-
+set of voxels predicted as positives and negatives for the tumor
+region in question. Similarly for P1 and P0. The online evalua-
+tion system also provides a ranking for every method submitted
+for evaluation. This includes methods from the 2013 BRATS
+challenge published in [32] as well as anonymized unpublished
+methods for which no reference is available. In this section, we
+report experimental results for our diﬀerent CNN architectures.
+5.1. The TwoPathCNN architecture
+As mentioned previously, unlike conventional CNNs, the
+TwoPathCNN architecture has two pathways: a “local” path
+focusing on details and a “global” path more focused on the
+context. To better understand how joint training of the global
+and local pathways beneﬁts the performance, we report results
+on each pathway as well as results on averaging the outputs of
+each pathway when trained separately. Our method also deals
+with the unbalanced nature of the problem by training in two
+phases as discussed in Section 3.2. To see the impact of the
+two phase training, we report results with and without it. We
+refer to the CNN model consisting of only the local path (i.e.
+conventional CNN architecture) as LocalPathCNN, the CNN
+model consisting of only the global path as GlobalPathCNN,
+the model averaging the outputs of the local and global paths
+(i.e. LocalPathCNN and GlobalPathCNN) as AverageCNN
+and the two-pathway CNN architecture as TwoPathCNN. The
+second training phase is noted by appending ‘*’ to the archi-
+tecture name. Since the second phase training has a substantial
+eﬀect and always improves the performance, we only report re-
+sults on GlobalPathCNN and AverageCNN with the second
+phase.
+Table 1 presents the quantitative results of these variations.
+This table contains results for the TwoPathCNN with one and
+two training phases, the common single path CNN (i.e. Lo-
+calPathCNN) with one and two training phases, the Global-
+PathCNN* which is a single path CNN model following the
+global pathway architecture and the output average of each of
+the trained single-pathway models (AverageCNN*). Without
+much surprise, the single path with one training phase CNN
+was ranked last with the lowest scores on almost every region.
+Using a second training phase gave a signiﬁcant boost to that
+model with a rank that went from 15 to 9. Also, the table shows
+that joint training of the local and global paths yields better per-
+formance compared to when each pathway is trained separately
+and the outputs are averaged. One likely explanation is that by
+joint training the local and global paths, the model allows the
+two pathways to co-adapt. In fact, the AverageCNN* performs
+worse than the LocalPathCNN* due to the fact that the Glob-
+alPathCNN* performs very badly. The top performing method
+in the uncascaded models is the TwoPathCNN* with a rank of
+4.
+Also, in some cases results are less accurate over the En-
+hancing region than for the Core and Complete regions. There
+are 2 main reasons for that. First, borders are usually diﬀused
+and there are no clear cut between enhanced tumor and non-
+enhanced tissues. This creates problems for both user labeling,
+9
+
+Global Path
+Local Path
+Figure 5: Randomly selected ﬁlters from the ﬁrst layer of the
+model. From left to right the ﬁgure shows visualization of fea-
+tures from the ﬁrst layer of the global and local path respec-
+tively. Features in the local path include more edge detectors
+while the global path contains more localized features.
+ground truth, as well as the model. The second reason is that
+the model learns what it sees in the ground truth. Since the la-
+bels are created by diﬀerent people and since the borders are
+not clear, each user has a slightly diﬀerent interpretation of the
+borders of the enhanced tumor and so sometimes we see overly
+thick enhanced tumor in the ground truth.
+Figure 5 shows representation of low level features in both
+local and global paths. As seen from this ﬁgure, features in the
+local path include more edge detectors while the ones in the
+global path are more localized features. Unfortunately, visual-
+izing the learned mid/high level features of a CNN is still very
+much an open research problem. However, we can study the im-
+pact these features have on predictions by visualizing the seg-
+mentation results of diﬀerent models. The segmentation results
+on two subjects from our validation set, produced by diﬀerent
+variations of the basic model can be viewed in Figure 75. As
+shown in the ﬁgure, the two-phase training procedure allows
+the model to learn from a more realistic distribution of labels
+and thus removes false positives produced by the model which
+trains with one training phase. Moreover, by having two path-
+ways, the model can simultaneously learn the global contextual
+features as well as the local detailed features. This gives the
+advantage of correcting labels at a global scale as well as rec-
+ognizing ﬁne details of the tumor at a local scale, yielding a bet-
+ter segmentation as oppose to a single path architecture which
+results in smoother boundaries. Joint training of the two con-
+volutional pathways and having two training phases achieves
+better results.
+5.2. Cascaded architectures
+We now discuss our experiments with the three cascaded
+architectures namely InputCascadeCNN, LocalCascadeCNN
+and MFCascadeCNN. Table 2 provides the quantitative results
+for each architecture. Figure 7 also provides visual examples of
+the segmentation generated by each architecture.
+We ﬁnd that the MFCascadeCNN* model yields smoother
+boundaries between classes.
+We hypothesize that, since the
+5It is important to note that we do not train the model on the validation set
+and thus the quality of the results is not due to overﬁtting
+T1C
+GT
+InputCascadeCNN*
+T1C
+GT
+InputCascadeCNN*
+Figure 8: Visual results from our top performing model, In-
+putCascadeCNN* on Coronal and Sagittal views. The subjects
+are the same as in Figure 7. In every sub-ﬁgure, the top row
+represents the Sagital view and the bottom row represents the
+Coronal view. The color codes are as follows: ■edema, ■
+enhanced tumor, ■necrosis, ■non-enhanced tumor.
+neurons in the softmax output layer are directly connected to
+the previous outputs within each receptive ﬁeld, these parame-
+ters are more likely to learn that the center pixel label should
+have a similar label to its surroundings.
+As for the LocalCascadeCNN* architecture, while it resulted
+in fewer false positives in the complete tumor category, the per-
+formance in other categories (i.e. tumor core and enhanced tu-
+mor) did not improve.
+Figure 8 shows segmentation results from the same brains
+(as in Figure 7) in Sagittal and Coronal views. The InputCas-
+cadeCNN* model was used to produce these results. As seen
+from this ﬁgure, although the segmentation is performed on
+Axial view but the output is consistent in Coronal and Sagittal
+views. Although subjects in Figure 5 and Figure 6 are from our
+validation set for which the model is not trained on and the seg-
+mentation results from these subjects can give a good estimate
+of the models performance on a test set, however, for further
+clarity we visualise the models performance on two subjects
+from BRATS-2013 testst. These results are shown in Figure 9
+in Saggital (top) and Axial (bottom) views.
+To better understand the process for which InputCas-
+cadeCNN* learns features, we present in Figure 6 the progres-
+sion of the model by making predictions at every few epochs on
+a subject from our validation set.
+Overall, the best performance is reached by the InputCas-
+cadeCNN* model.
+It improves the Dice measure on all tu-
+mor regions.
+With this architecture, we were able to reach
+10
+
+Second Phase
+T1C
+Epoch = 5
+Epoch = 11
+Epoch = 25
+Epoch = 35
+Epoch = 55
+Epoch = 1
+Epoch = 7
+Epoch = 5
+Epoch = 4
+Epoch = 2
+Epoch = 10
+GT
+Figure 6: Progression of learning in InputCascadeCNN*. The stream of ﬁgures on the ﬁrst row from left to right show the learning
+process during the ﬁrst phase. As the model learns better features, it can better distinguish boundaries between tumor sub-classes.
+This is made possible due to uniform label distribution of patches during the ﬁrst phase training which makes the model believe
+all classes are equiprobable and causes some false positives. This drawback is alleviated by training a second phase (shown in
+second row from left to right) on a distribution closer to the true distribution of labels. The color codes are as follows: ■edema, ■
+enhanced tumor, ■necrosis, ■non-enhanced tumor.
+Table 1: Performance of the TwoPathCNN model and variations. The second phase training is noted by appending ‘*’ to the
+architecture name. The ‘Rank’ column represents the ranking of each method in the online score board at the time of submission.
+Rank
+Method
+Dice
+Speciﬁcity
+Sensitivity
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+4
+TwoPathCNN*
+0.85
+0.78
+0.73
+0.93
+0.80
+0.72
+0.80
+0.76
+0.75
+9
+LocalPathCNN*
+0.85
+0.74
+0.71
+0.91
+0.75
+0.71
+0.80
+0.77
+0.73
+10
+AverageCNN*
+0.84
+0.75
+0.70
+0.95
+0.83
+0.73
+0.77
+0.74
+0.73
+14
+GlobalPathCNN*
+0.82
+0.73
+0.68
+0.93
+0.81
+0.70
+0.75
+0.65
+0.70
+14
+TwoPathCNN
+0.78
+0.63
+0.68
+0.67
+0.50
+0.59
+0.96
+0.89
+0.82
+15
+LocalPathCNN
+0.77
+0.64
+0.68
+0.65
+0.52
+0.60
+0.96
+0.87
+0.80
+11
+
+LocalPathCNN
+T1C
+GT
+LocalCascadeCNN*
+LocalPathCNN
+LocalPathCNN*
+TwoPathCNN*
+T1C
+LocalCascadeCNN*
+MFCascadeCNN*
+InputCascadeCNN*
+GT
+GlobalPathCNN*
+AverageCNN*
+GlobalPathCNN*
+AveragePathCNN*
+MFCascadeCNN*
+InputCascadeCNN*
+LocalPathCNN*
+TwoPathCNN*
+Figure 7: Visual results from our CNN architectures from the Axial view. For each sub-ﬁgure, the top row from left to right
+shows T1C modality, the conventional one path CNN, the Conventional CNN with two training phases, and the TwoPathCNN
+model. The second row from left to right shows the ground truth, LocalCascadeCNN model, the MFCascadeCNN model and the
+InputCascadeCNN. The color codes are as follows: ■edema, ■enhanced tumor, ■necrosis, ■non-enhanced tumor.
+12
+
+Table 2: Performance of the cascaded architectures. The reported results are from the second phase training. The ‘Rank’ column
+shows the ranking of each method in the online score board at the time of submission.
+Rank
+Method
+Dice
+Speciﬁcity
+Sensitivity
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+2
+InputCascadeCNN*
+0.88
+0.79
+0.73
+0.89
+0.79
+0.68
+0.87
+0.79
+0.80
+4-a
+MFCascadeCNN*
+0.86
+0.77
+0.73
+0.92
+0.80
+0.71
+0.81
+0.76
+0.76
+4-c
+LocalCascadeCNN*
+0.88
+0.76
+0.72
+0.91
+0.76
+0.70
+0.84
+0.80
+0.75
+Figure 9: Visual segmentation results from our top performing
+model, InputCascadeCNN*, on examples of the BRATS2013
+test dataset in Saggital (top) and Axial (bottom) views. The
+color codes are as follows: ■edema, ■enhanced tumor, ■
+necrosis, ■non-enhanced tumor.
+the second rank on the BRATS 2013 scoreboard. While MF-
+CascadeCNN*, TwoPathCNN* and LocalCascadeCNN* are
+all ranked 4, the inner ranking between these three models is
+noted as 4a, 4b and 4c respectively.
+Table 3 shows how our implemented architectures compare
+with currently published state-of-the-art methods as mentioned
+in [32]6. The table shows that InputCascadeCNN* out per-
+forms Tustison et al. the winner of the BRATS 2013 challenge
+and is ranked ﬁrst in the table. Results from the BRATS-2013
+leaderboard presented in Table 4 shows that our method outper-
+forms other approaches on this dataset. We also compare our
+top performing method in Table 5 with state-of-the-art methods
+on BRATS-2012, ”4 label” test set as mentioned in [32]. As
+seen from this table, our method out performs other methods in
+the tumor Core category and gets competitive results on other
+categories.
+Let us mention that Tustison’s method takes 100 minutes to
+compute predictions per brain as reported in [32], while the
+InputCascadeCNN* takes 3 minutes, thanks to the fully con-
+volutional architecture and the GPU implementation, which is
+over 30 times faster than the winner of the challenge.
+The
+TwoPathCNN* has a performance close to the state-of-the-art.
+However, with a prediction time of 25 seconds, it is over 200
+times faster than Tustison’s method. Other top methods in the
+table are that of Meier et al and Reza et al with processing
+times of 6 and 90 minutes respectively. Recently Subbanna
+et al. [43] published competitive results on the BRATS 2013
+dataset, reporting dice measures of 0.86, 0.86, 0.77 for Com-
+plete, Core and Enhancing tumor regions. Since they do not
+report Speciﬁcity and Sensitivity measures, a completely fair
+comparison with that method is not possible. However, as men-
+tioned in [43], their method takes 70 minutes to process a sub-
+ject, which is about 23 times slower than our method.
+Regarding other methods using CNNs, Urban et al. [45] used
+an average of two 3D convolutional networks with dice mea-
+sures of 0.87, 0.77, 0.73 for Complete, Core and Enhancing tu-
+mor regions on BRATS 2013 test dataset with a prediction time
+of about 1 minute per model which makes for a total of 2 min-
+utes. Again, since they do not report Speciﬁcity and Sensitiv-
+ity measures, we can not make a full comparison. However,
+based on their dice scores our TwoPathCNN* is similar in per-
+6Please note that the results mentioned in Table 3 and Table 4 are from meth-
+ods competing in the BRATS 2013 challenge for which a static table is provided
+[https://www.virtualskeleton.ch/BRATS/StaticResults2013]. Since then, other
+methods have been added to the score board but for which no reference is avail-
+able.
+13
+
+Table 5: Comparison of our top implemented architectures with
+the state-of-the-art methods on the BRATS-2012 ”4 label” test
+set as discussed in [32].
+Method
+Dice
+Complete
+Core
+Enhancing
+InputCascadeCNN*
+0.81
+0.72
+0.58
+Subbanna
+0.75
+0.70
+0.59
+Zhao
+0.82
+0.66
+0.42
+Tustison
+0.75
+0.55
+0.52
+Festa
+0.62
+0.50
+0.61
+formance while taking only 25 seconds, which is four times
+faster. And the InputCascadeCNN* is better or equal in accu-
+racy while having the same processing time. As for [49], they
+do not report results on BRATS 2013 test dataset. However,
+their method is very similar to the LocalPathCNN which, ac-
+cording to our experiments, has worse performance.
+Using our best performing method, we took part in the
+BRATS 2015 challenge.
+The BRATS 2015 training dataset
+comprises of 220 subjects with high grade and 54 subjects with
+low grade gliomas. There are 53 subjects with mixed high and
+low grade gliomas for testing. Every participating group had
+48 hours from receiving the test subjects to process them and
+submit their segmentation results to the online evaluation sys-
+tem. BRATS’15 contains the training data of 2013. The ground
+truth for the rest of the training brains is generated by a voted
+average of segmented results of the top performing methods in
+BRATS’13 and BRATS’12. Some of these automatically gen-
+erated ground truths have been reﬁned manually by a user.
+Because distribution of the intensity values in this dataset is
+very variable from one subject to another, we used a 7 fold cross
+validation for training. At test time, a voted average of these
+models was made to make prediction for each subject in the test
+dataset. The results of the challenge are presented in Figure 10.
+The semi-automatic methods participating in the challenge have
+been highlighted in grey. Please note since these results are not
+yet publicly available, we refrain from disclosing the name of
+the participants. In this ﬁgure the semi-automatic methods are
+highlighted in gray. As seen from the ﬁgure, our method ranks
+either ﬁrst or second on Complete tumor and tumor Core cat-
+egories and gets competitive results on active tumor category.
+Our method has also less outliers than most other approaches.
+6. Conclusion
+In this paper, we presented an automatic brain tumor segmen-
+tation method based on deep convolutional neural networks.
+We considered diﬀerent architectures and investigated their im-
+pact on the performance. Results from the BRATS 2013 on-
+line evaluation system conﬁrms that with our best model we
+managed to improve on the currently published state-of-the-art
+method both on accuracy and speed as presented in MICCAI
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 6
+competitor 7
+competitor 12
+competitor 4
+competitor 11
+competitor 9
+competitor 5
+competitor 3
+InputCascadeCNN*
+competitor 1
+competitor 2
+competitor 10
+competitor 8
+−5
+−4
+−3
+−2
+−1
+Hausdorff
+Participants
+Hausdorff Distance Active Tumor
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 7
+competitor 6
+competitor 5
+competitor 9
+competitor 11
+competitor 12
+competitor 1
+competitor 4
+competitor 8
+competitor 10
+competitor 3
+InputCascadeCNN*
+competitor 2
+−4
+−3
+−2
+−1
+Hausdorff
+Participants
+Hausdorff Distance Tumor Core
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 7
+competitor 6
+competitor 5
+competitor 9
+competitor 12
+competitor 11
+competitor 3
+competitor 1
+competitor 8
+competitor 4
+competitor 10
+InputCascadeCNN*
+competitor 2
+−4
+−3
+−2
+−1
+Hausdorff
+Participants
+Hausdorff Distance Whole Tumor
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 6
+competitor 7
+competitor 4
+competitor 12
+competitor 3
+competitor 5
+competitor 11
+competitor 1
+competitor 9
+InputCascadeCNN*
+competitor 8
+competitor 2
+competitor 10
+0.00
+0.25
+0.50
+0.75
+Dice
+Participants
+Dice Measure Active Tumor
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 7
+competitor 6
+competitor 4
+competitor 12
+competitor 11
+competitor 9
+competitor 5
+competitor 3
+competitor 2
+competitor 8
+InputCascadeCNN*
+competitor 10
+competitor 1
+0.00
+0.25
+0.50
+0.75
+Dice
+Participants
+Dice Measure Tumor Core
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+●
+competitor 7
+competitor 6
+competitor 3
+competitor 5
+competitor 12
+competitor 11
+competitor 4
+competitor 8
+competitor 9
+competitor 10
+InputCascadeCNN*
+competitor 1
+competitor 2
+0.00
+0.25
+0.50
+0.75
+1.00
+Dice
+Participants
+Dice Measure Whole Tumor
+Figure 10: Our BRATS’15 challenge results using InputCas-
+cadeCNN*. Dice scores and negative log Hausdorﬀdistances
+are presented for the three tumor categories. Since the results
+of the challenge are not yet publicly available, we are unable
+to disclose the name of the participants. The semi-automatic
+methods are highlighted in gray. In each sub-ﬁgure, the meth-
+ods are ranked based on the mean value. The mean is presented
+in green, the median in red and outliers in blue.
+2013. The high performance is achieved with the help of a novel
+two-pathway architecture (which can model both the local de-
+tails and global context) as well as modeling local label depen-
+dencies by stacking two CNN’s. Training is based on a two
+phase procedure, which we’ve found allows us to train CNNs
+eﬃciently when the distribution of labels is unbalanced.
+Thanks to the convolutional nature of the models and by us-
+ing an eﬃcient GPU implementation, the resulting segmenta-
+tion system is very fast. The time needed to segment an entire
+brain with any of the these CNN architectures varies between
+25 seconds and 3 minutes, making them practical segmentation
+methods.
+References
+References
+[1] Alvarez, J.M., Gevers, T., LeCun, Y., Lopez, A.M., 2012. Road scene
+segmentation from a single image, in: Proceedings of the 12th Euro-
+pean Conference on Computer Vision - Volume Part VII, Springer-Verlag,
+Berlin, Heidelberg. pp. 376–389.
+[2] Angelini, E., Clatz, O., E., Konukoglu, E., Capelle, L., Duﬀau, H., 2007.
+Glioma dynamics and computational models: A review of segmentation,
+registration, and in silico growth algorithms and their clinical applications
+3.
+14
+
+Table 3: Comparison of our implemented architectures with the state-of-the-art methods on the BRATS-2013 test set.
+Method
+Dice
+Speciﬁcity
+Sensitivity
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+InputCascadeCNN*
+0.88
+0.79
+0.73
+0.89
+0.79
+0.68
+0.87
+0.79
+0.80
+Tustison
+0.87
+0.78
+0.74
+0.85
+0.74
+0.69
+0.89
+0.88
+0.83
+MFCascadeCNN*
+0.86
+0.77
+0.73
+0.92
+0.80
+0.71
+0.81
+0.76
+0.76
+TwoPathCNN*
+0.85
+0.78
+0.73
+0.93
+0.80
+0.72
+0.80
+0.76
+0.75
+LocalCascadeCNN*
+0.88
+0.76
+0.72
+0.91
+0.76
+0.70
+0.84
+0.80
+0.75
+LocalPathCNN*
+0.85
+0.74
+0.71
+0.91
+0.75
+0.71
+0.80
+0.77
+0.73
+Meier
+0.82
+0.73
+0.69
+0.76
+0.78
+0.71
+0.92
+0.72
+0.73
+Reza
+0.83
+0.72
+0.72
+0.82
+0.81
+0.70
+0.86
+0.69
+0.76
+Zhao
+0.84
+0.70
+0.65
+0.80
+0.67
+0.65
+0.89
+0.79
+0.70
+Cordier
+0.84
+0.68
+0.65
+0.88
+0.63
+0.68
+0.81
+0.82
+0.66
+TwoPathCNN
+0.78
+0.63
+0.68
+0.67
+0.50
+0.59
+0.96
+0.89
+0.82
+LocalPathCNN
+0.77
+0.64
+0.68
+0.65
+0.52
+0.60
+0.96
+0.87
+0.80
+Festa
+0.72
+0.66
+0.67
+0.77
+0.77
+0.70
+0.72
+0.60
+0.70
+Doyle
+0.71
+0.46
+0.52
+0.66
+0.38
+0.58
+0.87
+0.70
+0.55
+Table 4: Comparison of our top implemented architectures with the state-of-the-art methods on the BRATS-2013 leaderboard set.
+Method
+Dice
+Speciﬁcity
+Sensitivity
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+Complete
+Core
+Enhancing
+InputCascadeCNN*
+0.84
+0.71
+0.57
+0.88
+0.79
+0.54
+0.84
+0.72
+0.68
+Tustison
+0.79
+0.65
+0.53
+0.83
+0.70
+0.51
+0.81
+0.73
+0.66
+Zhao
+0.79
+0.59
+0.47
+0.77
+0.55
+0.50
+0.85
+0.77
+0.53
+Meier
+0.72
+0.60
+0.53
+0.65
+0.62
+0.48
+0.88
+0.69
+0.6
+Reza
+0.73
+0.56
+0.51
+0.68
+0.64
+0.48
+0.79
+0.57
+0.63
+Cordier
+0.75
+0.61
+0.46
+0.79
+0.61
+0.43
+0.78
+0.72
+0.52
+15
+
+[3] Avants, B.B., Tustison, N., Song, G., 2009. Advanced normalization tools
+(ants). Insight J .
+[4] Bauer, S., Nolte, L.P., Reyes, M., 2011. Fully automatic segmentation of
+brain tumor images using support vector machine classiﬁcation in com-
+bination with hierarchical conditional random ﬁeld regularization., in:
+MICCAI, pp. 354–361.
+[5] Bauer, S., Wiest, R., Nolte, L., Reyes, M., 2013. A survey of mri-based
+medical image analysis for brain tumor studies. Physics in medicine and
+biology 58, 97–129.
+[6] Bengio, Y., 2012. Practical recommendations for gradient-based training
+of deep architectures, in: Neural Networks: Tricks of the Trade. Springer,
+pp. 437–478.
+[7] Bengio, Y., Courville, A., Vincent, P., 2013. Representation learning: A
+review and new perspectives. Pattern Analysis and Machine Intelligence,
+IEEE Transactions on 35, 1798–1828.
+[8] Ciresan, D., Giusti, A., Gambardella, L.M., Schmidhuber, J., 2012. Deep
+neural networks segment neuronal membranes in electron microscopy im-
+ages, in: Advances in neural information processing systems, pp. 2843–
+2851.
+[9] Clark, M., Hall, L., Goldgof, D., Velthuizen, R.P., Murtagh, F., Silbiger,
+M.L., 1998. Automatic tumor segmentation using knowledge-based clus-
+tering. IEEE Trans. Med. Imaging 17, 187–201.
+[10] Cobzas, D., Birkbeck, N., Schmidt, M., Jgersand, M., Murtha, A., 2007.
+3d variational brain tumor segmentation using a high dimensional feature
+set, in: ICCV, pp. 1–8.
+[11] Davy, A., Havaei, M., Warde-Farley, D., Biard, A., Tran, L., Jodoin, P.M.,
+Courville, A., Larochelle, H., Pal, C., Bengio, Y., 2014. Brain tumor
+segmentation with deep neural networks. in proc of BRATS-MICCAI .
+[12] Doyle, S., Vasseur, F., Dojat, M., Forbes, F., 2013. Fully automatic brain
+tumor segmentation from multiple mr sequences using hidden markov
+ﬁelds and variational em. in proc of BRATS-MICCAI .
+[13] Farabet, C., Couprie, C., Najman, L., LeCun, Y., 2013. Learning hierar-
+chical features for scene labeling. Pattern Analysis and Machine Intelli-
+gence, IEEE Transactions on 35, 1915–1929.
+[14] Farahani, K., Menze, B., Reyes, M., 2013.
+Multimodal Brain Tumor
+Segmentation (BRATS 2013).
+URL: http://martinos.org/qtim/
+miccai2013/.
+[15] Farahani, K., Menze, B., Reyes, M., 2014.
+Brats 2014 Challenge
+Manuscripts. URL: http://www.braintumorsegmentation.org.
+[16] Glorot, X., Bordes, A., Bengio, Y., 2011. Domain adaptation for large-
+scale sentiment classiﬁcation: A deep learning approach, in: Proceedings
+of the 28th International Conference on Machine Learning (ICML-11),
+pp. 513–520.
+[17] Goodfellow, I.J., Warde-Farley, D., Lamblin, P., Dumoulin, V., Mirza,
+M., Pascanu, R., Bergstra, J., Bastien, F., Bengio, Y., 2013a. Pylearn2: a
+machine learning research library. arXiv preprint arXiv:1308.4214 .
+[18] Goodfellow, I.J., Warde-Farley, D., Mirza, M., Courville, A., Bengio, Y.,
+2013b. Maxout networks, in: ICML.
+[19] Gotz, M., Weber, C., Blocher, J., Stieltjes, B., Meinzer, H.P., Maier-Hein,
+K., 2014. Extremely randomized trees based brain tumor segmentation,
+in: in proc of BRATS Challenge - MICCAI.
+[20] Hamamci, A., Kucuk, N., Karaman, K., Engin, K., Unal, G., 2012.
+Tumor-cut: Segmentation of brain tumors on contrast enhanced mr im-
+ages for radiosurgery applications. IEEE trans. Medical Imaging 31, 790–
+804.
+[21] Hariharan, B., Arbel´aez, P., Girshick, R., Malik, J., 2014. Simultaneous
+detection and segmentation, in: Computer Vision–ECCV 2014. Springer,
+pp. 297–312.
+[22] Havaei, M., Jodoin, P.M., Larochelle, H., 2014. Eﬃcient interactive brain
+tumor segmentation as within-brain knn classiﬁcation, in: International
+Conference on Pattern Recognition (ICPR).
+[23] Huang, G.B., Jain, V., 2013. Deep and wide multiscale recursive networks
+for robust image labeling. arXiv preprint arXiv:1310.0354 .
+[24] Jarrett, K., Kavukcuoglu, K., Ranzato, M., LeCun, Y., 2009. What is
+the best multi-stage architecture for object recognition?, in: Computer
+Vision, 2009 IEEE 12th International Conference on, IEEE. pp. 2146–
+2153.
+[25] Khotanlou, H., Colliot, O., Atif, J., Bloch, I., 2009. 3d brain tumor seg-
+mentation in mri using fuzzy classiﬁcation, symmetry analysis and spa-
+tially constrained deformable models. Fuzzy Sets Syst. 160, 1457–1473.
+[26] Kleesiek, J., Biller, A., Urban, G., Kothe, U., Bendszus, M., Hamprecht,
+F.A., 2014. ilastik for multi-modal brain tumor segmentation. in proc of
+BRATS-MICCAI .
+[27] Krizhevsky, A., Sutskever, I., Hinton, G., 2012. ImageNet classiﬁcation
+with deep convolutional neural networks, in: NIPS.
+[28] Kwon, D., Akbari, H., Da, X., Gaonkar, B., Davatzikos, C., 2014. Multi-
+modal brain tumor image segmentation using glistr, in: in proc of BRATS
+Challenge - MICCAI.
+[29] LeCun, Y., Bottou, L., Bengio, Y., Haﬀner, P., 1998.
+Gradient-based
+learning applied to document recognition. Proceedings of the IEEE 86,
+2278–2324.
+[30] Lee, C.H., Schmidt, M., Murtha, A., Bistritz, A., S, J., Greiner, R., 2005.
+Segmenting brain tumor with conditional random ﬁelds and support vec-
+tor machines, in: in Proc of Workshop on Computer Vision for Biomedi-
+cal Image Applications.
+[31] Long, J., Shelhamer, E., Darrell, T., 2015. Fully convolutional networks
+for semantic segmentation. CVPR (to appear) .
+[32] Menze, B., Reyes, M., Leemput, K.V., 2014. The multimodal brain tumor
+image segmentation benchmark (brats). IEEE Trans. on Medical Imaging
+(accepted) .
+[33] N.Tustison, M. Wintermark, C.D., Avants, B., 2013. Ants and ´arboles, in:
+in proc of BRATS Challenge - MICCAI.
+[34] Parisot, S., Duﬀau, H., Chemouny, S., Paragios, N., 2012. Joint tumor
+segmentation and dense deformable registration of brain mr images., in:
+MICCAI, pp. 651–658.
+[35] Pinheiro, P., Collobert, R., 2014. Recurrent convolutional neural networks
+for scene labeling, in: Proceedings of The 31st International Conference
+on Machine Learning, pp. 82–90.
+[36] Popuri, K., Cobzas, D., Murtha, A., Jgersand, M., 2012. 3d variational
+brain tumor segmentation using dirichlet priors on a clustered feature set.
+Int. J. Computer Assisted Radiology and Surgery 7, 493–506.
+[37] Prastawa, M., Bullit, E., Ho, S., Gerig, G., 2004. A brain tumor segmen-
+tation framework based on outlier detection. Medical Image Anaylsis 8,
+275–283.
+[38] Prastawa, M., Bullitt, E., Ho, S., Gerig, G., 2003. Robust estimation for
+brain tumor segmentation, in: Medical Image Computing and Computer-
+Assisted Intervention-MICCAI 2003. Springer, pp. 530–537.
+[39] R.Meier, S.Bauer, J.Slotboom, R.Wiest, M.Reyes, 2014. Appearance-
+and context-sensitive features for brain tumor segmentation, in: in proc
+of BRATS Challenge - MICCAI.
+[40] Rumelhart, D.E., Hinton, G.E., Williams, R.J., 1988. Learning represen-
+tations by back-propagating errors. Cognitive modeling 5.
+[41] Schmidt, M., Levner, I., Greiner, R., Murtha, A., Bistritz, A., 2005. Seg-
+menting brain tumors using alignment-based features, in: Int. Conf on
+Machine Learning and Applications, pp. 6–pp.
+[42] Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., Salakhutdinov,
+R., 2014. Dropout: A simple way to prevent neural networks from over-
+ﬁtting. Journal of Machine Learning Research 15, 1929–1958. URL:
+http://jmlr.org/papers/v15/srivastava14a.html.
+[43] Subbanna, N., Precup, D., Arbel, T., 2014. Iterative multilevel mrf lever-
+aging context and voxel information for brain tumour segmentation in
+mri.
+[44] Subbanna, N., Precup, D., Collins, L., Arbel, T., 2013. Hierarchical prob-
+abilistic gabor and mrf segmentation of brain tumours in mri volumes.,
+in: in proc of MICCAI, pp. 751–758.
+[45] Urban, G., Bendszus, M., Hamprecht, F., Kleesiek, J., 2014. Multi-modal
+brain tumor segmentation using deep convolutional neural networks. in
+proc of BRATS-MICCAI .
+[46] Xing, E.P., Jordan, M.I., Russell, S., 2002. A generalized mean ﬁeld algo-
+rithm for variational inference in exponential families, in: Proceedings of
+the Nineteenth conference on Uncertainty in Artiﬁcial Intelligence, Mor-
+gan Kaufmann Publishers Inc.. pp. 583–591.
+[47] Zeiler, M.D., Fergus, R., 2014. Visualizing and understanding convolu-
+tional networks, in: Computer Vision–ECCV 2014. Springer, pp. 818–
+833.
+[48] Zikic, D., Glocker, B., Konukoglu, E., Criminisi, A., Demiralp, C., Shot-
+ton, J., Thomas, O., Das, T., Jena, R., Price, S., 2012. Decision forests
+for tissue-speciﬁc segmentation of high-grade gliomas in multi-channel
+mr, in: Medical Image Computing and Computer-Assisted Intervention–
+MICCAI 2012. Springer, pp. 369–376.
+[49] Zikic, D., Ioannou, Y., Brown, M., Criminisi, A., 2014. Segmentation
+of brain tumor tissues with convolutional neural networks. in proc of
+16
+
+BRATS-MICCAI .
+17

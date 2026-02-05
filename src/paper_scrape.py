@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import json
 import time
@@ -12,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from collections import deque
 from dotenv import load_dotenv
+from typing import Optional
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,9 +25,11 @@ load_dotenv()
 OPENALEX_API = "https://api.openalex.org/works"
 # Use EMAIL from .env, fallback to OPENALEX_EMAIL, then default
 EMAIL = os.getenv("EMAIL") or os.getenv("OPENALEX_EMAIL", "jkarr@nd.edu")  # required by OpenAlex etiquette
-OUTPUT_DIR = "papers"
-META_FILE = os.path.join(OUTPUT_DIR, "metadata.jsonl")
-# Domain-specific folders: papers/{domain}/pdfs/, papers/{domain}/text/, papers/{domain}/abstracts/
+PAPERS_ROOT_DIR = "papers"
+DEFAULT_COLLECTION = "2020_back"
+OUTPUT_DIR = os.path.join(PAPERS_ROOT_DIR, DEFAULT_COLLECTION)
+META_FILE = os.path.join(OUTPUT_DIR, f"metadata_{DEFAULT_COLLECTION}.jsonl")
+# Domain-specific folders: papers/{collection}/{domain}/pdfs/, text/, abstracts/
 
 GROBID_URL = "http://localhost:8070/api/processFulltextDocument"
 
@@ -46,6 +51,11 @@ MAX_PAPERS_PER_DOMAIN = 100  # Target number of papers to collect per domain
 MIN_ABSTRACT_WORDS = 25
 PER_PAGE = 200
 YEAR_CUTOFF = 2020
+# Optional inclusive publication date range (OpenAlex filter sugar):
+# - from_publication_date:YYYY-MM-DD
+# - to_publication_date:YYYY-MM-DD
+DATE_FROM = None
+DATE_TO = None
 MAX_WORKERS = 10
 # How many candidate papers to download/process per batch.
 # Bigger = fewer OpenAlex roundtrips; smaller = less wasted work when many PDFs fail.
@@ -61,6 +71,21 @@ EXTRACT_FULLTEXT = False
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 # Domain-specific directories created as needed
 
+
+def configure_output(collection: str) -> None:
+    """Configure output folder under papers/{collection}/..."""
+    global OUTPUT_DIR, META_FILE
+    OUTPUT_DIR = os.path.join(PAPERS_ROOT_DIR, collection)
+    META_FILE = os.path.join(OUTPUT_DIR, f"metadata_{collection}.jsonl")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def configure_date_range(date_from: Optional[str], date_to: Optional[str]) -> None:
+    """Configure optional OpenAlex publication date range (inclusive)."""
+    global DATE_FROM, DATE_TO
+    DATE_FROM = date_from
+    DATE_TO = date_to
+
 # Headers for OpenAlex API (simple, as per their documentation)
 api_headers = {
     "User-Agent": f"PaperScraper ({EMAIL})",
@@ -70,6 +95,64 @@ api_headers = {
 # Reuse sessions for better performance (connection pooling).
 openalex_session = requests.Session()
 openalex_session.headers.update(api_headers)
+
+
+def _candidate_pdf_urls_from_work(work: dict) -> list:
+    """
+    Return a prioritized list of URLs that might yield a PDF.
+    OpenAlex often provides better links via best_oa_location than open_access.oa_url.
+    """
+    urls = []
+    best = work.get("best_oa_location") or {}
+    if isinstance(best, dict):
+        for k in ("pdf_url", "url"):
+            v = best.get(k)
+            if v:
+                urls.append(v)
+
+    primary = work.get("primary_location") or {}
+    if isinstance(primary, dict):
+        for k in ("pdf_url", "landing_page_url"):
+            v = primary.get(k)
+            if v:
+                urls.append(v)
+
+    oa = work.get("open_access") or {}
+    if isinstance(oa, dict):
+        v = oa.get("oa_url")
+        if v:
+            urls.append(v)
+
+    # Unique preserving order
+    seen = set()
+    out = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def fetch_openalex_work(openalex_id: str):
+    """Fetch a full work record from OpenAlex (best_oa_location, etc.)."""
+    if not openalex_id:
+        return None
+    work_id = openalex_id
+    if openalex_id.startswith("https://openalex.org/"):
+        work_id = openalex_id.replace("https://openalex.org/", "")
+    url = f"{OPENALEX_API}/{work_id}"
+    params = {"mailto": EMAIL}
+    try:
+        # Keep a small sleep to be polite; backfill may call this many times.
+        time.sleep(0.12)
+        r = openalex_session.get(url, params=params, timeout=30)
+        if r.status_code == 429:
+            time.sleep(5)
+            r = openalex_session.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
 
 # Browser-like headers for PDF downloads to avoid 403 errors
 pdf_headers = {
@@ -91,14 +174,45 @@ def abstract_word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text))
 
 
+def publication_month_from_date(publication_date: Optional[str]):
+    """Return YYYY-MM from YYYY-MM-DD, else None."""
+    if not publication_date or not isinstance(publication_date, str):
+        return None
+    m = re.match(r"^(\d{4}-\d{2})-\d{2}$", publication_date.strip())
+    return m.group(1) if m else None
+
+
+def extract_publication_date(work: dict):
+    """Prefer OpenAlex `publication_date` if present."""
+    d = work.get("publication_date")
+    if isinstance(d, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", d):
+        return d
+    return None
+
+
 def fetch_openalex(concept_id):
     cursor = "*"
     page_count = 0
     # No page limit - we'll stop when we have enough papers
 
     while cursor:
+        # Build OpenAlex filter string.
+        filters = [
+            f"concepts.id:{concept_id}",
+            "open_access.is_oa:true",
+            "language:en",
+        ]
+        # Prefer explicit date range if provided; otherwise fall back to legacy year cutoff.
+        if DATE_FROM:
+            filters.append(f"from_publication_date:{DATE_FROM}")
+        if DATE_TO:
+            filters.append(f"to_publication_date:{DATE_TO}")
+        if not DATE_FROM and not DATE_TO:
+            filters.append(f"publication_year:<{YEAR_CUTOFF}")
+
+        filter_str = ",".join(filters)
         params = {
-            "filter": f"concepts.id:{concept_id},publication_year:<{YEAR_CUTOFF},open_access.is_oa:true,language:en",
+            "filter": filter_str,
             "per-page": PER_PAGE,
             "cursor": cursor,
             "mailto": EMAIL,  # polite pool
@@ -164,11 +278,26 @@ def download_pdf(url, path):
         
         # Check if we got a PDF
         content_type = r.headers.get("content-type", "").lower()
-        if content_type.startswith("application/pdf"):
+        # Some providers return PDFs as application/octet-stream; verify using the PDF magic header.
+        first_chunk = None
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                first_chunk = chunk
+                break
+
+        if first_chunk is None:
+            return False
+
+        is_pdf_by_type = content_type.startswith("application/pdf")
+        is_pdf_by_magic = first_chunk.lstrip().startswith(b"%PDF")
+
+        if is_pdf_by_type or is_pdf_by_magic:
             with open(path, "wb") as f:
+                f.write(first_chunk)
                 for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            return True
+                    if chunk:
+                        f.write(chunk)
+            return os.path.exists(path) and os.path.getsize(path) > 0
         
         # If we got HTML, try to find a PDF link (common for DOI/landing pages)
         if content_type.startswith("text/html"):
@@ -463,8 +592,10 @@ def process_paper_download(work_data):
         if inverted_index:
             abstract = reconstruct_abstract_from_inverted_index(inverted_index)
 
+    # If OpenAlex already provides a good abstract, keep it and save it.
+    # We'll fetch PDFs in a separate backfill step; this keeps scraping fast and reliable.
     if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
-        # Save abstract and return without downloading/extracting full text.
+        publication_date = extract_publication_date(work)
         try:
             abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
             with open(abstract_path, "w", encoding="utf-8") as f:
@@ -478,6 +609,8 @@ def process_paper_download(work_data):
             "domain": domain,
             "title": work.get("display_name"),
             "year": work.get("publication_year"),
+            "publication_date": publication_date,
+            "publication_month": publication_month_from_date(publication_date),
             "doi": work.get("doi"),
             "abstract": abstract.strip(),
             "pdf_url": pdf_url,
@@ -495,6 +628,7 @@ def process_paper_download(work_data):
         if not abstract:
             abstract = extract_abstract_from_pdf(pdf_path)
         if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
+            publication_date = extract_publication_date(work)
             # Ensure abstract file exists and is up to date
             try:
                 abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
@@ -508,6 +642,8 @@ def process_paper_download(work_data):
                 "domain": domain,
                 "title": work.get("display_name"),
                 "year": work.get("publication_year"),
+                "publication_date": publication_date,
+                "publication_month": publication_month_from_date(publication_date),
                 "doi": work.get("doi"),
                 "abstract": abstract,
                 "pdf_url": pdf_url
@@ -521,18 +657,15 @@ def process_paper_download(work_data):
         if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
             return None
     
-    # Get abstract (fallback to PDF only if OpenAlex didn't provide one)
-    abstract = work.get("abstract")
-    if not abstract:
-        inverted_index = work.get("abstract_inverted_index")
-        if inverted_index:
-            abstract = reconstruct_abstract_from_inverted_index(inverted_index)
+    # Ensure we have a valid abstract (prefer OpenAlex, fallback to PDF)
     if not abstract:
         abstract = extract_abstract_from_pdf(pdf_path)
     if not abstract or not abstract.strip():
         return None
     if abstract_word_count(abstract) < MIN_ABSTRACT_WORDS:
         return None
+
+    publication_date = extract_publication_date(work)
     
     # Save abstract
     try:
@@ -542,20 +675,23 @@ def process_paper_download(work_data):
     except Exception:
         pass
     
-    # Extract text
+    # Extract text (optional; many PDFs are image-only). Best-effort only.
     if EXTRACT_FULLTEXT and (not os.path.exists(txt_path) or os.path.getsize(txt_path) == 0):
         tei_xml = grobid_extract(pdf_path)
-        if tei_xml:
-            with open(txt_path, "w", encoding="utf-8") as f:
-                f.write(tei_xml)
+        if tei_xml and tei_xml.strip():
+            try:
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(tei_xml)
+            except Exception:
+                pass
         else:
             try:
                 doc = fitz.open(pdf_path)
                 text_parts = []
                 for page in doc:
                     text_parts.append(page.get_text())
-                text = "\n".join(text_parts)
                 doc.close()
+                text = "\n".join(text_parts)
                 if text.strip():
                     with open(txt_path, "w", encoding="utf-8") as f:
                         f.write(text)
@@ -568,6 +704,8 @@ def process_paper_download(work_data):
         "domain": domain,
         "title": work.get("display_name"),
         "year": work.get("publication_year"),
+        "publication_date": publication_date,
+        "publication_month": publication_month_from_date(publication_date),
         "doi": work.get("doi"),
         "abstract": abstract,
         "pdf_url": pdf_url
@@ -666,8 +804,8 @@ def scrape_papers():
                     if not is_domain_first_concept(concepts, domain):
                         continue
 
-                    oa = work.get("open_access", {})
-                    pdf_url = oa.get("oa_url")
+                    pdf_candidates = _candidate_pdf_urls_from_work(work)
+                    pdf_url = pdf_candidates[0] if pdf_candidates else None
                     if not pdf_url:
                         continue
 
@@ -740,6 +878,278 @@ def scrape_papers():
     return True
 
 
+# ==========================
+# BACKFILL: FULL TEXT FROM EXISTING METADATA
+# ==========================
+def _ensure_pdf_and_maybe_fulltext_for_metadata_record(paper: dict) -> tuple[bool, bool]:
+    """
+    Given a metadata.jsonl record, ensure pdf + extracted full text exist on disk.
+    Returns (pdf_ok, fulltext_ok).
+    """
+    pid = paper.get("id")
+    domain = paper.get("domain")
+    pdf_url = paper.get("pdf_url")
+    openalex_id = paper.get("openalex_id")
+    abstract = paper.get("abstract") or ""
+
+    if not pid or not domain:
+        return (False, False)
+    if abstract_word_count(abstract) < MIN_ABSTRACT_WORDS:
+        return (False, False)
+
+    domain_dir = os.path.join(OUTPUT_DIR, domain)
+    pdf_dir = os.path.join(domain_dir, "pdfs")
+    text_dir = os.path.join(domain_dir, "text")
+    os.makedirs(pdf_dir, exist_ok=True)
+    os.makedirs(text_dir, exist_ok=True)
+
+    pdf_path = os.path.join(pdf_dir, f"{pid}.pdf")
+    txt_path = os.path.join(text_dir, f"{pid}.txt")
+
+    pdf_ok = os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+    fulltext_ok = os.path.exists(txt_path) and os.path.getsize(txt_path) > 0
+    if pdf_ok and (fulltext_ok or not EXTRACT_FULLTEXT):
+        return (pdf_ok, fulltext_ok)
+
+    # Ensure PDF exists
+    if not pdf_ok:
+        # Try stored pdf_url first, then fall back to OpenAlex best locations if available.
+        urls = []
+        if pdf_url:
+            urls.append(pdf_url)
+        if openalex_id:
+            work = fetch_openalex_work(openalex_id)
+            if work:
+                urls.extend(_candidate_pdf_urls_from_work(work))
+
+        tried = set()
+        downloaded = False
+        for u in urls:
+            if not u or u in tried:
+                continue
+            tried.add(u)
+            if download_pdf(u, pdf_path):
+                downloaded = True
+                break
+
+        if not downloaded:
+            return (False, False)
+        pdf_ok = os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+        if not pdf_ok:
+            return (False, False)
+
+    # Extract full text
+    if not EXTRACT_FULLTEXT:
+        return (pdf_ok, fulltext_ok)
+
+    # Best-effort full-text extraction
+    tei_xml = grobid_extract(pdf_path)
+    if tei_xml and tei_xml.strip():
+        try:
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(tei_xml)
+        except Exception:
+            pass
+    else:
+        try:
+            doc = fitz.open(pdf_path)
+            text_parts = []
+            for page in doc:
+                text_parts.append(page.get_text())
+            doc.close()
+            text = "\n".join(text_parts)
+            if text.strip():
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(text)
+        except Exception:
+            pass
+
+    fulltext_ok = os.path.exists(txt_path) and os.path.getsize(txt_path) > 0
+    return (pdf_ok, fulltext_ok)
+
+
+def backfill_pdfs_from_metadata(max_workers: int = MAX_WORKERS) -> bool:
+    """
+    For every metadata.jsonl record with abstract >= MIN_ABSTRACT_WORDS, ensure we have:
+    - papers/{domain}/pdfs/{id}.pdf
+    Optionally (EXTRACT_FULLTEXT=True):
+    - papers/{domain}/text/{id}.txt  (full text; best-effort)
+    """
+    if not os.path.exists(META_FILE):
+        print(f"Error: {META_FILE} not found")
+        return False
+
+    records = []
+    with open(META_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                paper = json.loads(line)
+            except Exception:
+                continue
+            if abstract_word_count(paper.get("abstract") or "") < MIN_ABSTRACT_WORDS:
+                continue
+            records.append(paper)
+
+    if not records:
+        print("No eligible records found for backfill.")
+        return True
+
+    # Only backfill records that are missing PDFs
+    missing_records = []
+    for paper in records:
+        pid = paper.get("id")
+        domain = paper.get("domain")
+        if not pid or not domain:
+            continue
+        pdf_path = os.path.join(OUTPUT_DIR, domain, "pdfs", f"{pid}.pdf")
+        if not (os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0):
+            missing_records.append(paper)
+
+    print(
+        f"Backfilling PDFs for {len(missing_records)}/{len(records)} papers "
+        f"(abstracts >= {MIN_ABSTRACT_WORDS} words)..."
+    )
+    if len(missing_records) == 0:
+        print("All eligible papers already have PDFs.")
+        return True
+
+    pbar = tqdm(total=len(missing_records), desc="pdf backfill", unit="paper")
+    pdf_ok_count = 0
+    fulltext_ok_count = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(_ensure_pdf_and_maybe_fulltext_for_metadata_record, paper)
+            for paper in missing_records
+        ]
+        for future in as_completed(futures):
+            try:
+                pdf_ok, fulltext_ok = future.result()
+            except Exception:
+                pdf_ok, fulltext_ok = (False, False)
+            if pdf_ok:
+                pdf_ok_count += 1
+            if fulltext_ok:
+                fulltext_ok_count += 1
+            pbar.update(1)
+    pbar.close()
+    print(
+        f"Backfill complete. PDFs downloaded for {pdf_ok_count}/{len(missing_records)} papers "
+        f"(some may have failed due to PDF access)."
+    )
+    return True
+
+
+# ==========================
+# ENRICH: ADD PUBLICATION DATE/MONTH INTO METADATA JSONL
+# ==========================
+def enrich_metadata_dates() -> bool:
+    """
+    Rewrite the current collection's metadata file so each record includes:
+    - publication_date (YYYY-MM-DD) when available from OpenAlex
+    - publication_month (YYYY-MM) derived from publication_date
+
+    This preserves the JSONL format and line order (no dedup).
+    """
+    if not os.path.exists(META_FILE):
+        print(f"Error: {META_FILE} not found")
+        return False
+
+    cache_path = os.path.join(OUTPUT_DIR, "openalex_publication_dates_cache.json")
+    try:
+        if os.path.exists(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as f:
+                date_cache = json.load(f) or {}
+        else:
+            date_cache = {}
+    except Exception:
+        date_cache = {}
+
+    def _cache_get(openalex_id: str):
+        return date_cache.get(openalex_id)
+
+    def _cache_set(openalex_id: str, pub_date: str):
+        date_cache[openalex_id] = pub_date
+
+    tmp_path = META_FILE + ".tmp"
+    bak_path = META_FILE + ".bak"
+
+    updated = 0
+    fetched = 0
+    total = 0
+
+    with open(META_FILE, "r", encoding="utf-8") as fin, open(tmp_path, "w", encoding="utf-8") as fout:
+        for line in fin:
+            raw = line.strip()
+            if not raw:
+                continue
+            total += 1
+            try:
+                rec = json.loads(raw)
+            except Exception:
+                # Keep unparseable lines as-is
+                fout.write(line)
+                continue
+
+            openalex_id = rec.get("openalex_id")
+            pub_date = rec.get("publication_date")
+
+            if not pub_date and openalex_id:
+                cached = _cache_get(openalex_id)
+                if cached:
+                    pub_date = cached
+                else:
+                    work = fetch_openalex_work(openalex_id)
+                    d = extract_publication_date(work) if work else None
+                    if d:
+                        pub_date = d
+                        _cache_set(openalex_id, d)
+                        fetched += 1
+
+            pub_month = publication_month_from_date(pub_date) if pub_date else None
+
+            # Only count as updated if we added something new
+            if pub_date and rec.get("publication_date") != pub_date:
+                rec["publication_date"] = pub_date
+                updated += 1
+            if pub_month and rec.get("publication_month") != pub_month:
+                rec["publication_month"] = pub_month
+                updated += 1
+
+            # If year is missing but publication_date exists, fill it.
+            if (rec.get("year") is None) and pub_date:
+                try:
+                    rec["year"] = int(pub_date.split("-")[0])
+                except Exception:
+                    pass
+
+            fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    # Save cache
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(date_cache, f, indent=2, sort_keys=True)
+    except Exception:
+        pass
+
+    # Backup and replace atomically
+    try:
+        if not os.path.exists(bak_path):
+            shutil.copy2(META_FILE, bak_path)
+    except Exception:
+        pass
+    os.replace(tmp_path, META_FILE)
+
+    print(f"Enriched metadata dates: updated_fields={updated}, fetched_from_openalex={fetched}, total_lines={total}")
+    print(f"Metadata: {META_FILE}")
+    print(f"Date cache: {cache_path}")
+    if os.path.exists(bak_path):
+        print(f"Backup: {bak_path}")
+    return True
+
+
 # Note: All papers in metadata.jsonl are already filtered for #1 concept during scraping
 # No need for additional filtering step
 
@@ -750,13 +1160,49 @@ def main():
         description="Scrape papers from OpenAlex where domain is #1 concept (default behavior)."
     )
     parser.add_argument(
+        "--collection",
+        default=DEFAULT_COLLECTION,
+        help="Output subfolder under papers/ (e.g., 2015_back, 2025_back_2023).",
+    )
+    parser.add_argument(
+        "--from-date",
+        dest="from_date",
+        default=None,
+        help="Inclusive start publication date (YYYY-MM-DD), e.g. 2023-01-01",
+    )
+    parser.add_argument(
+        "--to-date",
+        dest="to_date",
+        default=None,
+        help="Inclusive end publication date (YYYY-MM-DD), e.g. 2025-12-31",
+    )
+    parser.add_argument(
         "--scrape",
         action="store_true",
         help="Scrape papers from OpenAlex (same as default, kept for compatibility)"
     )
+    parser.add_argument(
+        "--backfill-pdfs",
+        action="store_true",
+        help=f"Download PDFs for all metadata records with abstracts >= {MIN_ABSTRACT_WORDS} words",
+    )
+    parser.add_argument(
+        "--enrich-metadata-dates",
+        action="store_true",
+        help="Rewrite metadata jsonl to include publication_date and publication_month (cached OpenAlex lookups).",
+    )
     args = parser.parse_args()
+    configure_output(args.collection)
+    configure_date_range(args.from_date, args.to_date)
     
-    # Default behavior: scrape papers where domain is #1 (all papers are already #1)
+    if args.backfill_pdfs:
+        backfill_pdfs_from_metadata()
+        return
+    if args.enrich_metadata_dates:
+        enrich_metadata_dates()
+        return
+
+    # Default behavior: scrape papers where domain is #1 (and ensure full text exists)
     scrape_papers()
 
 
