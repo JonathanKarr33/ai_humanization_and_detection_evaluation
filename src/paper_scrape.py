@@ -56,6 +56,9 @@ YEAR_CUTOFF = 2020
 # - to_publication_date:YYYY-MM-DD
 DATE_FROM = None
 DATE_TO = None
+# If True, only record/count papers when a PDF download succeeds.
+# This is useful for tightly-scoped date-range collections where you want guaranteed PDFs.
+REQUIRE_PDF = False
 MAX_WORKERS = 10
 # How many candidate papers to download/process per batch.
 # Bigger = fewer OpenAlex roundtrips; smaller = less wasted work when many PDFs fail.
@@ -85,6 +88,11 @@ def configure_date_range(date_from: Optional[str], date_to: Optional[str]) -> No
     global DATE_FROM, DATE_TO
     DATE_FROM = date_from
     DATE_TO = date_to
+
+
+def configure_require_pdf(require_pdf: bool) -> None:
+    global REQUIRE_PDF
+    REQUIRE_PDF = bool(require_pdf)
 
 # Headers for OpenAlex API (simple, as per their documentation)
 api_headers = {
@@ -592,9 +600,29 @@ def process_paper_download(work_data):
         if inverted_index:
             abstract = reconstruct_abstract_from_inverted_index(inverted_index)
 
+    def _ensure_pdf() -> bool:
+        """Ensure a PDF exists on disk for this work (best-effort)."""
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+            return True
+        # Try the candidate passed in, then fall back to best OpenAlex locations.
+        urls = []
+        if pdf_url:
+            urls.append(pdf_url)
+        urls.extend(_candidate_pdf_urls_from_work(work))
+        seen = set()
+        for u in urls:
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            if download_pdf(u, pdf_path):
+                return True
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+
     # If OpenAlex already provides a good abstract, keep it and save it.
-    # We'll fetch PDFs in a separate backfill step; this keeps scraping fast and reliable.
+    # If REQUIRE_PDF is enabled, only succeed if we can also download the PDF.
     if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
+        if REQUIRE_PDF and (not _ensure_pdf()):
+            return None
         publication_date = extract_publication_date(work)
         try:
             abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
@@ -616,7 +644,7 @@ def process_paper_download(work_data):
             "pdf_url": pdf_url,
         }
 
-    # Check if already processed
+    # Check if already processed (for require-pdf mode, PDF must exist)
     pdf_exists = os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     if pdf_exists and os.path.exists(txt_path) and os.path.getsize(txt_path) > 0:
         # Already processed
@@ -628,6 +656,8 @@ def process_paper_download(work_data):
         if not abstract:
             abstract = extract_abstract_from_pdf(pdf_path)
         if abstract and abstract.strip() and abstract_word_count(abstract) >= MIN_ABSTRACT_WORDS:
+            if REQUIRE_PDF and not pdf_exists:
+                return None
             publication_date = extract_publication_date(work)
             # Ensure abstract file exists and is up to date
             try:
@@ -651,14 +681,16 @@ def process_paper_download(work_data):
         return None
     
     # Download PDF
-    if not pdf_exists:
-        if not download_pdf(pdf_url, pdf_path):
+    if REQUIRE_PDF or (abstract is None):
+        # If we need the PDF (require-pdf mode or to recover abstract), ensure it's downloaded.
+        if not _ensure_pdf():
             return None
-        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
-            return None
+        pdf_exists = os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
     
     # Ensure we have a valid abstract (prefer OpenAlex, fallback to PDF)
     if not abstract:
+        if not pdf_exists:
+            return None
         abstract = extract_abstract_from_pdf(pdf_path)
     if not abstract or not abstract.strip():
         return None
@@ -722,10 +754,22 @@ def scrape_papers():
         print("\nExiting due to API connection issues.")
         return False
     
+    def _has_pdf(domain: str, pid: str) -> bool:
+        pdf_path = os.path.join(OUTPUT_DIR, domain, "pdfs", f"{pid}.pdf")
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+
     def _is_valid_existing(paper: dict) -> bool:
-        # Count only papers whose abstract meets the minimum word requirement.
+        # Count only papers whose abstract meets the minimum word requirement (and pdf if required).
         abs_text = paper.get("abstract") or ""
-        return abstract_word_count(abs_text) >= MIN_ABSTRACT_WORDS
+        if abstract_word_count(abs_text) < MIN_ABSTRACT_WORDS:
+            return False
+        if REQUIRE_PDF:
+            dom = paper.get("domain")
+            pid = paper.get("id")
+            if not dom or not pid:
+                return False
+            return _has_pdf(dom, pid)
+        return True
 
     # Check existing papers in metadata.jsonl (dedup by paper id; count only valid abstracts)
     existing_papers: dict = {}
@@ -1043,6 +1087,134 @@ def backfill_pdfs_from_metadata(max_workers: int = MAX_WORKERS) -> bool:
 
 
 # ==========================
+# BACKFILL: PDFs FOR ALL EXISTING ABSTRACT FILES
+# ==========================
+def backfill_pdfs_for_abstract_files(max_workers: int = MAX_WORKERS, max_to_attempt: Optional[int] = None) -> bool:
+    """
+    Ensure that for every existing abstract file on disk:
+      papers/{collection}/{domain}/abstracts/{id}.txt
+    we have a corresponding PDF:
+      papers/{collection}/{domain}/pdfs/{id}.pdf
+
+    Uses metadata_{collection}.jsonl to find `pdf_url` and `openalex_id`, and falls back to
+    OpenAlex best locations when direct PDF download fails (paywalls may still block).
+    """
+    # Index metadata by (domain, id) using the last occurrence
+    latest: dict = {}
+    if not os.path.exists(META_FILE):
+        print(f"Error: {META_FILE} not found")
+        return False
+
+    with open(META_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            dom = rec.get("domain")
+            pid = rec.get("id")
+            if dom and pid:
+                latest[(dom, pid)] = rec
+
+    tasks: list[tuple[str, str]] = []
+    for domain in CONCEPTS.keys():
+        abstract_dir = os.path.join(OUTPUT_DIR, domain, "abstracts")
+        pdf_dir = os.path.join(OUTPUT_DIR, domain, "pdfs")
+        if not os.path.isdir(abstract_dir):
+            continue
+        os.makedirs(pdf_dir, exist_ok=True)
+        for p in Path(abstract_dir).glob("*.txt"):
+            pid = p.stem
+            pdf_path = os.path.join(pdf_dir, f"{pid}.pdf")
+            if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+                continue
+            tasks.append((domain, pid))
+
+    if max_to_attempt is not None:
+        tasks = tasks[: max(0, int(max_to_attempt))]
+
+    print(f"Backfilling PDFs for {len(tasks)} abstract files missing PDFs...")
+    if not tasks:
+        print("All abstract files already have PDFs.")
+        return True
+
+    failures_path = os.path.join(OUTPUT_DIR, "pdf_backfill_failures.jsonl")
+    lock = Lock()
+    downloaded = 0
+    failed = 0
+
+    def _download_one(domain: str, pid: str) -> bool:
+        rec = latest.get((domain, pid))
+        if not rec:
+            return False
+        pdf_dir = os.path.join(OUTPUT_DIR, domain, "pdfs")
+        os.makedirs(pdf_dir, exist_ok=True)
+        pdf_path = os.path.join(pdf_dir, f"{pid}.pdf")
+
+        urls = []
+        if rec.get("pdf_url"):
+            urls.append(rec["pdf_url"])
+        openalex_id = rec.get("openalex_id")
+        if openalex_id:
+            work = fetch_openalex_work(openalex_id)
+            if work:
+                urls.extend(_candidate_pdf_urls_from_work(work))
+
+        # unique
+        seen = set()
+        for u in urls:
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            if download_pdf(u, pdf_path):
+                return True
+        return False
+
+    pbar = tqdm(total=len(tasks), desc="pdf backfill (from abstracts)", unit="paper")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_download_one, d, pid): (d, pid) for d, pid in tasks}
+        for future in as_completed(futures):
+            domain, pid = futures[future]
+            try:
+                ok = future.result()
+            except Exception:
+                ok = False
+
+            with lock:
+                if ok:
+                    downloaded += 1
+                else:
+                    failed += 1
+                    try:
+                        rec = latest.get((domain, pid), {})
+                        with open(failures_path, "a", encoding="utf-8") as f:
+                            f.write(
+                                json.dumps(
+                                    {
+                                        "domain": domain,
+                                        "id": pid,
+                                        "openalex_id": rec.get("openalex_id"),
+                                        "pdf_url": rec.get("pdf_url"),
+                                    },
+                                    ensure_ascii=False,
+                                )
+                                + "\n"
+                            )
+                    except Exception:
+                        pass
+                pbar.update(1)
+    pbar.close()
+
+    print(f"PDF backfill complete: downloaded={downloaded}, failed={failed}")
+    if failed:
+        print(f"Failures written to: {failures_path}")
+    return True
+
+
+# ==========================
 # ENRICH: ADD PUBLICATION DATE/MONTH INTO METADATA JSONL
 # ==========================
 def enrich_metadata_dates() -> bool:
@@ -1177,6 +1349,16 @@ def main():
         help="Inclusive end publication date (YYYY-MM-DD), e.g. 2025-12-31",
     )
     parser.add_argument(
+        "--require-pdf",
+        action="store_true",
+        help="Only record/count papers when PDF download succeeds (recommended for date-range collections).",
+    )
+    parser.add_argument(
+        "--no-require-pdf",
+        action="store_true",
+        help="Allow recording abstracts even when PDF download fails (default for non-range scraping).",
+    )
+    parser.add_argument(
         "--scrape",
         action="store_true",
         help="Scrape papers from OpenAlex (same as default, kept for compatibility)"
@@ -1187,6 +1369,17 @@ def main():
         help=f"Download PDFs for all metadata records with abstracts >= {MIN_ABSTRACT_WORDS} words",
     )
     parser.add_argument(
+        "--backfill-pdfs-for-abstracts",
+        action="store_true",
+        help="Download PDFs for every existing abstract file that is missing a PDF (best-effort; paywalls may block).",
+    )
+    parser.add_argument(
+        "--max-pdf-attempts",
+        type=int,
+        default=None,
+        help="Limit the number of missing-PDF abstract files to attempt (debug).",
+    )
+    parser.add_argument(
         "--enrich-metadata-dates",
         action="store_true",
         help="Rewrite metadata jsonl to include publication_date and publication_month (cached OpenAlex lookups).",
@@ -1194,9 +1387,19 @@ def main():
     args = parser.parse_args()
     configure_output(args.collection)
     configure_date_range(args.from_date, args.to_date)
+    # Default behavior: if a date range is specified, require PDFs unless explicitly disabled.
+    if args.require_pdf:
+        configure_require_pdf(True)
+    elif args.no_require_pdf:
+        configure_require_pdf(False)
+    else:
+        configure_require_pdf(bool(args.from_date or args.to_date))
     
     if args.backfill_pdfs:
         backfill_pdfs_from_metadata()
+        return
+    if args.backfill_pdfs_for_abstracts:
+        backfill_pdfs_for_abstract_files(max_to_attempt=args.max_pdf_attempts)
         return
     if args.enrich_metadata_dates:
         enrich_metadata_dates()
