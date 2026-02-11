@@ -1,0 +1,728 @@
+Obtaining Well Calibrated Probabilities Using Bayesian Binning
+Mahdi Pakdaman Naeini1, Gregory F. Cooper1,2, and Milos Hauskrecht1,3
+1Intelligent Systems Program, University of Pittsburgh, PA, USA
+2Department of Biomedical Informatics, University of Pittsburgh, PA, USA
+3Computer Science Department, University of Pittsburgh, PA, USA
+Abstract
+Learning probabilistic predictive models that are well cali-
+brated is critical for many prediction and decision-making
+tasks in artiﬁcial intelligence. In this paper we present a new
+non-parametric calibration method called Bayesian Binning
+into Quantiles (BBQ) which addresses key limitations of ex-
+isting calibration methods. The method post processes the
+output of a binary classiﬁcation algorithm; thus, it can be
+readily combined with many existing classiﬁcation algo-
+rithms. The method is computationally tractable, and em-
+pirically accurate, as evidenced by the set of experiments
+reported here on both real and simulated datasets.
+Introduction
+A rational problem solving agent aims to maximize its util-
+ity subject to the existing constraints (Russell and Norvig
+1995). To be able to maximize the utility function for many
+practical prediction and decision-making tasks, it is cru-
+cial to develop an accurate probabilistic prediction model
+from data. Unfortunately, many existing machine learning
+and data mining models and algorithms are not optimized
+for obtaining accurate probabilities and the predictions they
+produce may be miscalibrated. Generally, a set of predic-
+tions of a binary outcome is well calibrated if the outcomes
+predicted to occur with probability p do occur about p frac-
+tion of the time, for each probability p that is predicted.
+This concept can be readily generalized to outcomes with
+more than two values. Figure 1 shows a hypothetical ex-
+ample of a reliability curve (DeGroot and Fienberg 1983;
+Niculescu-Mizil and Caruana 2005), which displays the cal-
+ibration performance of a prediction method. The curve
+shows, for example, that when the method predicts Z = 1
+to have probability 0.5, the outcome Z = 1 occurs in about
+0.57 fraction of the instances (cases). The curve indicates
+that the method is fairly well calibrated, but it tends to assign
+probabilities that are too low. In general, perfect calibration
+corresponds to a straight line from (0, 0) to (1, 1). The closer
+a calibration curve is to this line, the better calibrated is the
+associated prediction method.
+Producing well-calibrated probabilistic predictions is crit-
+ical in many areas of science (e.g., determining which exper-
+Copyright c⃝2015, Association for the Advancement of Artiﬁcial
+Intelligence (www.aaai.org). All rights reserved.
+iments to perform), medicine (e.g., deciding which therapy
+to give a patient), business (e.g., making investment deci-
+sions), and others. However, model calibration and the learn-
+ing of well-calibrated probabilistic models have not been
+studied in the machine learning literature as extensively as
+for example discriminative machine learning models that
+are built to achieve the best possible discrimination among
+classes of objects. One way to achieve a high level of model
+calibration is to develop methods for learning probabilistic
+models that are well-calibrated, ab initio. However, this ap-
+proach would require one to modify the objective function
+used for learning the model and it may increase the com-
+putational cost of the associated optimization task. An al-
+ternative approach is to construct well-calibrated models by
+relying on the existing machine learning methods and by
+modifying their outputs in a post-processing step to obtain
+the desired model. This approach is often preferred because
+of its generality, ﬂexibility, and the fact that it frees the de-
+signer of the machine learning model from the need to add
+additional calibration measures into the objective function
+used to learn the model. The existing approaches developed
+for this purpose include histogram binning, Platt scaling, or
+isotonic regression (Platt 1999; Zadrozny and Elkan 2001;
+2002). In all these the post-processing step can be seen as
+a function that maps the output of a prediction model to
+probabilities that are intended to be well-calibrated. Figure
+1 shows an example of such a mapping.
+Existing post-processing calibration methods can be di-
+vided into two groups: parametric and nonparametric meth-
+ods. An example of a parametric method is Platt’s method
+that applies a sigmoidal transformation that maps the out-
+put of a predictive model to a calibrated probability output
+(Platt 1999). The parameters of the sigmoidal transforma-
+tion function are learned using a maximum likelihood esti-
+mation framework. The key limitation of the approach is the
+(sigmoidal) form of the transformation function, which only
+rarely ﬁts the true distribution of predictions. The most com-
+mon non-parametric methods are based either on binning
+(Zadrozny and Elkan 2001) or isotonic regression (Zadrozny
+and Elkan 2002). In the histogram binning approach, also
+known as quantile binning, the raw predictions of a binary
+classiﬁer are sorted ﬁrst, and then they are partitioned into
+B subsets of equal size, called bins. Given a prediction y,
+the method ﬁnds the bin containing that prediction and re-
+Proceedings of the Twenty-Ninth AAAI Conference on Artificial Intelligence
+2901
+
+Figure 1: The solid line shows a calibration (reliability)
+curve for predicting Z = 1. The dotted line is the ideal cali-
+bration curve.
+turns as ˆy the fraction of positive outcomes (Z = 1) in the
+bin. Histogram binning has several limitations, including the
+need to deﬁne the number of bins and the fact that the bins
+and their associated boundaries remain ﬁxed over all predic-
+tions (Zadrozny and Elkan 2002).
+The other non-parametric calibration method is based on
+isotonic regression (Zadrozny and Elkan 2002). This method
+only requires that the mapping function be isotonic (mono-
+tonically increasing) (Niculescu-Mizil and Caruana 2005).
+A commonly used method for computing the isotonic re-
+gression is pool adjacent violators (PAV) algorithm (Bar-
+low et al. 1972). The isotonic calibration method based on
+the (PAV) algorithm can be viewed as a binning algorithm
+where the position of boundaries and the size of bins are
+selected according to how well the classiﬁer ranks the ex-
+amples in the training data (Zadrozny and Elkan 2002).
+Recently a variation of the isotonic-regression-based cali-
+bration method for predicting accurate probabilities with a
+ranking loss was proposed (Menon et al. 2012). Although
+isotonic regression based calibration yields good perfor-
+mance in many real data applications, the violation of iso-
+tonicity assumption in practice is quite frequent, so the re-
+laxation of the isotonicity constraints may be appropriate.
+This paper presents a new binary classiﬁer calibration
+method called Bayesian Binning into Quantiles (BBQ) that
+is applied as a post-processing step1. The approach can be
+viewed as a reﬁnement of the histogram-binning calibration
+method in that it considers multiple different binnings and
+their combination to yield more robust calibrated predic-
+tions. Brieﬂy, by considering only one ﬁxed bin discretiza-
+tion, one may not be able to guess correctly the optimal bin
+width. In addition, the data may not be distributed equally
+across the output space after applying the discriminative pro-
+jection learned in the ﬁrst step, and various biases in the dis-
+tribution may occur. Both of these problems can be resolved
+by considering multiple different binnings and their com-
+bination. The experimental results presented below indicate
+that the proposed method works well in practice.
+1An implementation of BBQ method can be found at the fol-
+lowing address: https://github.com/pakdaman/calibration.git
+Methods
+BBQ extends the simple histogram-binning calibration
+method (Zadrozny and Elkan 2001) by considering multiple
+binning models and their combination. The main challenge
+here is to decide on how to pick the models and how to com-
+bine them. BBQ considers multiple equal-frequency bin-
+ning models that distribute the data-points in the training set
+equally across all bins. The different binning models differ
+in the number of bins they have. We combine them using a
+Bayesian score derived from the BDeu (Heckerman, Geiger,
+and Chickering 1995) score used for learning Bayesian net-
+work structures. Let yi and zi deﬁne respectively an uncal-
+ibrated classiﬁer prediction and the true class of the i’th in-
+stance. Also, let D deﬁne the set of all training instances
+(yi, zi) and let S be the sorted set of all uncalibrated clas-
+siﬁer predictions {y1, y2 . . . , yN}, where N is total number
+of training data. In addition, let Pa denote a partitioning of
+S into B equal frequency bins. A binning model M induced
+by the training set is deﬁned as M ≡{B, Pa, Θ}. Where,
+B is the number of bins over the set S and Θ is the set of all
+the calibration model parameters Θ = {θ1, . . . , θB}, which
+are deﬁned as follows. For a bin b the distribution of the
+class variable P(Z = 1|B = b) is modeled as a binomial
+distribution with parameter θb. Thus, Θ speciﬁes all the bi-
+nomial distributions for all the existing bins in Pa. We score
+a binning model M as follows:
+Score(M) = P(M) · P(D|M)
+(1)
+The marginal likelihood P(D|M) in Equation 1 has
+a closed form solution under the following assumptions
+(Heckerman, Geiger, and Chickering 1995): (1) All samples
+are i.i.d and the class distribution P(Z|B = b), which is
+class distribution for instances located in bin number b, is
+modeled using a binomial distribution with parameter θb, (2)
+the distributions of the class variable over two different bins
+are independent of each other, and (3) the prior distribution
+over binning model parameters θs are modeled using a Beta
+distribution. We also assume that the parameters of the Beta
+distribution associated with θb are αb and βb. We set them
+to be equal to αb = N′
+B pb and βb = N ′
+B (1 −pb), where N ′
+is the equivalent sample size expressing the strength of our
+belief in the prior distribution2 and pb is the midpoint of the
+interval deﬁning the b’th bin in the binning model M. Given
+the above assumptions, the marginal likelihood can be ex-
+pressed as (Heckerman, Geiger, and Chickering 1995):
+P(D|M) =
+B
+Y
+b=1
+Γ( N′
+B )
+Γ(Nb + N′
+B )
+Γ(mb + αb)
+Γ(αb)
+Γ(nb + βb)
+Γ(βb)
+,
+where Γ is the gamma function and Nb is the total num-
+ber of training instances located in the b’th bin. Also, nb
+and mb are respectively the number of class zero and class
+one instances among all Nb training instances in bin b. The
+term P(M) in Equation 1 speciﬁes the prior probability of
+the binning model M. In our experiments we use a uniform
+prior for modeling P(M). BBQ uses the above Bayesian
+2We set N ′ = 2 in our experiments.
+2902
+
+score to perform model averaging over the space of all pos-
+sible equal frequency binnings. We could have also used
+the above Bayesian score to perform the model selection,
+which in our case would yield a single binning model. How-
+ever, model averaging is typically superior to model selec-
+tion (Hoeting et al. 1999). Hence a calibrated prediction in
+our BBQ framework is deﬁned as:
+P(z = 1|y) =
+T
+X
+i=1
+Score(Mi)
+PT
+j=1 Score(Mj)
+P(z = 1|y, Mi),
+where T is the total number of binning models consid-
+ered and P(z = 1|y, Mi) is the probability estimate3 ob-
+tained using the binning model Mi, for the (uncalibrated)
+classiﬁer output y. To choose models Mi we choose a re-
+stricted range of binning models, each deﬁned by a differ-
+ent number of bins. We deﬁne the range of possible val-
+ues of the number of bins as B ∈{
+3√
+N
+C , . . . , C
+3√
+N},
+where C is a constant that controls the number of bin-
+ning models (C = 10 in our experiments). The choice of
+the above range is due to some previous results (Klemela
+2009; Scott and Nowak 2003) that show that the ﬁxed bin
+size histogram binning classiﬁer is a mini-max rate clas-
+siﬁer for Lipschitz Bayes decision boundaries when we
+set number of bins to θ(
+3√
+N), where θ(.) is asymptoti-
+cally tight bound notation deﬁned as θ(g(n)) = {h(n) :
+∃positive constants c1, c2, n0 such that 0
+≤
+c1g(n)
+≤
+h(n) ≤c2g(n), ∀n ≥n0}. Although the results are valid
+for histogram classiﬁers with ﬁxed bin size, our experi-
+ments show that both ﬁxed bin size and ﬁxed frequency his-
+togram classiﬁers behave quite similarly. We conjecture that
+a histogram classiﬁer with equal frequency binning is also a
+mini-max rate classiﬁer; this is an interesting open problem
+that we intend to study in the future.
+We may further restrict the number of binning models
+used in averaging in the application stage. That is, we may
+start by calculating the Bayesian score for all models in the
+above range, and select a subset of those that yield a higher
+Bayesian score afterwards. The number of resulting models
+can be determined by a priori ﬁxing the number of mod-
+els to be used in averaging or by checking for the sharp
+drops in the Bayesian scores over all such models. Assume
+S1, S2, . . . , ST are the sorted Bayesian scores of histogram
+models in a decreasing order. We ﬁx a small number ρ > 0
+(ρ = 0.001 in our experiments) and pick the ﬁrst kρ asso-
+ciated binning models as the reﬁned set of models, where
+kρ = min{k : Sk−Sk+1
+σ2
+≤ρ} and σ2 is the empirical vari-
+ance of the Bayesian scores.
+Calibration Measures
+In order to evaluate the calibration capability of a classi-
+ﬁer, we use two intuitive statistics that measure calibration
+relative to the ideal reliability diagram (DeGroot and Fien-
+berg 1983; Niculescu-Mizil and Caruana 2005) (Figure 1
+shows an example of a reliability diagram). These measures
+are called Expected Calibration Error (ECE), and Maximum
+3We actually use smoothing of the counts in the binning models,
+which is consistent with the Bayesian priors in the scoring function.
+Calibration Error (MCE). In computing these measures, the
+predictions are sorted and partitioned into K ﬁxed number
+of bins (K = 10 in our experiments). The predicted value of
+each test instance falls into one of the bins. The ECE cal-
+culates Expected Calibration Error over the bins, and MCE
+calculates the Maximum Calibration Error among the bins,
+using empirical estimates as follows:
+ECE =
+K
+X
+i=1
+P(i) · |oi −ei|
+,
+MCE =
+K
+max
+i=1 (|oi −ei|) ,
+where oi is the true fraction of positive instances in bin i,
+ei is the mean of the post-calibrated probabilities for the in-
+stances in bin i, and P(i) is the empirical probability (frac-
+tion) of all instances that fall into bin i. The lower the values
+of ECE and MCE, the better is the calibration of a model.
+Empirical Results
+This section describes the set of experiments that we per-
+formed to evaluate the performance of the proposed calibra-
+tion method in comparison to other commonly used calibra-
+tion methods: histogram binning, Platt’s method, and iso-
+tonic regression. To evaluate the calibration performance of
+each method, we ran experiments on both simulated and on
+real data. For the evaluation of the calibration methods, we
+used 5 different measures. The ﬁrst two measures are Ac-
+curacy (Acc) and the Area Under the ROC Curve (AUC),
+which measure discrimination. The three other measures
+are the root mean square error (RMSE), the expected cal-
+ibration error (ECE), and the maximum calibration error
+(MCE), which measure calibration.
+Simulated Data
+For the simulated data experiments, we used a binary clas-
+siﬁcation dataset in which the outcomes were not linearly
+separable. The scatter plot of the simulated dataset is shown
+in Figure 2. The data were divided into 1000 instances for
+training and calibrating the prediction model, and 1000 in-
+stances for testing the models.
+To conduct the experiments on simulated datasets, we
+used two extreme classiﬁers: support vector machines
+(SVM) with linear and quadratic kernels. The choice of
+SVM with a linear kernel allows us to see how the calibra-
+tion methods perform when the classiﬁcation model makes
+over simplifying (linear) assumptions. Also, to achieve
+good discrimination on the data in Figure 2, SVM with a
+quadratic kernel is an ideal choice. So, the experiment using
+a quadratic kernel SVM allows us to see how well different
+calibration methods perform when we use an ideal learner
+for the classiﬁcation problem in terms of discrimination.
+As seen in Tables 1, BBQ outperforms Platt’s method
+and isotonic regression on the simulation dataset, especially
+when the linear SVM method is used as the base learner.
+The poor performance of Platt’s method is not surprising
+given its simplicity, which consists of a parametric model
+with only two parameters. However, isotonic regression is
+a non-parametric model that only makes a monotonicity as-
+sumption over the output of the base classiﬁer. When we
+2903
+
+SVM
+Hist
+Platt
+IsoReg
+BBQ
+AUC
+0.50
+0.84
+0.50
+0.65
+0.85
+ACC
+0.48
+0.78
+0.52
+0.64
+0.78
+RMSE 0.50
+0.39
+0.50
+0.46
+0.38
+ECE
+0.28
+0.07
+0.28
+0.35
+0.03
+MCE 0.52
+0.19
+0.54
+0.58
+0.09
+(a) SVM Linear
+SVM
+Hist
+Platt
+IsoReg
+BBQ
+AUC
+1.00
+1.00
+1.00
+1.00
+1.00
+ACC
+0.99
+0.99
+0.99
+0.99
+0.99
+RMSE 0.21
+0.09
+0.19
+0.08
+0.08
+ECE
+0.14
+0.01
+0.15
+0.00
+0.00
+MCE 0.35
+0.04
+0.32
+0.03
+0.03
+(b) SVM Quadratic Kernel
+Table 1: Experimental Results on Simulated dataset
+use a linear kernel SVM, this assumption is violated be-
+cause of the non-linearity of data. As a result, isotonic re-
+gression performs relatively poorly, in terms of improving
+the discrimination and calibration capability of the base clas-
+siﬁer. The violation of this assumption can happen in real
+data as well. In order to mitigate this pitfall, Menon et. al
+(Menon et al. 2012) proposed a new isotonic based cali-
+bration method using a combination of optimizing AUC as
+a ranking loss measure, plus isotonic regression for build-
+ing an accurate ranking model. However, this is counter to
+our goal of developing post-processing methods that can be
+used with any existing classiﬁcation models. As shown in
+Table 1b, even if we use an ideal SVM classiﬁer for our lin-
+early non-separable dataset, the proposed method performs
+as well as an isotonic regression based calibration.
+As can be seen in Table 1b, although the SVM based
+learner performs very well in terms of discrimination based
+on AUC and ACC measures, it performs poorly in terms
+of calibration, as measured by RMSE, MCE, and ECE.
+Moreover, while improving calibration, all of the calibra-
+tion methods retain the same discrimination performance
+that was obtained prior to post-processing.
+Real Data
+In terms of real data, we used 30 different real world binary
+classiﬁcation data sets from the UCI and LibSVM reposi-
+tory 4 (Bache and Lichman 2013; Chang and Lin 2011). We
+used three common classiﬁers, namely, Logistic Regression
+(LR), Support Vector Machines (SVM), and Naive Bayes
+(NB) to evaluate the performance of the proposed calibration
+method. To evaluate the performance of calibration mod-
+els, we use the recommended statistical test procedure by
+4The datasets used were as follows: spect, breast, adult, page-
+blocks, pendigits, ad, mamography, satimage, australian, code rna,
+colon cancer, covtype, letter unbalanced, letter balanced, dia-
+betes, duke, fourclass, german numer, gisette scale, heart, ijcnn1,
+ionosphere scale, liver disorders, mushrooms, sonar scale, splice,
+svmguide1, svmguide3, coil2000, balance.
+Figure 2: Scatter plot of non-linear separable simulated data
+(a) AUC Results on LR
+(b) AUC results on SVM
+(c) AUC results on NB
+Figure 3: Performance of each method in terms of average rank of
+AUC on the real datasets. All the methods which are not connected
+to BBQ by the horizontal bar are signiﬁcantly different from BBQ
+(using Friedman test followed by Holm’s step-down procedure at a
+0.05 signiﬁcance level).
+Janez Demsar (Demˇsar 2006). More speciﬁcally, we use the
+Freidman nonparametric hypothesis testing method (Fried-
+man 1937) followed by Holm’s step-down procedure (Holm
+1979) to evaluate the performance of BBQ in comparison
+to the other calibration methods across the 30 real data sets.
+Next, we brieﬂy describe the test procedure; more detailed
+information can be found in (Demˇsar 2006).
+Friedman test with Holm’s post-hoc procedure
+The
+Friedman test (Friedman 1937) is a non-parametric version
+of the ANOVA test. For more concrete description of how
+the test performs, assume we aim to compare the perfor-
+mance of the calibration methods in terms of RMSE and
+our base classiﬁer is LR. The Friedman test ranks the RMSE
+of LR in addition to the RMSE of the calibration methods
+(Hist, Platt, IsoReg, BBQ) for each dataset separately, with
+the best performing method getting the rank of 1, the second
+best the rank of 2, and so on. In case of ties, average ranks
+2904
+
+(a) ACC Results on LR
+(b) ACC results on SVM
+(c) ACC results on NB
+Figure 4: Performance of each method in terms of average rank of
+ACC on the real datasets. There is no statistically signiﬁcant dif-
+ference between the performance of the methods in terms of ACC
+(using the Friedman test at a 0.05 signiﬁcance level).
+are assigned to the corresponding methods. Let ri,j be the
+rank of i’th of the 5 methods (LR, Hist, Platt, Isoreg, BBQ)
+at the j’th of the 30 datasets. The Friedman test computes
+the average rank of each method Ri =
+1
+30
+P30
+j=1 ri,j. The
+null hypothesis states that all the methods are statistically
+equivalent and so their associated rank Ri should be equal.
+Under the null-hypothesis, the Friedman statistic
+χ2
+F =
+12N
+k(k + 1)
+ X
+j
+R2
+j −k(k + 1)2
+4
+
+is distributed according to χ2
+F with k−1 degrees of freedom,
+where N is the number of datasets (30 in our case) and k is
+the number of methods (5 in our case). However, it is known
+that the Friedman statistic is often unnecessarily conserva-
+tive; thus, we use a more accurate FF statistic (Iman and
+Davenport 1980) deﬁned as follows:
+FF =
+(N −1)χ2
+F
+N(k −1) −χ2
+F
+Under the null hypothesis the FF statistic is distributed ac-
+cording to the F distribution with k −1 and (k −1)(N −1)
+degrees of freedom. If the null hypothesis is rejected, we
+proceed with Holm’s step-down post-hoc test (Holm 1979)
+to compare the RMSE of our targeted method (BBQ in our
+case) to the RMSE of the other methods. In order to use
+Holm’s method, we deﬁne the zi statistics as:
+zi = (Ri −RBBQ)
+q
+k(k+1)
+6N
+,
+(a) RMSE Results on LR
+(b) RMSE results on SVM
+(c) RMSE results on NB
+Figure 5: Performance of each method in terms of average rank
+of RMSE on the real datasets. All the methods which are not con-
+nected to BBQ by the horizontal bar are signiﬁcantly different from
+BBQ (using the Friedman test followed by Holm’s step-down pro-
+cedure at a 0.05 signiﬁcance level).
+where RBBQ is the average rank of the target method
+(BBQ), Ri is the average rank of i’th method, k is the number
+of methods, and N is number of datasets. In Holm’s method
+of testing, the zi statistic is used to ﬁnd the corresponding
+pi value from the table of the normal distribution, which is
+compared with an adjusted α values as follows. First, the
+p values are sorted so that pπ1 ≤pπ2 . . . ≤pπk−1. Then
+each pi is compared to
+α
+k−i sequentially. So the most signif-
+icant p value, p1, is compared with
+α
+k−1. If p1 is below
+α
+k−1,
+the corresponding hypothesis is rejected and we continue to
+compare p2 with
+α
+k−2, and so on. As soon as a certain null
+hypothesis cannot be rejected, all the remaining hypothe-
+ses are retained as well. So, if pjis the ﬁrst p value that is
+greater than
+α
+k−j , then we conclude that the rank of our tar-
+get method BBQ is signiﬁcantly different from the methods
+π1, .., πj−1, and it is statistically equivalent to the rest of the
+methods.
+Results on real data sets
+The results on real datasets are
+shown in the Figures 3, 4, 5, 6, and 7. In these graphs, we
+indicate the average rank of each method (1 is best) and
+we connect the methods that are statistically equivalent with
+our target method BBQ using a horizontal bar (e.g in Fig-
+ure 5a the average rank of BBQ is 2.156, it is perform-
+ing statistically equivalent to IsoReg ; however, its perfor-
+mance in terms of RMSE is statistically superior to Hist,
+Platt’s method, and the base classiﬁer LR). Figure 3 shows
+the result of comparing the AUC of BBQ with other meth-
+ods. As shown, BBQ performs signiﬁcantly better than his-
+togram binning in terms of AUC at a conﬁdence level of
+2905
+
+(a) ECE Results on LR
+(b) ECE results on SVM
+(c) ECE results on NB
+Figure 6: Performance of each method in terms of average rank
+of ECE on the benchmark datasets. BBQ is statistically superior
+to all the compared methods (using the Friedman test followed by
+Holm’s step-down procedure at a 0.05 signiﬁcance level).
+α = 0.05. Also, its performance in terms of AUC is always
+statistically equivalent to the base classiﬁer (LR, SVM, NB)
+and isotonic regression. Note that we did not include Platt’s
+method in our statistical test for AUC, since the AUC of the
+Platt’s method would be the same as the AUC of the base
+classiﬁer; this pattern occurs because Platt’s method always
+uses a monotonic mapping of the base classiﬁer output as
+the calibrated scores.
+Figure 4 shows the result of comparing ACC of the BBQ
+with the other methods. As shown, the performance of BBQ
+is statistically equivalent to the rest of the calibration meth-
+ods as well as the base classiﬁer in our experiments over
+30 real datasets. Figure 5 shows the results of our exper-
+iments on comparing the performance of BBQ with other
+calibration methods in terms of RMSE. As it shows, BBQ
+always outperforms the base classiﬁer, histogram binning,
+and Platt’s method. However, its performance is statistically
+equivalent to isotonic regression, whether the base classiﬁer
+is LR, SVM, or NB.
+Figures 6 and 7 show the results of comparing BBQ per-
+formance with the others in terms of ECE and MCE, respec-
+tively. They show that BBQ performs statistically better than
+all other calibration methods and the base classiﬁer, in terms
+of ECE and MCE.
+Overall, in terms of discrimination measured by AUC and
+ACC, the results show that the proposed Bayesian calibra-
+tion method either outperforms the other calibration meth-
+ods or has a performance that is not statistically signiﬁcantly
+different from the other methods and the base classiﬁer. In
+terms of calibration performance, BBQ is statistically supe-
+rior to all other methods measured by ECE and MCE. Fur-
+(a) MCE Results on LR
+(b) MCE results on SVM
+(c) MCE results on NB
+Figure 7: Performance of each method in terms of average rank
+of MCE on the benchmark datasets. BBQ is statistically superior
+to all the compared methods (using the Friedman test followed by
+Holm’s step-down procedure at a 0.05 signiﬁcance level).
+thermore, the results show that BBQ and isotonic regression
+are not statistically signiﬁcantly different in terms of RMSE;
+however, it is still statistically superior to other calibration
+methods and the base classiﬁer in terms of RMSE.
+Conclusion
+In this paper, we presented a Bayesian approach for Bin-
+ning into Quantiles (BBQ) as a new nonparametric binary
+classiﬁer calibration method. We also performed a set of ex-
+periments on simulated and real data sets to compare the
+discrimination and calibration performance of the method to
+that of other commonly applied post-processing calibration
+methods. The results provide support that the BBQ method
+performs competitively with other methods in terms of dis-
+crimination and often performs better in terms of calibration.
+Thus, we recommend that researchers consider using BBQ
+when the post-processing of binary predictions is likely to
+be useful.
+In future work, we plan to investigate the theoretical prop-
+erties of BBQ. In particular, we plan to investigate the con-
+jecture that BBQ is expected to improve the calibration of a
+classiﬁer (measured in terms of MCE and ECE) without
+sacriﬁcing its discrimination capability (measured in terms
+of AUC). Another direction for future research is to ex-
+tend BBQ to work for multi-class and multi-label calibration
+problems.
+Acknowledgements
+This
+research
+was
+funded
+in
+part
+by
+NIH
+grants
+R01GM088224 and R01LM010019 and NSF grant IIS-
+0911032.
+2906
+
+References
+Bache, K., and Lichman, M. 2013. UCI machine learning
+repository.
+Barlow, R. E.; Bartholomew, D. J.; Bremner, J.; and Brunk,
+H. D. 1972. Statistical inference under order restrictions:
+The theory and application of isotonic regression.
+Wiley
+New York.
+Chang, C.-C., and Lin, C.-J. 2011. Libsvm: A library for
+support vector machines. ACM Transactions on Intelligent
+Systems and Technology (TIST) 2(3):27.
+DeGroot, M., and Fienberg, S. 1983. The comparison and
+evaluation of forecasters. The Statistician 12–22.
+Demˇsar, J. 2006. Statistical comparisons of classiﬁers over
+multiple data sets. The Journal of Machine Learning Re-
+search 7:1–30.
+Friedman, M. 1937. The use of ranks to avoid the assump-
+tion of normality implicit in the analysis of variance. Journal
+of the American Statistical Association 32(200):675–701.
+Heckerman, D.; Geiger, D.; and Chickering, D. 1995. Learn-
+ing bayesian networks: The combination of knowledge and
+statistical data. Machine Learning 20(3):197–243.
+Hoeting, J. A.; Madigan, D.; Raftery, A. E.; and Volinsky,
+C. T. 1999. Bayesian model averaging: a tutorial. Statistical
+Science 382–401.
+Holm, S. 1979. A simple sequentially rejective multiple test
+procedure. Scandinavian Journal of Statistics 65–70.
+Iman, R. L., and Davenport, J. M. 1980. Approximations of
+the critical region of the friedman statistic. Communications
+in Statistics-Theory and Methods 9(6):571–595.
+Klemela, J.
+2009.
+Multivariate histograms with data-
+dependent partitions. Statistica Sinica 19(1):159.
+Menon, A.; Jiang, X.; Vembu, S.; Elkan, C.; and Ohno-
+Machado, L. 2012. Predicting accurate probabilities with
+a ranking loss. In Proceedings of the International Confer-
+ence on Machine Learning, 703–710.
+Niculescu-Mizil, A., and Caruana, R. 2005. Predicting good
+probabilities with supervised learning. In Proceedings of the
+International Conference on Machine Learning, 625–632.
+Platt, J. C. 1999. Probabilistic outputs for support vector
+machines and comparisons to regularized likelihood meth-
+ods. Advances in Large Margin Classiﬁers 10(3):61–74.
+Russell, S., and Norvig, P.
+1995.
+Artiﬁcial intelligence:
+A modern approach. Artiﬁcial Intelligence. Prentice-Hall,
+Englewood Cliffs 25.
+Scott, C., and Nowak, R. 2003. Near-minimax optimal clas-
+siﬁcation with dyadic classiﬁcation trees. Advances in Neu-
+ral Information Processing Systems 16.
+Zadrozny, B., and Elkan, C.
+2001.
+Obtaining calibrated
+probability estimates from decision trees and naive bayesian
+classiﬁers. In International Conference on Machine Learn-
+ing, 609–616.
+Zadrozny, B., and Elkan, C. 2002. Transforming classiﬁer
+scores into accurate multiclass probability estimates. In Pro-
+ceedings of the ACM SIGKDD International Conference on
+Knowledge Discovery and Data Mining, 694–699.
+2907

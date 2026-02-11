@@ -1,0 +1,1556 @@
+arXiv:1203.5924v2  [cs.IT]  2 Oct 2012
+A Coordinated Approach to Channel Estimation in
+Large-scale Multiple-antenna Systems
+Haifan Yin, David Gesbert Fellow, IEEE, Miltiades Filippou, and Yingzhuang Liu
+Abstract—This paper addresses the problem of channel es-
+timation in multi-cell interference-limited cellular networks. We
+consider systems employing multiple antennas and are interested
+in both the ﬁnite and large-scale antenna number regimes (so-
+called ”massive MIMO”). Such systems deal with the multi-cell
+interference by way of per-cell beamforming applied at each base
+station. Channel estimation in such networks, which is known to
+be hampered by the pilot contamination effect, constitute a major
+bottleneck for overall performance. We present a novel approach
+which tackles this problem by enabling a low-rate coordination
+between cells during the channel estimation phase itself. The
+coordination makes use of the additional second-order statistical
+information about the user channels, which are shown to offer a
+powerful way of discriminating across interfering users with even
+strongly correlated pilot sequences. Importantly, we demonstrate
+analytically that in the large-number-of-antennas regime, the
+pilot contamination effect is made to vanish completely under
+certain conditions on the channel covariance. Gains over the
+conventional channel estimation framework are conﬁrmed by our
+simulations for even small antenna array sizes.
+Index Terms—massive MIMO, pilot contamination, channel
+estimation, scheduling, covariance information.
+I. INTRODUCTION
+Full reuse of the frequency across neighboring cells leads to
+severe interference, which in turn limits the quality of service
+offered to cellular users, especially those located at the cell
+edge. As service providers seek some solutions to restore
+performance in low-SINR cell locations, several approaches
+aimed at mitigating inter-cell interference have emerged in the
+last few years. Among these, the solutions which consist of
+exploiting the additional degrees of freedom made available
+by the use of multiple antennas seem the most promising,
+particularly so at the base station side where such arrays are
+more easily affordable.
+In an effort to solve this problem while limiting the re-
+quirements for user data sharing over the backhaul network,
+coordinated beamforming approaches have been proposed in
+which 1) multiple-antenna processing is exploited at each base
+station, and 2) the optimization of the beamforming vectors at
+Manuscript received February 1, 2012; revised June 15, 2012. This work
+was supported in part by National Natural Science Foundation of China
+under grant No. 60972015 and 61231007, by the European research project
+SAPHYRE under the FP7 ICT Objective 1.1 - The Network of the Future,
+and by the French national ANR-VERSO funded project LICORNE.
+H. Yin was with Huazhong University of Science and Technology, Wuhan,
+430074 China. He is now with EURECOM, 06410 Biot, France (e-mail:
+yin@eurecom.fr).
+D. Gesbert, M. Filippou are with EURECOM, 06410 Biot, France (e-mail:
+gesbert@eurecom.fr, ﬁlippou@eurecom.fr).
+Y. Liu is with Huazhong University of Science and Technology, Wuhan,
+430074 China (e-mail: liuyz@mail.hust.edu.cn)
+all cooperating base stations is performed jointly. Coordinated
+beamforming does not require the exchange of user message
+information (e.g., in network MIMO). Yet it still demands
+the exchange of channel state information (CSI) across the
+transmitters on a fast time scale, low-latency basis, making
+almost as challenging to implement in practice as the above
+mentioned network MIMO schemes.
+Fortunately a path towards solving some of the essential
+practical problems related to beamforming-based interference
+avoidance was suggested in [1]. In this work, it was pointed
+out that the need for exchanging Channel State Information at
+Transmitter (CSIT) between base stations could be alleviated
+by simply increasing the number of antennas, M, at each
+transmitter (so-called massive MIMO). This result is rooted in
+the law of large numbers, which predicts that, as the number of
+antennas increases, the vector channel for a desired terminal
+will tend to be more orthogonal to the vector channel of a
+randomly selected interfering user. This makes it possible to
+reject interference at the base station side by simply aligning
+the beamforming vector with the desired channel (”Maximum
+Ratio Combining” or spatial matched ﬁlter). Hence in theory,
+a simple fully distributed per-cell beamforming scheme can
+offer performance scaling (with M) similar to a more complex
+centralized optimization.
+Unfortunately, the above conclusion only holds without
+pilot-contaminated CSI estimates. In reality, channel informa-
+tion is acquired on the basis of ﬁnite-length pilot sequences,
+and crucially, in the presence of inter-cell interference. There-
+fore, the pilot sequences from neighboring cells would con-
+taminate each other. It was pointed out in [1] that pilot contam-
+ination constitutes a bottleneck for performance. In particular,
+it has been shown that pilot contamination effects [2], [3],
+[4] (i.e., the reuse of non-orthogonal pilot sequences across
+interfering cells) cause the interference rejection performance
+to quickly saturate with the number of antennas, thereby
+undermining the value of MIMO systems in cellular networks.
+In this paper, we address the problem of channel estimation
+in the presence of multi-cell interference generated from
+pilot contamination. We propose an estimation method which
+provides a substantial improvement in performance. It relies
+on two key ideas. The ﬁrst is the exploitation of dormant
+side-information lying in the second-order statistics of the
+user channels, both for desired and the interfering users. In
+particular, we demonstrate a powerful result indicating that the
+exploitation of covariance information under certain subspace
+conditions on the covariance matrices can lead to a complete
+removal of pilot contamination effects in the large M limit. We
+then turn to a practical algorithm design where this concept
+
+2
+is exploited. The key idea behind the new algorithm is the
+use of a covariance-aware pilot assignment strategy within
+the channel estimation phase itself. While diversity-based
+scheduling methods have been popularized for maximizing
+various throughput-fairness performance criteria [5], [6], [7],
+[8], the potential beneﬁt of user-to-pilot assignment in the
+context of interference-prone channel estimation has received
+very little attention so far.
+More speciﬁcally, our contributions are the following: We
+ﬁrst develop a Bayesian channel estimation method making
+explicit use of covariance information in the inter-cell inter-
+ference scenario with pilot contamination. We show that the
+channel estimation performance is a function of the degree
+to which dominant signal subspaces pertaining to the desired
+and interference channel covariance overlap with each other.
+Therefore we exploit the fact that the desired user signals and
+interfering user signals are received at the base station with
+(at least approximately) ﬁnite-rank covariance matrices. This
+is typically the case in realistic scenarios due to the limited
+angle spread followed by incoming paths originating from
+street-level users [9]. Finally, we propose a pilot sequence
+assignment strategy based on assigning carefully selected
+groups of users to identical pilot sequences. The gains are
+shown to depend on system parameters such as the typical
+angle spread measured at the base station and the number of
+base station antennas. Performance close to the interference-
+free channel estimation scenario is obtained for moderate
+numbers of antennas and users.
+The notations adopted in the paper are as follows. We
+use boldface to denote matrices and vectors. Speciﬁcally, IM
+denotes the M × M identity matrix. Let (X)T , (X)∗, and
+(X)H denote the transpose, conjugate, and conjugate transpose
+of a matrix X respectively. E {·} denotes the expectation, ∥·∥F
+denotes the Frobenius norm, and diag{a1, ..., aN} denotes a
+diagonal matrix or a block diagonal matrix with a1, ..., aN at
+the main diagonal. The Kronecker product of two matrices X
+and Y is denoted by X ⊗Y. ≜is used for deﬁnitions.
+II. SIGNAL AND CHANNEL MODELS
+We consider a network of L time-synchronized1 cells, with
+full spectrum reuse. Estimation of (block-fading) channels in
+the uplink is considered,2 and all the base stations are equipped
+with M antennas. To simplify the notations, we assume the 1st
+cell is the target cell, unless otherwise notiﬁed. We assume the
+pilots, of length τ, used by single-antenna users in the same
+cell are mutually orthogonal. As a result, intra-cell interference
+is negligible in the channel estimation phase. However, non-
+orthogonal (possibly identical) pilots are reused from cell to
+cell, resulting in pilot contamination from L −1 interfering
+cells. For ease of exposition, we consider the case where a
+single user per cell transmits its pilot sequence to its serving
+1Note that assuming synchronization between uplink pilots provides a worst
+case scenario from a pilot contamination point of view, since any lack of
+synchronization will tend to statistically decorrelate the pilots.
+2Similar ideas would be applicable for downlink channel estimation,
+provided the UE is equipped with multiple antennas as well, in which case
+the estimation would help resolve interferences originating from neighboring
+base stations.
+base. The pilot sequence used in the l-th cell is denoted by:
+sl = [ sl1
+sl2
+· · ·
+slτ ]T .
+(1)
+The power of pilot sequences are assumed equal such that
+|sl1|2 + · · · + |slτ|2 = τ, l = 1, 2, . . . , L.
+The channel vector between the l-th cell user and the target
+base station is hl. Thus, h1 is the desired channel while hl, l >
+1 are interference channels. All channel vectors are assumed
+to be M ×1 complex Gaussian, undergoing correlation due to
+the ﬁnite multipath angle spread at the base station side [10]:
+hl = R1/2
+l
+hWl, l = 1, 2, . . . , L,
+(2)
+where hWl ∼CN(0, IM) is the spatially white M × 1 SIMO
+channel, and CN(0, IM) denotes zero-mean complex Gaus-
+sian distribution with covariance matrix IM. In this paper, we
+make the assumption that covariance matrix Rl ≜E{hlhH
+l }
+can be obtained separately from the desired and interference
+channels (see Section VI for how this could be done in
+practice).
+During the pilot phase, the M × τ signal received at the
+target base station is
+Y =
+L
+X
+l=1
+hlsT
+l + N,
+(3)
+where N ∈CM×τ is the spatially and temporally white
+additive Gaussian noise (AWGN) with zero-mean and element-
+wise variance σ2
+n.
+III. COVARIANCE-BASED CHANNEL ESTIMATION
+A. Pilot Contamination
+Conventional channel estimation relies on correlating the
+received signal with the known pilot sequence (referred here as
+Least Squares estimate for example). Hence, using the model
+in (3), a Least Square (LS) estimator for the desired channel
+h1 is
+bhLS
+1 = Ys1∗(s1T s1∗)
+−1.
+(4)
+The conventional estimator suffers from a lack of orthogonality
+between the desired and interfering pilots, an effect known as
+pilot contamination [2], [11], [12]. In particular, when the same
+pilot sequence is reused in all L cells, i.e., s1 = · · · = sL = s,
+the estimator can be written as
+bhLS
+1 = h1 +
+L
+P
+l̸=1
+hl + Ns∗/τ .
+(5)
+As it appears in (5), the interfering channels leak directly
+into the desired channel estimate. The estimation performance
+is then limited by the signal to interfering ratio at the base
+station, which in turns limits the ability to design effective
+interference-avoiding beamforming solution.
+
+3
+B. Bayesian Estimation
+We hereby propose an improved channel estimator with the
+aim of reducing the pilot contamination effect, and taking
+advantage of the multiple antenna dimensions. We suggest
+to do so by exploiting side information lying in the second
+order statistics of the channel vectors. The role of covariance
+matrices is to capture structure information related to the
+distribution (mainly mean and spread) of the multipath angles
+of arrival at the base station. Due to the typically elevated
+position of the base station, rays impinge on the antennas with
+a ﬁnite angle-of-arrival (AOA) spread and a user location-
+dependent mean angle. Note that covariance-aided channel
+estimation itself is not a novel idea, e.g., in [13]. In [14],
+the authors focus on optimal design of pilot sequences and
+they exploit the covariance matrices of desired channels and
+colored interference. The optimal training sequences were
+developed with adaptation to the statistics of disturbance. In
+our paper, however, the pilot design is shown not having an
+impact on interference reduction, since fully aligned pilots
+are transmitted. Instead, we focus on i) studying the limiting
+behavior of covariance-based estimates in the presence of
+interference and large-scale antenna arrays, and ii) how to
+shape covariance information for the full beneﬁt of channel
+estimation quality.
+Two Bayesian channel estimators can be formed. In the ﬁrst,
+all channels are estimated at the target base station (including
+interfering ones). In the second, only h1 is estimated. By
+vectorizing the received signal and noise, our model (3) can
+be represented as
+y = ˜Sh + n,
+(6)
+where y = vec(Y), n = vec(N), and h ∈CLM×1 is obtained
+by stacking all L channels into a vector. The pilot matrix ˜S
+is deﬁned as
+˜S
+≜
+ s1 ⊗IM
+· · ·
+sL ⊗IM
+
+.
+(7)
+Applying Bayes’ rule, the conditional distribution of the
+channels h given the received training signal y is
+p(h|y) = p(h)p(y|h)
+p(y)
+= p(h)p(y|h).
+(8)
+We use the multivariate Gaussian probability density function
+(PDF) of the random vector h and assume its rows h1, · · · , hL
+are mutually independent, giving the joint PDF:
+p(h) =
+exp
+
+−
+L
+P
+l=1
+hH
+l R−1
+l
+hl
+
+πLM(det R1 · · · det RL)M .
+(9)
+Note that we derive this Bayesian estimator under the stan-
+dard condition of covariance matrix invertibility, although we
+show later this hypothesis is actually challenged by reality
+in the large-number-of-antennas regime. Fortunately, our ﬁnal
+expressions for channel estimators completely skip the covari-
+ance inversion.
+Using (6), we may obtain:
+p(y|h) =
+exp
+
+−(y −˜Sh)
+H(y −˜Sh)/σ2
+n
+
+(πσ2n)Mτ
+.
+(10)
+Combining the equations (9) and (10), the expression of (8)
+can be rewritten as
+p(h|y) = exp (−l(h))
+AB
+,
+(11)
+where A ≜(πσ2
+n)Mτ, B ≜πLM(det R1 · · · det RL)M =
+πLM(det R)M, and
+l(h) ≜hH ¯Rh + (y −˜Sh)H(y −˜Sh)/σ2
+n,
+(12)
+in which R ≜diag(R1, · · · , RL), ¯R ≜R−1.
+Using the maximum a posteriori (MAP) decision rule, the
+Bayesian estimator yields the most probable value given the
+observation y [15]:
+bh = arg
+max
+h∈CLM×1 p(h|y)
+= arg
+min
+h∈CLM×1 l(h)
+= (σ2
+nILM + R˜SH˜S)−1R˜SHy.
+(13)
+Interestingly, the Bayesian estimate as shown in (13) coin-
+cides with the minimum mean square error (MMSE) estimate,
+which has the form
+bhMMSE = R˜SH(˜SR˜SH + σ2
+nIτM)−1y.
+(14)
+(13) and (14) are equivalent thanks to the matrix inversion
+identity (I + AB)−1A = A(I + BA)−1.
+C. Channel Estimation with Full Pilot Reuse
+Previously we have given expressions whereby interfering
+channels are estimated simultaneously with the desired chan-
+nel. This could be of use in designing zero-forcing type re-
+ceivers. Even though it is clear that Zero-Forcing (ZF) type (or
+other sophisticated) receivers would give better performance
+at ﬁnite M (see [3] for an analysis of this problem), in this
+paper, however, we focus on simple matched ﬁlters, since
+such ﬁlters are made more relevant by the users of massive
+MIMO. Matched ﬁlters require the knowledge of the desired
+channel only, so that interference channels can be considered
+as nuisance parameters. For this case, the single user channel
+estimation shown below can be used. For ease of exposition,
+the worst case situation with an unique pilot sequence reused
+in all L cells is considered:
+s = [ s1
+s2
+· · ·
+sτ ]T .
+(15)
+Similar to (7), we deﬁne a training matrix ¯S ≜s ⊗IM. Note
+that ¯SH¯S = τIM. Then the vectorized received training signal
+at the target base station can be expressed as
+y = ¯S
+L
+X
+l=1
+hl + n.
+(16)
+Since the Bayesian estimator and the MMSE estimator are
+identical, we omit the derivation and simply give the expres-
+sion of this estimator for the desired channel h1 only:
+
+4
+bh1 = R1¯SH
+ 
+¯S
+ L
+X
+l=1
+Rl
+!
+¯SH + σ2
+nIτM
+!−1
+y
+(17)
+= R1
+ 
+σ2
+nIM + τ
+L
+X
+l=1
+Rl
+!−1
+¯SHy.
+(18)
+Note that the MMSE channel estimation in the presence of
+identical pilots is also undertaken in other works such as [3].
+In the section below, we examine the degradation caused
+by the pilot contamination on the estimation performance. In
+particular, we point out the role played by the use of covariance
+matrices in dramatically reducing the pilot contamination
+effects under certain conditions on the rank structure.
+We are interested in the mean squared error (MSE) of
+the proposed estimators, which can be deﬁned as: M ≜
+E{∥bh −h∥2
+F }, or for the single user channel estimate M1 ≜
+E{∥bh1 −h1∥2
+F }.
+The estimation MSE of (13) is
+M = tr
+
+
+R
+ 
+ILM +
+˜SH˜S
+σ2n
+R
+!−1
+
+.
+(19)
+Speciﬁcally, when identical pilots are used in all cells, the
+MSEs are
+M = tr
+(
+R
+
+ILM + τJLL ⊗IM
+σ2n
+R
+−1)
+,
+(20)
+M1 = tr
+
+
+R1 −R2
+1
+ 
+σ2
+n
+τ IM +
+L
+X
+l=1
+Rl
+!−1
+
+,
+(21)
+where JLL is a L × L unit matrix consisting of all 1s. The
+derivations to obtain M and M1 use standard methods and
+the details are omitted here due to lack of space. However,
+similar methods can be found in [16]. Of course, it is clear
+from (20) and (21) that the MSE is not dependent on the
+speciﬁc design of the pilot sequence, but on the power of it.
+We can readily obtain the channel estimate of (18) in an
+interference-free scenario, by setting interference terms to
+zero:
+bhno int
+1
+= R1
+ σ2
+nIM + τR1
+−1¯SH(¯Sh1 + n),
+(22)
+where the superscript no int refers to the ”no interference
+case”, and the corresponding MSE:
+Mno int
+1
+= tr
+(
+R1
+
+IM + τ
+σ2n
+R1
+−1)
+.
+(23)
+D. Large Scale Analysis
+We seek to analyze the performance for the above estimators
+in the regime of large antenna number M. For tractability, our
+analysis is based on the assumption of an uniform linear array
+(ULA) with supercritical antenna spacing (i.e., less than or
+equal to half wavelength).
+Hence we have the following multipath model3
+hi =
+1
+√
+P
+P
+X
+p=1
+a(θip)αip,
+(24)
+where P is the arbitrary number of i.i.d. paths, αip
+∼
+CN(0, δ2
+i ) is independent over channel index i and path index
+p, where δi is the i-th channel’s average attenuation. a(θ) is
+the steering vector, as shown in [17]
+a(θ) ≜
+
+
+1
+e−j2π D
+λ cos(θ)
+...
+e−j2π (M−1)D
+λ
+cos(θ)
+
+,
+(25)
+where D is the antenna spacing at the base station and λ
+is the signal wavelength, such that D ≤λ/2. θip ∈[0, π]
+is a random AOA. Note that we can limit angles to [0, π]
+because any θ ∈[−π, 0] can be replaced by −θ giving the
+same steering vector.
+Below, we momentarily assume that the selected users
+exhibit multipath AOAs that do not overlap with the AOAs for
+the desired user, i.e., the AOA spread and user locations are
+such that multipath for the desired user are conﬁned to a region
+of space where interfering paths are very unlikely to exist.
+Although the asymptotic analysis below makes use of this
+condition, it will be shown in Section IV how such a structure
+can be shaped implicitly by the coordinated pilot assignment.
+Finally, simulations reveal in Section V the robustness with
+respect to an overlap between AOA regions of desired and
+interference channels (for instance in the case of Gaussian
+AOA distribution).
+Our main result is as follows:
+Theorem 1. Assume the multipath angle of arrival θ yielding
+channel hj, j = 1, . . . , L, in (24), is distributed according to
+an arbitrary density pj(θ) with bounded support, i.e., pj(θ) =
+0 for θ /∈[θmin
+j
+, θmax
+j
+] for some ﬁxed θmin
+j
+⩽θmax
+j
+∈[0, π] . If
+the L −1 intervals [θmin
+i
+, θmax
+i
+] , i = 2, . . . , L are strictly
+non-overlapping with the desired channel’s AOA interval4
+[θmin
+1
+, θmax
+1
+], we have
+lim
+M→∞
+bh1 = bhno int
+1
+.
+(26)
+Proof: From the channel model (24), we get
+Ri = δ2
+i
+P
+P
+X
+p=1
+E{a(θip)a(θip)H} = δ2
+i E{a(θi)a(θi)H},
+where θi has the PDF pi(θ) for all i = 1, . . . , L. The proof of
+Theorem 1 relies on three intermediate lemmas which exploit
+the eigenstructures of the covariance matrices. The proofs of
+the lemmas are given in the appendix. The essential ingredient
+is to exhibit an asymptotic (at large M) orthonormal vector
+3Note that the Gaussian model (2) can well approximate the multipath
+model (24) as long as there are enough paths. Since the number of elementary
+path is typically very large, we have P ≫1 this assumption is valid in
+practice.
+4This condition is just one example of practical scenario leading to
+non-overlapping signal subspaces between the desired and the interference
+covariances, however, more general multipath scenarios could be used.
+
+5
+basis for Ri constructed from steering vectors at regularly
+sampled spatial frequencies.
+Lemma 1. Deﬁne α(x) ≜[ 1
+e−jπx
+· · ·
+e−jπ(M−1)x ]T
+and A ≜span{α(x), x ∈[−1, 1]}. Given b1, b2 ∈[−1, 1] and
+b1 < b2, deﬁne B ≜span{α(x), x ∈[b1, b2]}, then
+• dim{A} = M
+• dim{B} ∼(b2 −b1)M/2 when M grows large.
+Proof: See Appendix A.
+Lemma 1 characterizes the number of dimensions a linear
+space has, which is spanned by α(x), in which x plays the
+role of spatial frequency.
+Lemma 2. With a bounded support of AOAs, the rank of
+channel covariance matrix Ri satisﬁes:
+rank(Ri)
+M
+⩽di, as M →∞,
+where di is deﬁned as
+di ≜
+ cos(θmin
+i
+) −cos(θmax
+i
+)
+ D
+λ .
+Proof: See Appendix B.
+Lemma 2 indicates that for large M, there exists a null
+space null(Ri) of dimension (1 −di)M. Interestingly, related
+eigenstructure properties of the covariance matrices were in-
+dependently derived in [18] for the purpose of reducing the
+overhead of downlink channel estimation and CSI feedback in
+massive MIMO for FDD systems.
+Lemma 3. The null space null(Ri) includes a certain set of
+unit-norm vectors:
+null(Ri) ⊃span
+a(Φ)
+√
+M
+, ∀Φ /∈[θmin
+i
+, θmax
+i
+]
+
+, as M →∞.
+Proof: See Appendix C.
+This lemma indicates that multipath components with AOA
+outside the AOA region for a given user will tend to fall in
+the null space of its covariance matrix in the large-number-of-
+antennas case.
+We now return to the proof of Theorem 1. Ri can be
+decomposed into
+Ri = UiΣiUH
+i ,
+(27)
+where Ui is the signal eigenvector matrix of size M × mi, in
+which mi ≤diM. Σi is an eigenvalue matrix of size mi×mi.
+Due to Lemma 3 and the fact that densities pi(θ) and p1(θ)
+have non-overlapping supports, we have
+UH
+i U1 = 0, ∀i ̸= 1, as M →∞.
+(28)
+Combining the channel estimate (18) and the channel model
+(16), we obtain
+bh1 = R1
+ 
+σ2
+nIM + τ
+L
+X
+l=1
+Rl
+!−1
+¯SH
+ 
+¯S
+L
+X
+i=1
+hi + n
+!
+.
+According to (28), matrices R1 and
+L
+P
+l=2
+Rl span orthogonal
+subspaces in the large M limit. Therefore we place ourselves
+in the asymptotic regime for M, when τ
+L
+P
+l=2
+Rl can be eigen-
+decomposed according to
+τ
+L
+X
+l=2
+Rl = WΣWH,
+(29)
+where W is the eigenvector matrix such that WHW = I
+and span {W} is included in the orthogonal complement of
+span {U1}. Now denote V the unitary matrix correspond-
+ing to the orthogonal complement of both span {W} and
+span {U1}, so that the M × M identity matrix can now be
+decomposed into:
+IM = U1UH
+1 + WWH + VVH.
+(30)
+Thus, for large M,
+bh1 ∼U1Σ1UH
+1
+ σ2
+nU1UH
+1 + σ2
+nVVH + σ2
+nWWH
++τU1Σ1UH
+1 + WΣWH −1
+ 
+τ
+L
+X
+i=1
+hi + ¯SHn
+!
+.
+Due to asymptotic orthogonality between U1, W and V,
+bh1 ∼U1Σ1(σ2Im1 + τΣ1)−1UH
+1 (τ
+L
+X
+i=1
+hi + ¯SHn)
+∼U1Σ1(σ2Im1 + τΣ1)−1τ(UH
+1 h1 +
+L
+X
+i=2
+UH
+1 hi +
+¯SHn1
+τ
+).
+However, since hi ⊂span
+
+a(θ), ∀θ ∈[θmin
+i
+, θmax
+i
+]
+	
+, we have
+from Lemma 3 that ∥UH
+1 hi∥
+∥UH
+1 h1∥→0, for i ̸= 1 when M →∞.
+Therefore
+lim
+M→∞
+bh1 = τU1Σ1
+ σ2
+nIm1 + τΣ1
+−1 
+UH
+1 h1 +
+¯SHn
+τ
+
+,
+which is identical to bhno int
+1
+if we apply the EVD decomposition
+(27) for R1 in (22). This proves Theorem 1.
+We also believe that, although antenna calibration is needed
+as a technical assumption in the theorem, orthogonality of co-
+variances signal subspaces will occur in non-tightly calibrated
+settings provided the AOA regions do not overlap.
+IV. COORDINATED PILOT ASSIGNMENT
+We have seen from above that the performance of the
+covariance-aided channel estimation is particularly sensitive
+to the degree with which the signal subspaces of covariance
+matrices for the desired and the interference channels overlap
+with each other. In the ideal case where the desired and
+the interference covariances span distinct subspaces, we have
+demonstrated that the pilot contamination effect tends to
+vanish in the large-antenna-array case. In this section, we
+make use of this property by designing a suitable coordination
+protocol for assigning pilot sequences to users in the L
+cells. The role of the coordination is to optimize the use
+of covariance matrices in an effort to try and satisfy the
+non-overlapping AOA constraint of Theorem 1. We assume
+that in all L cells, the considered pilot sequence will be
+assigned to one (out of K) user in each of the L cells. Let
+
+6
+G ≜{1, . . . , K}, then Kl ∈G denotes the index of the user
+in the l-th cell who is assigned the pilot sequence s. The set
+of selected users is denoted by U in what follows.
+We use the estimation MSE (21) as a performance metric
+to be minimized in order to ﬁnd the best user set. (20) is
+an alternative if we take the estimates of interfering channels
+into consideration. For a given user set U, we deﬁne a network
+utility function
+F(U) ≜
+|U|
+X
+j=1
+Mj(U)
+tr {Rjj(U)},
+(31)
+where |U| is the cardinal number of the set U. Mj(U) is the
+estimation MSE for the desired channel at the j-th base station,
+with a notation readily extended from M1 in (21), where this
+time cell j is the target cell when computing Mj. Rjj(U) is
+the covariance matrix of the desired channel at the j-th cell.
+The principle of the coordinated pilot assignment consists
+in exploiting covariance information at all cells (a total of
+KL2 covariance matrices) in order to minimize the sum MSE
+metric. Hence, L users are assigned an identical pilot sequence
+when the corresponding L2 covariance matrices exhibit the
+most orthogonal signal subspaces. Note that the MSE-based
+criterion (31) implicitly exploits the property of subspace
+orthogonality, e.g., at high SNRs, the proposed MSE-based
+criterion will be minimized by choices of users with covariance
+matrices showing maximum signal subspace orthogonality,
+thereby implicitly satisfying the conditions behind Theorem
+1. In view of minimizing the search complexity, a classical
+greedy approach is proposed:
+1) Initialize U = ∅
+2) For l = 1, . . . , L do:
+Kl = arg min
+k∈G F(U ∪{k})
+U ←U ∪{Kl}
+End
+The coordination can be interpreted as follows: To minimize
+the estimation error, a base station tends to assign a given
+pilot to the user whose spatial feature has most differences
+with the interfering users assigned the same pilot. Clearly,
+the performance will improve with the number of users, as it
+becomes more likely to ﬁnd users with discriminable second-
+order statistics.
+V. NUMERICAL RESULTS
+In order to preserve fairness between users and avoid having
+high-SNR users being systematically assigned the considered
+pilot, we consider a symmetric multicell network where the
+users are all distributed on the cell edge and have the same
+distance with their base stations. In practice, users with greater
+average SNR levels (but equal across cells) can be assigned
+together on a separate pilot pool. We adopt the model of a
+cluster of synchronized and hexagonally shaped cells. Some
+basic simulation parameters are given in Table I. We keep
+these parameters in the following simulation, unless otherwise
+stated.
+TABLE I
+BASIC SIMULATION PARAMETERS
+Cell radius
+1 km
+Cell edge SNR
+20 dB
+Number of user per-cell
+10
+Distance from a user to its BS
+800 m
+Path loss exponent
+3
+Carrier frequency
+2 GHz
+Antenna spacing
+λ/2
+Number of paths
+50
+Pilot length
+10
+The channel vector between the u-th user in the l-th cell
+and the target base station is
+hlu =
+1
+√
+P
+P
+X
+p=1
+a(θlup)αlup,
+(32)
+where θlup and αlup are the AOA and the attenuation of the
+p-th path between the u-th user in the l-th cell and the target
+base station respectively. Note that the variance of αlup, ∀p is
+δ2
+lu, which includes the distance-based path loss βlu between
+the user and the target base station (which can be anyone of
+the L cells):
+βlu = α
+dγ
+lu
+,
+(33)
+where α is a constant dependent on the prescribed average
+SNR at cell edge. dlu is the geographical distance. γ is the
+path-loss exponent.
+Two types of AOA distributions are considered here, a non-
+bounded one (Gaussian) and a bounded one (uniform):
+1) Gaussian distribution: For the channel coefﬁcients hlu,
+the AOAs of all P paths are i.i.d. Gaussian random variables
+with mean ¯θlu and standard deviation σ. Here we suppose
+all the desired channels and interference channels have the
+same standard deviation of AOA. Note that Gaussian AOA
+distributions cannot fulﬁll the conditions of non-overlapping
+AOA support domains in Theorem 1, nevertheless the use of
+the proposed method in this context also gives substantial gains
+as σ2 decreases.
+2) Uniform distribution: For the channel hlu, the AOAs
+are uniformly distributed over [¯θlu −θ∆, ¯θlu + θ∆], where ¯θlu
+is the mean AOA.
+Two performance metrics are used to evaluate the proposed
+channel estimation scheme. The ﬁrst one is a normalized
+channel estimation error
+err ≜10log10
+
+
+
+
+
+L
+P
+j=1
+bhjj −hjj
+
+2
+F
+L
+P
+j=1
+∥hjj∥2
+F
+
+
+
+
+,
+(34)
+where hjj and bhjj are the desired channel at the j-th
+base station and its estimate respectively. Note that we only
+consider the estimation error of the desired channel. The
+second performance metric is the per-cell rate of the downlink
+obtained assuming standard MRC beamformer based on the
+channel estimates. The beamforming weight vector of the j-th
+
+7
+base station is wMRC
+j
+= bhjj. We deﬁne the per-cell rate as
+follows:
+C ≜
+L
+P
+j=1
+log2(1 + SINRj)
+L
+,
+where SINRj is the received signal-to-noise-plus-interference
+ratio (SINR) by the scheduled user in the j-th cell.
+Numerical results of the proposed channel estimation
+scheme are now shown. In the ﬁgures, ”LS” stands for conven-
+tional LS channel estimation. ”CB” denotes the Covariance-
+aided Bayesian estimation (without coordinated pilot as-
+signment), and ”CPA” is the proposed Coordinated Pilot
+Assignment-based Bayesian estimation.
+0
+20
+40
+60
+80
+100
+120
+140
+160
+180
+200
+−40
+−35
+−30
+−25
+−20
+−15
+−10
+Antenna Number
+Estimation Error [dB]
+ 
+ 
+Conventional LS Estimation
+Covariance−aided Bayesian (CB) Estimation
+LS − Interference Free Scenario
+CB − Interference Free Scenario
+Fig. 1.
+Estimation MSE vs. BS antenna number, 2-cell network, ﬁxed
+positions of two users, uniformly distributed AOAs with θ∆= 20 degrees,
+non-overlapping multipath.
+We ﬁrst validate Theorem 1 in Fig. 1 with a 2-cell network,
+where the two users’ positions are ﬁxed. AOAs of desired
+channels are uniformly distributed with a mean of 90 degrees,
+and the angle spreads of all channels are 20 degrees, yielding
+no overlap between desired and interfering multipaths. The
+pilot contamination is quickly eliminated with growing number
+of antennas.
+In Fig. 2 and Fig. 3, the estimation MSEs versus the BS
+antenna number are illustrated. When the AOAs have uniform
+distributions with θ∆= 10 degrees, as shown in Fig. 2, the
+performance of CPA estimator improves quickly with M from
+2 to 10. In the 2-cell network, CPA has the ability of avoiding
+the overlap between AOAs for the desired and interference
+channels. For comparison, Fig. 3 is obtained with Gaussian
+AOA distribution. We can observe a gap remains between the
+CPA and the interference-free one, due to the non-boundedness
+of the Gaussian PDF. Nevertheless, the gains over the classical
+estimator remain substantial.
+We then examine the impact of standard deviation σ of
+Gaussian AOAs on the estimation. Fig. 4 shows that the
+estimation error is a monotonically increasing function of σ.
+In contrast, an angle spread tending toward zero will cause
+the channel direction to collapse into a deterministic quantity,
+yielding large gains for covariance-based channel estimation.
+0
+5
+10
+15
+20
+25
+30
+35
+40
+45
+50
+−40
+−35
+−30
+−25
+−20
+−15
+−10
+−5
+Antenna Number
+Estimation Error [dB]
+ 
+ 
+Conventional LS Estimation
+Covariance−aided Bayesian Estimation
+Coordinated Pilot Assignment−based Estimation
+LS − Interference Free Scenario
+CB − Interference Free Scenario
+Fig. 2.
+Estimation MSE vs. antenna number, uniformly distributed AOAs
+with θ∆= 10 degrees, 2-cell network.
+0
+5
+10
+15
+20
+25
+30
+35
+40
+45
+50
+−40
+−35
+−30
+−25
+−20
+−15
+−10
+−5
+Antenna Number
+Estimation error [dB]
+ 
+ 
+LS Estimation
+CB Estimation
+CPA Estimation
+LS − Interference Free
+CB − Interference Free
+Fig. 3.
+Estimation MSE vs. antenna number, Gaussian distributed AOAs
+with σ = 10 degrees, 2-cell network.
+Figs. 5 and 6 depict the downlink per-cell rate achieved
+by the MRC beamforming strategy and suggest large gains
+when the Bayesian estimation is used in conjunction with
+the proposed coordinated pilot assignment strategy and in-
+termediate gains when it is used alone. Obviously the rate
+performance almost saturates with M in the classical LS case
+(due to pilot contamination) while it increases quickly with
+M for the proposed estimators, indicating the full beneﬁts of
+massive MIMO systems are exploited.
+VI. DISCUSSIONS
+In this paper, we assumed the individual covariance matrices
+can be estimated separately. This could be done in practice by
+exploiting resource blocks where the desired user and inter-
+ference users are known to be assigned at different times. In
+future networks, one may imagine a speciﬁc training design for
+learning second-order statistics. Since covariance information
+
+8
+0
+10
+20
+30
+40
+50
+60
+70
+80
+90
+−35
+−30
+−25
+−20
+−15
+−10
+−5
+0
+Standard Deviation of AOA [degree]
+Estimation error [dB]
+ 
+ 
+Conventional LS Estimation
+Covariance−aided Bayesian Estimation
+Coordinated Pilot Assignment−based Estimation
+Fig. 4.
+Estimation MSE vs. standard deviation of Gaussian distributed AOAs
+with M = 10, 7-cell network.
+0
+5
+10
+15
+20
+25
+30
+35
+40
+45
+50
+4
+6
+8
+10
+12
+14
+16
+18
+Antenna Number
+Per−cell rate [bits/sec/Hz]
+ 
+ 
+Conventional LS Estimation
+Covariance−aided Bayesian Estimation
+Coordinated Pilot Assignment−based Estimation
+Fig. 5.
+Per-cell rate vs. antenna number, 2-cell network, Gaussian distributed
+AOAs with σ = 10 degrees.
+varies much slower than fast fading, such training may not
+consume a substantial amount of resources.
+The proposed coordinated estimation method would intro-
+duce information exchange between base stations. Although
+the second-order statistics vary much slower than the instan-
+taneous CSI, base stations still have to update the covariance
+information every now and then so as to maintain performance.
+Clearly, the overhead depends on the degree of user mobility.
+VII. CONCLUSIONS
+This paper proposes a covariance-aided channel estimation
+framework in the context of interference-limited multi-cell
+multiple antenna systems. We develop Bayesian estimators and
+demonstrate analytically the efﬁciency of such an approach for
+large-scale antenna systems, leading to a complete removal
+of pilot contamination effects in the case covariance matrices
+satisfy a certain non-overlapping condition on their dominant
+subspaces. We suggest a coordinated pilot assignment strategy
+0
+10
+20
+30
+40
+50
+60
+70
+80
+90
+2.5
+3
+3.5
+4
+4.5
+5
+5.5
+6
+6.5
+Standard Deviation of AOA [degree]
+Per−cell rate [bits/sec/Hz]
+ 
+ 
+Conventional LS Estimation
+Covariance−aided Bayesian Estimation
+Coordinated Pilot Assignment−based Estimation
+Fig. 6.
+Per-cell rate vs. standard deviation of AOA (Gaussian distribution)
+with M = 10, 7-cell network.
+that helps shape covariance matrices toward satisfying the
+needed condition and show channel estimation performance
+close to interference-free scenarios.
+APPENDIX
+A. Proof of Lemma 1:
+Deﬁne the series
+xi ≜−1 + 2(i −1)
+M
+, i = 1, . . . , M,
+and
+µi ≜α(xi)
+√
+M
+.
+Then we have µi ⊂A, ∀i = 1, . . . , M and
+µH
+k µi =
+1 −e−j2π(i−k)
+M(1 −e−j2π(i−k)
+M
+)
+= 0, k ̸= i.
+Thus {µi |i = 1, . . . , M } forms an orthogonal basis of A, and
+therefore
+dim{A} = M.
+Deﬁne
+˜B ≜
+
+µi
+i ∈Z ∩
+
+⌊M(b1 + 1)
+2
++ 1⌋+ 1, ⌈M(b2 + 1)
+2
++ 1⌉−1
+
+,
+where ⌈x⌉and ⌊x⌋are rounded-above and rounded-below
+operators respectively. Then ˜B is part of an orthogonal basis
+of the space B, which indicates dim{B} ⩾| ˜B|. By counting
+vectors in ˜B, we have that
+dim{B} ⩾⌈M(b2 + 1)
+2
++ 1⌉−⌊M(b1 + 1)
+2
++ 1⌋−1
+= ⌈M(b2 + 1)
+2
+⌉−⌊M(b1 + 1)
+2
+⌋−1.
+(35)
+Now we deﬁne
+˜C ≜
+
+µi
+i ∈Z and i ∈
+
+1, ⌊M(b1 + 1)
+2
++ 1⌋
+
+∪
+
+⌈M(b2 + 1)
+2
++ 1⌉, M
+
+.
+
+9
+Then ˜C is part of an orthogonal basis of A. Furthermore,
+| ˜C| = ⌊M(b1 + 1)
+2
++ 1⌋+ M −⌈M(b2 + 1)
+2
++ 1⌉+ 1
+= M −⌈M(b2 + 1)
+2
+⌉+ ⌊M(b1 + 1)
+2
+⌋+ 1.
+Consider the equivalent form of B
+B =
+(Z b2
+b1
+f(x)α(x)dx
+ ∀|f(x)| < ∞, x ∈[b1, b2]
+)
+.
+Take any vector µi ∈˜C, we have
+µH
+i
+Z b2
+b1
+f(x)α(x)dx =
+1
+√
+M
+Z b2
+b1
+f(x)α(xi)Hα(x)dx
+=
+1
+√
+M
+Z b2
+b1
+f(x)1 −e−jπM(x−xi)
+1 −e−jπ(x−xi) dx.
+Since µi ∈˜C, we can observe xi /∈[b1, b2], thus
+lim
+M→∞µH
+i
+Z b2
+b1
+f(x)α(x)dx = 0.
+Therefore ˜C ⊂B⊥when M →∞. Hence we have
+dim{B⊥} = M −dim{B} ⩾| ˜C|
+⇒dim{B} ⩽⌈M(b2 + 1)
+2
+⌉−⌊M(b1 + 1)
+2
+⌋−1.
+(36)
+Combining (35) and (36), we can easily obtain
+dim{B} ∼⌈M(b2 + 1)
+2
+⌉−⌊M(b1 + 1)
+2
+⌋−1
+∼M(b2 −b1)
+2
++ o(M),
+and Lemma 1 is proved.
+B. Proof of Lemma 2:
+We deﬁne
+b(x) ≜a
+
+cos−1(x λ
+D)
+
+, x ∈[−D
+λ , D
+λ ].
+(37)
+It is clear from Lemma 1 that b(x) = α(2x). Hence, for any
+interval [xmin, xmax] in [−1
+2, 1
+2],
+dim
+
+span
+
+b(x), ∀x ∈[xmin, xmax]
+		
+∼(xmax −xmin)M
+when M is large.
+(38)
+Additionally, for i = 1, . . . , L, we have
+span {Ri} = span
+Z π
+0
+a(θ)a(θ)Hpi(θ)dθ
+
+,
+Thus, due to the bounded support of pi(θ), we can obtain
+span {Ri} = span
+(Z θmax
+i
+θmin
+i
+a(θ)a(θ)Hpi(θ)dθ
+)
+= span
+(Z θmax
+i
+θmin
+i
+b(D
+λ cos(θ))bH(D
+λ cos(θ))pi(θ)dθ
+)
+.
+Then, by interpreting the integral as a (continuous) sum, we
+have
+span {Ri} ⊂span
+
+b(x), ∀x ∈[D
+λ cos(θmax
+i
+), D
+λ cos(θmin
+i
+)]
+
+.
+From (38), we obtain
+rank(Ri) ≤
+ cos(θmin
+i
+) −cos(θmax
+i
+)
+ D
+λ M,
+for large M, and Lemma 2 is proved.
+C. Proof of Lemma 3:
+Take an angle Φ /∈[θmin
+i
+, θmax
+i
+] and deﬁne
+u ≜a(Φ)
+√
+M
+.
+Then we have
+uHRiu = 1
+M a(Φ)HRia(Φ)
+= 1
+M aH(Φ)E
+
+a(θ)aH(θ)
+	
+a(Φ)
+= 1
+M E
+naH(Φ)a(θ)
+2o
+= 1
+M E
+
+
+
+
+M−1
+X
+m=0
+e2πj(m−1) D
+λ (cos(Φ)−cos(θ))
+
+2
+
+
+=
+Z θmax
+i
+θmin
+i
+
+1
+M
+M−1
+X
+m=0
+e2πj(m−1) D
+λ (cos(Φ)−cos(θ))
+
+2
+pi(θ)dθ.
+According to the well-known result on the sum of geometric
+series, we can easily obtain
+lim
+M→∞
+
+1
+M
+M−1
+X
+m=0
+e2πj(m−1) D
+λ (cos(Φ)−cos(θ))
+
+2
+= 0,
+since Φ ̸= θ, ∀θ ∈[θmin
+i
+, θmax
+i
+]. Thus
+lim
+M→∞uHRiu = 0,
+which proves Lemma 3.
+ACKNOWLEDGMENT
+Discussions with Dirk Slock and Laura Cottatellucci are
+gratefully acknowledged.
+REFERENCES
+[1] T. L. Marzetta, “Noncooperative cellular wireless with unlimited num-
+bers of base station antennas,” IEEE Trans. Wireless Commun, vol. 9,
+no. 11, pp. 3590–3600, Nov. 2010.
+[2] J. Jose, A. Ashikhmin, T. L. Marzetta, and S. Vishwanath, “Pilot
+contamination problem in multi-cell TDD systems,” in Proc. IEEE
+International Symposium on Information Theory (ISIT09), Seoul, Korea,
+Jun. 2009, pp. 2184–2188.
+[3] J. Hoydis, S. ten Brink, and M. Debbah, “Massive MIMO: How many
+antennas do we need?” in Proc. 2011 49th Annual Allerton Conference
+on Communication, Control, and Computing (Allerton), Sep. 2011, pp.
+545 –550.
+[4] J. Jose, A. Ashikhmin, T. L. Marzetta, and S. Vishwanath, “Pilot
+contamination and precoding in multi-cell TDD systems,” IEEE Trans.
+Wireless Commun., vol. 10, no. 8, pp. 2640–2651, Aug. 2011.
+
+10
+[5] R. Knopp and P. A. Humblet, “Information capacity and power control
+in single-cell multiuser communications,” in Proc. IEEE International
+Conference on Communications, vol. 1, Seattle, WA, USA, 1995, pp.
+331–335.
+[6] P. Viswanath, D. N. C. Tse, and R. Laroia, “Opportunistic beamforming
+using dumb antennas,” IEEE Trans. Inf. Theory, vol. 48, no. 6, pp. 1277–
+1294, Jun. 2002.
+[7] J. Jang and K. B. Lee, “Transmit power adaptation for multiuser OFDM
+systems,” IEEE J. Sel. Areas Commun., vol. 21, no. 2, pp. 171–178,
+2003.
+[8] D. Gesbert, M. Kountouris, R. Heath, C. Chae, and T. Salzer, “Shifting
+the MIMO paradigm,” IEEE Signal Process. Mag., vol. 24, no. 5, pp.
+36–46, Sep. 2007.
+[9] R. B. Ertel, P. Cardieri, K. W. Sowerby, T. S. Rappaport, and J. H. Reed,
+“Overview of spatial channel models for antenna array communication
+systems,” IEEE Pers. Commun., vol. 5, no. 1, pp. 10 –22, Feb. 1998.
+[10] A. J. Paulraj, R. Nabar, and D. Gore, Introduction to space-time wireless
+communications.
+Cambridge University Press, 2003.
+[11] H. Q. Ngo, T. L. Marzetta, and E. G. Larsson, “Analysis of the pilot
+contamination effect in very large multicell multiuser MIMO systems
+for physical channel models,” in Proc. IEEE International Conference
+on Acoustics, Speech and Signal Processing (ICASSP11), Prague, Czech
+Republic, May 2011, pp. 3464–3467.
+[12] B. Gopalakrishnan and N. Jindal, “An analysis of pilot contamination on
+multi-user MIMO cellular systems with many antennas,” in 2011 IEEE
+12th International Workshop on Signal Processing Advances in Wireless
+Communications (SPAWC), Jun. 2011, pp. 381–385.
+[13] A. Scherb and K. Kammeyer, “Bayesian channel estimation for doubly
+correlated MIMO systems,” in Proc. IEEE Workshop Smart Antennas,
+2007.
+[14] E. Bjornson and B. Ottersten, “A framework for training-based esti-
+mation in arbitrarily correlated Rician MIMO channels with Rician
+disturbance,” IEEE Trans Signal Process., vol. 58, no. 3, pp. 1807–1820,
+2010.
+[15] R. M. Gray and L. D. Davisson, An introduction to statistical signal
+processing.
+Cambridge University Press, 2004.
+[16] S. M. Kay, Fundamentals of Statistical Signal Processing: Estimation
+Theory.
+Englewood Cliffs, NJ: Prentice Hall, 1993.
+[17] J. A. Tsai, R. M. Buehrer, and B. D. Woerner, “The impact of AOA
+energy distribution on the spatial fading correlation of linear antenna
+array,” in Proc. IEEE Vehicular Technology Conference, (VTC 02), vol. 2,
+May 2002, pp. 933–937.
+[18] J. Nam, J. Ahn, and G. Caire, “Joint spatial division and multiplexing:
+Realizing massive MIMO gains with limited channel state information,”
+in 46th Annual Conference on Information Sciences and Systems, (CISS
+2012), Princeton University, NJ, USA, Mar. 2012.

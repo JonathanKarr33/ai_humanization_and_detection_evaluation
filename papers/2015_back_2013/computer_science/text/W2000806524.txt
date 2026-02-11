@@ -1,0 +1,834 @@
+arXiv:1312.7377v2  [math.OC]  20 Aug 2014
+1
+Designing Fully Distributed Consensus
+Protocols for Linear Multi-agent Systems with
+Directed Graphs
+Zhongkui Li, Member, IEEE, Guanghui Wen, Member, IEEE, Zhisheng Duan,
+Wei Ren, Senior Member, IEEE
+Abstract
+This technical note addresses the distributed consensus protocol design problem for multi-agent
+systems with general linear dynamics and directed communication graphs. Existing works usually design
+consensus protocols using the smallest real part of the nonzero eigenvalues of the Laplacian matrix
+associated with the communication graph, which however is global information. In this technical note,
+based on only the agent dynamics and the relative states of neighboring agents, a distributed adaptive
+consensus protocol is designed to achieve leader-follower consensus in the presence of a leader with a
+zero input for any communication graph containing a directed spanning tree with the leader as the root
+node. The proposed adaptive protocol is independent of any global information of the communication
+graph and thereby is fully distributed. Extensions to the case with multiple leaders are further studied.
+Index Terms
+This work was supported by the National Natural Science Foundation of China under grants 61104153, 61473005, 11332001,
+61225013, 61304168, a Foundation for the Author of National Excellent Doctoral Dissertation of PR China, the Natural Science
+Foundation of Jiangsu Province of China under grant BK20130595, and National Science Foundation under grant ECCS-1307678.
+Z. Li and Z. Duan are with the State Key Laboratory for Turbulence and Complex Systems, Department of Mechanics
+and Engineering Science, College of Engineering, Peking University, Beijing 100871, China (E-mail: zhongkli@pku.edu.cn;
+duanzs@pku.edu.cn).
+G.
+Wen is
+with the
+Department
+of
+Mathematics,
+Southeast
+University,
+Nanjing
+210096,
+China
+(E-mail:
+wen-
+guanghui@gmail.com).
+W. Ren is with the Department of Electrical Engineering, University of California, Riverside, CA, 92521, USA (E-mail:
+ren@ee.ucr.edu).
+August 21, 2014
+DRAFT
+
+2
+Multi-agent system, cooperative control, consensus, distributed control, adaptive control.
+I. INTRODUCTION
+Consensus of multi-agent systems has been an emerging research topic in the systems and
+control community in recent years. Due to its potential applications in several areas such as
+spacecraft formation ﬂying, sensor networks, and cooperative surveillance [1], the consensus
+control problem has been addressed by many researchers from various perspectives; see [1], [2],
+[3], [4], [5] and the references therein. Existing consensus algorithms can be roughly categorized
+into two classes, namely, consensus without a leader (i.e., leaderless consensus) and consensus
+with a leader which is also called leader-follower consensus or distributed tracking. For the
+consensus control problem, a key task is to design appropriate distributed controllers which
+are usually called consensus protocols. Due to the spatial distribution of the agents and limited
+sensing capability of sensors, implementable consensus protocols for multi-agent systems should
+be distributed, depending on only the local state or output information of each agent and its
+neighbors.
+In this technical note, we consider the distributed consensus protocol design problem for
+multi-agent systems with general continuous-time linear dynamics. Previous works along this
+line include [6], [7], [8], [9], [10], [11], where different static and dynamic consensus protocols
+have been proposed. One common feature in the aforementioned works is that the design of the
+consensus protocols requires the knowledge of some eigenvalue information of the Laplacian
+matrix associated with the communication graph (speciﬁcally, the smallest nonzero eigenvalue of
+the Laplacian matrix for undirected graphs and the smallest real part of the nonzero eigenvalues
+of the Laplacian matrix for directed graphs). As pointed in [8], for the case where the agents
+are not neutrally stable, e.g., double integrators, the design of the consensus protocols generally
+depends on the smallest real part of the nonzero eigenvalues of the Laplacian matrix. However, it
+is worth mentioning that the smallest real part of the nonzero eigenvalues of the Laplacian matrix
+is global information in the sense that each agent has to know the entire communication graph
+G to compute it. Therefore, the consensus protocols given in the aforementioned papers cannot
+be designed by each agent in a fully distributed fashion, i.e., using only the local information
+of its own and neighbors. To overcome this limitation, distributed adaptive consensus protocols
+are proposed in [12], [13]. Similar adaptive schemes are presented to achieve second-order
+August 21, 2014
+DRAFT
+
+3
+consensus with nonlinear dynamics in [14], [15]. Note that the protocols in [12], [13], [14],
+[15] are applicable to only undirected communication graphs or leader-follower graphs where
+the subgraphs among the followers are undirected. How to design fully distributed adaptive
+consensus protocols for the case with general directed graphs is quite challenging and to the
+best of our knowledge is still open. The main difﬁculty lies in that the Laplacian matrices of
+directed graphs are generally asymmetric, which renders the construction of adaptive consensus
+protocol and the selection of appropriate Lyapunov function far from being easy.
+In this technical note, we intend to design fully distributed consensus protocols for general
+linear multi-agent systems with a leader of a zero input and a directed communication graph.
+Based on the relative states of neighboring agents, a distributed adaptive consensus protocol is
+constructed. It is shown via a novel Lyapunov function that the proposed adaptive protocol can
+achieve leader-follower consensus for any communication graph containing a directed spanning
+tree with the leader as the root node. The adaptive protocol proposed in this technical note,
+independent of any global information of the communication graph, relies on only the agent
+dynamics and the relative state information and thereby is fully distributed. Compared to the
+distributed adaptive protocols in [12], [13] for undirected graphs, a distinct feature of the adaptive
+protocol in this technical note is that monotonically increasing functions, inspired by the changing
+supply function notion in [16], are introduced to provide extra freedom for design. As an
+extension, we consider the case where there exist multiple leaders with zero inputs. In this
+case, it is shown that the proposed adaptive protocol can solve the containment control problem,
+i.e., the states of the followers are to be driven into the convex hull spanned by the states of
+the leaders, if for each follower, there exists at least one leader that has a directed path to that
+follower. A sufﬁcient condition for the existence of the adaptive protocol in this technical note
+is that each agent is stabilizable.
+The rest of this technical note is organized as follows. Mathematical preliminaries required
+in this paper are summarized in Section II. The problem is formulated and the motivation is
+stated in Section III. Distributed adaptive consensus protocols are designed in Section IV for
+general directed leader-follower graphs. Extensions to the case with multiple leaders are studied
+in Section V. Simulation examples are presented for illustration in Section VI. Conclusions are
+drawn in Section VII.
+August 21, 2014
+DRAFT
+
+4
+II. MATHEMATICAL PRELIMINARIES
+Throughout this technical note, the following notations and deﬁnitions will be used: Rn×m
+and Cn×m denote the sets of n × m real and complex matrices, respectively. IN represents
+the identity matrix of dimension N. Denote by 1 a column vector with all entries equal to
+one. diag(A1, · · · , An) represents a block-diagonal matrix with matrices Ai, i = 1, · · · , n, on
+its diagonal. For real symmetric matrices X and Y , X > (≥)Y means that X −Y is positive
+(semi-)deﬁnite. For a vector x, x > (≥)0 means that every entry of x is positive (nonnegative).
+A ⊗B denotes the Kronecker product of matrices A and B. Re(α) represents the real part of
+α ∈C. A matrix A = [aij] ∈Rn×n is called a nonsingular M-matrix, if aij < 0, ∀i ̸= j, and
+all eigenvalues of A have positive real parts.
+A directed graph G is a pair (V, E), where V = {v1, · · · , vN} is a nonempty ﬁnite set of nodes
+and E ⊆V × V is a set of edges, in which an edge is represented by an ordered pair of distinct
+nodes. For an edge (vi, vj), node vi is called the parent node, node vj the child node, and vi is a
+neighbor of vj. A graph with the property that (vi, vj) ∈E implies (vj, vi) ∈E for any vi, vj ∈V
+is said to be undirected. A path from node vi1 to node vil is a sequence of ordered edges of the
+form (vik, vik+1), k = 1, · · · , l −1. A directed graph contains a directed spanning tree if there
+exists a node called the root, which has no parent node, such that the node has directed paths
+to all other nodes in the graph.
+The adjacency matrix A = [aij] ∈RN×N associated with the directed graph G is deﬁned
+by aii = 0, aij is a positive value if (vj, vi) ∈E and aij = 0 otherwise. Note that aij denotes
+the weight for the edge (vj, vi) ∈E. If the weights are not relevant, then aij is set equal to
+1 if (vj, vi) ∈E. The Laplacian matrix L = [Lij] ∈RN×N is deﬁned as Lii = P
+j̸=i aij and
+Lij = −aij, i ̸= j.
+Lemma 1 ([17]): Zero is an eigenvalue of L with 1 as a right eigenvector and all nonzero
+eigenvalues have positive real parts. Furthermore, zero is a simple eigenvalue of L if and only
+if G has a directed spanning tree.
+Lemma 2 (Young’s Inequality, [18]): If a and b are nonnegative real numbers and p and q are
+positive real numbers such that 1/p + 1/q = 1, then ab ≤ap
+p + bq
+q .
+August 21, 2014
+DRAFT
+
+5
+III. PROBLEM STATEMENT AND MOTIVATIONS
+Consider a group of N + 1 identical agents with general linear dynamics, consisting of N
+followers and a leader. The dynamics of the i-th agent are described by
+˙xi = Axi + Bui,
+i = 0, · · · , N,
+(1)
+where xi ∈Rn is the state, ui ∈Rp is the control input, and A and B are constant matrices
+with compatible dimensions.
+Without loss of generality, let the agent in (1) indexed by 0 be the leader (which receives
+no information from any follower) and the agents indexed by 1, · · · , N, be the followers. It is
+assumed that the leader’s control input is zero, i.e., u0 = 0. The communication graph G among
+the N + 1 agents is assumed to satisfy the following assumption.
+Assumption 1: The graph G contains a directed spanning tree with the leader as the root node
+1.
+Denote by L the Laplacian matrix associated with G. Because the node indexed by 0 is the
+leader which has no neighbors, L can be partitioned as
+L =
+
+0
+01×N
+L2
+L1
+
+,
+(2)
+where L2 ∈RN×1 and L1 ∈RN×N. Since G satisﬁes Assumption 1, it follows from Lemma 1
+that all eigenvalues of L1 have positive real parts. It then can be veriﬁed that L1 is a nonsingular
+M-matrix and is diagonally dominant.
+The intention of this technical note is to solve the leader-follower consensus problem for
+the agent in (1), i.e., to design distributed consensus protocols under which the states of the
+N followers converge to the state of the leader in the sense of limt→∞∥xi(t) −x0(t)∥= 0,
+∀i = 1, · · · , N.
+Several consensus protocols have been proposed to reach leader-follower consensus for the
+agents in (1), e.g., in [6], [7], [9], [23], [8], [10]. A static consensus protocol based on the
+relative states between neighboring agents is given in [6], [10] as
+ui = c ˜K
+N
+X
+j=1
+aij(xi −xj),
+i = 1, · · · , N,
+(3)
+1Equivalently, the leader has directed paths to all followers.
+August 21, 2014
+DRAFT
+
+6
+where c > 0 is the common coupling weight among neighboring agents, ˜K ∈Rp×n is the
+feedback gain matrix, and aij is (i, j)-th entry of the adjacency matrix A associated with G.
+Lemma 3 ([6], [10]): For the communication graph G satisfying Assumption 1, the N agents
+described by (1) reach leader-follower consensus under the protocol (3) with ˜K = −BT P −1 and
+c ≥1/ min
+i=1,··,NRe(λi), where λi, i = 1, · · · , N, are the nonzero eigenvalues of L1 and P > 0 is
+a solution to the following linear matrix inequality (LMI):
+AP + PAT −2BBT < 0.
+(4)
+As shown in the above lemma, in order to reach consensus, the coupling weight c should
+be not less than the inverse of
+min
+i=1,··,NRe(λi), that is, the smallest real part of the eigenvalues
+of L1. Actually it is pointed out in [8], [23] that for the case where the agents in (1) are
+critically unstable, e.g., double integrators, the design of the consensus protocol generally requires
+the knowledge of
+min
+i=1,··,NRe(λi). However, it is worth mentioning that
+min
+i=1,··,NRe(λi) is global
+information in the sense that each follower has to know the entire communication graph G to
+compute it. Therefore, the consensus protocols given in Lemma 3 cannot be designed by each
+agent in a fully distributed fashion, i.e., using only the local information of its own and neighbors.
+This limitation motivates us to design some fully distributed consensus protocols for the agents
+in (1) whose directed communication graph satisﬁes Assumption 1.
+IV. DISTRIBUTED ADAPTIVE CONSENSUS PROTOCOL DESIGN
+In this section, we consider the case where each agent has access to the relative states of its
+neighbors with respect to itself. Based on the relative states of neighboring agents, we propose
+the following distributed adaptive consensus protocol with time-varying coupling weights:
+ui = ciρi(ξT
+i P −1ξi)Kξi,
+˙ci = ξT
+i Γξi,
+i = 1, · · · , N,
+(5)
+where ξi ≜PN
+j=0 aij(xi −xj), ci(t) denotes the time-varying coupling weight associated with
+the i-th follower with ci(0) ≥1, P > 0 is a solution to the LMI (4), K ∈Rp×n and Γ ∈Rn×n
+are the feedback gain matrices to be designed, ρi(·) are smooth and monotonically increasing
+functions to be determined later which satisﬁes that ρi(s) ≥1 for s > 0, and the rest of variables
+are deﬁned as in (3).
+August 21, 2014
+DRAFT
+
+7
+Let ξ = [ξT
+1 , · · · , ξT
+N]T. Then,
+ξ = (L1 ⊗In)
+
+
+x1 −x0
+...
+xN −x0
+
+,
+(6)
+where L1 is deﬁned in (2). Because L1 is nonsingular for G satisfying Assumption 1, it is
+easy to see that the leader-follower consensus problem is solved if and only if ξ asymptotically
+converges to zero. Hereafter, we refer to ξ as the consensus error. In light of (1) and (5), it is
+not difﬁcult to obtain that ξ and ci satisfy the following dynamics:
+˙ξ = [IN ⊗A + L1 bC ˆρ(ξ) ⊗BK]ξ,
+˙ci = ξT
+i Γξi,
+(7)
+where ˆρ(ξ) ≜diag(ρ1(ξT
+1 P −1ξ1), · · · , ρN(ξT
+NP −1ξN)) and bC ≜diag(c1, · · · , cN).
+Before moving on to present the main result of this section, we ﬁrst introduce a property of
+the nonsingular M-matrix L1.
+Lemma 4: There exists a positive diagonal matrix G such that GL1 + LT
+1 G > 0. One such G
+is given by diag(q1, · · · , qN), where q = [q1, · · · , qN]T = (LT
+1 )−11.
+Proof: The ﬁrst assertion is well known; see Theorem 4.25 in [19] or Theorem 2.3 in [20].
+The second assertion is shown in the following. Note that the speciﬁc form of G given here is
+different from that in [19], [21], [22].
+Since L1 is a nonsingular M-matrix, it follows from Theorem 4.25 in [19] that (LT
+1 )−1 exists,
+is nonnegative, and thereby cannot have a zero row. Then, it is easy to verify that q > 0 and hence
+GL11 ≥0. By noting that LT
+1 G1 = LT
+1 q = 1, we can conclude that (GL1+LT
+1 G)1 > 0, implying
+that GL1 + LT
+1 G is strictly diagonally dominant. Since the diagonal entries of GL1 + LT
+1 G are
+positive, it then follows from Gershgorin’s disc theorem [18] that every eigenvalue of GL1+LT
+1 G
+is positive, implying that GL1 + LT
+1 G > 0.
+The following result provides a sufﬁcient condition to design the adaptive consensus protocol
+(5).
+Theorem 1: Suppose that the communication graph G satisﬁes Assumption 1. Then, the leader-
+follower consensus problem of the agents in (1) is solved by the adaptive protocol (5) with
+K = −BT P −1, Γ = P −1BBT P −1, and ρi(ξT
+i P −1ξi) = (1 + ξT
+i P −1ξi)3, where P > 0 is a
+August 21, 2014
+DRAFT
+
+8
+solution to the LMI (4). Moreover, each coupling weight ci converges to some ﬁnite steady-state
+value.
+Proof: Consider the following Lyapunov function candidate:
+V1 =
+N
+X
+i=1
+ciqi
+2
+Z ξT
+i P −1ξi
+0
+ρi(s)ds +
+ˆλ0
+24
+N
+X
+i=1
+˜c2
+i ,
+(8)
+where ˜ci = ci−α, α is a positive scalar to be determined later, ˆλ0 denotes the smallest eigenvalue
+of GL1 + LT
+1 G, and G ≜diag(q1, · · · , qN) is chosen as in Lemma 4 such that GL1 + LT
+1 G >
+0. Because ci(0) ≥1, it follows from the second equation in (7) that ci(t) ≥1 for t > 0.
+Furthermore, by noting that ρi(·) are smooth and monotonically increasing functions satisfying
+ρi(s) ≥1 for s > 0, it is not difﬁcult to see that V1 is positive deﬁnite with respect to ξi and ˜ci,
+i = 1, · · · , N.
+The time derivative of V1 along the trajectory of (7) is given by
+˙V1 =
+N
+X
+i=1
+ciqiρi(ξT
+i P −1ξi)ξT
+i P −1 ˙ξi
++
+N
+X
+i=1
+˙ciqi
+2
+Z ξT
+i P −1ξi
+0
+ρi(s)ds
++
+ˆλ0
+12
+N
+X
+i=1
+(ci −α)ξT
+i P −1BBT P −1ξi.
+(9)
+In the sequel, for conciseness we shall use ˆρ and ρi instead of ˆρ(ξ) and ρi(ξT
+i P −1ξi), respectively,
+whenever without causing any confusion.
+By using (7) and after some mathematical manipulations, we can get that
+N
+X
+i=1
+ciqiρiξT
+i P −1 ˙ξi = ξT( bC ˆρG ⊗P −1) ˙ξ
+= 1
+2ξT[ bC ˆρG ⊗(P −1A + ATP −1)
+−bC ˆρ(GL1 + LT
+1 G) bC ˆρ ⊗P −1BBT P −1]ξ
+≤1
+2ξT[ bC ˆρG ⊗(P −1A + ATP −1)
+−ˆλ0 bC2ˆρ2 ⊗P −1BBTP −1]ξ,
+(10)
+where we have used the fact that GL1 + LT
+1 G ≥ˆλ0I to get the ﬁrst inequality.
+August 21, 2014
+DRAFT
+
+9
+Because ρi are monotonically increasing and satisfy ρi(s) ≥1 for s > 0, it follows that
+N
+X
+i=1
+˙ciqi
+Z ξT
+i P −1ξi
+0
+ρi(s)ds ≤
+N
+X
+i=1
+˙ciqiρiξT
+i P −1ξi
+≤
+N
+X
+i=1
+˙ciq3
+i
+3ˆλ2
+0
++
+N
+X
+i=1
+2
+3
+ˆλ0 ˙ciρ
+3
+2
+i (ξT
+i P −1ξi)
+3
+2
+≤
+N
+X
+i=1
+˙ciq3
+i
+3ˆλ2
+0
++
+N
+X
+i=1
+2
+3
+ˆλ0 ˙ciρ
+3
+2
+i (1 + ξT
+i P −1ξi)
+3
+2
+=
+N
+X
+i=1
+( q3
+i
+3ˆλ2
+0
++ 2
+3
+ˆλ0ρ2
+i )ξT
+i P −1BBTP −1ξi,
+(11)
+where we have used the mean value theorem for integrals to get the ﬁrst inequality and used
+Lemma 2 to get the second inequality.
+Substituting (10) and (11) into (9) yields
+˙V1 ≤1
+2ξT[ bC ˆρG ⊗(P −1A + ATP −1)]ξ
+−
+N
+X
+i=1
+[ˆλ0(1
+2c2
+i ρ2
+i −1
+12ci −1
+3ρ2
+i )
++ 1
+12(ˆλ0α −2q3
+i
+ˆλ2
+0
+)]ξT
+i P −1BBTP −1ξi.
+(12)
+Choose α ≥ˆα + maxi=1,··· ,N
+2q3
+i
+ˆλ3
+0 , where ˆα > 0 will be determined later. Then, by noting that
+ρi ≥1 and ci ≥1, i = 1, · · · , N, it follows from (12) that
+˙V1 ≤1
+2ξT[ bC ˆρG ⊗(P −1A + ATP −1)]ξ
+−
+ˆλ0
+12
+N
+X
+i=1
+(c2
+i ρ2
+i + ˆα)ξT
+i P −1BBT P −1ξi
+≤1
+2ξT[ bC ˆρG ⊗(P −1A + ATP −1)
+−1
+3
+√
+ˆαˆλ0 bC ˆρ ⊗P −1BBTP −1]ξ.
+(13)
+Let ˜ξ = (
+q
+bC ˆρG ⊗I)ξ and choose ˆα to be sufﬁciently large such that
+√
+ˆαˆλ0G−1 ≥6I. Then,
+we can get from (13) that
+˙V1 ≤1
+2
+˜ξT[IN ⊗(P −1A + ATP −1 −2P −1BBTP −1)]˜ξ
+≤0,
+(14)
+August 21, 2014
+DRAFT
+
+10
+where to get the last inequality we have used the assertion that P −1A+ATP −1−2P −1BBT P −1 <
+0, which follows readily from (4).
+Since ˙V1 ≤0, V1(t) is bounded and so is each ci. By noting ˙ci ≥0, it can be seen from (7)
+that ci are monotonically increasing. Then, it follows that each coupling weight ci converges to
+some ﬁnite value. Note that ˙V1 ≡0 implies that ˜ξ = 0 and thereby ξ = 0. Hence, by LaSalle’s
+Invariance principle [24], it follows that the consensus error ξ asymptotically converges to zero.
+That is, the leader-follower consensus problem is solved.
+Remark 1: As shown in [6], a necessary and sufﬁcient condition for the existence of a P > 0 to
+the LMI (4) is that (A, B) is stabilizable. Therefore, a sufﬁcient condition for the existence of an
+adaptive protocol (5) satisfying Theorem 1 is that (A, B) is stabilizable. The consensus protocol
+(5) can also be designed by solving the algebraic Ricatti equation: ATQ+QA+I−QBBT Q = 0,
+as in [23], [10]. In this case, the parameters in (5) can be chosen as K = −BT Q, Γ = QBBT Q,
+and ρi = (1 + ξT
+i Qξi)3. The solvability of the above Ricatti equation is equal to that of the LMI
+(4).
+Remark 2: In contrast to the consensus protocols in [6], [7], [9], [23], [10] which require
+the knowledge of the eigenvalues of the asymmetric Laplacian matrix, the adaptive protocol (5)
+depends on only the agent dynamics and the relative states of neighboring agents, and thereby
+can be computed and implemented by each agent in a fully distributed way. Compared to the
+adaptive protocols in [13], [12] which are applicable to only undirected graphs or leader-follower
+graphs where the subgraph among the followers is undirected, the adaptive consensus protocol
+(5) works for general directed leader-follower communication graphs.
+Remark 3: In comparison to the adaptive protocols in [13], [12], a distinct feature of (5) is
+that inspired by the changing supply functions in [16], monotonically increasing functions ρi
+are introduced into (5) to provide extra freedom for design. As the consensus error ξ converges
+to zero, the functions ρi will converge to 1, in which case the adaptive protocol (5) will reduce
+to the adaptive protocols for undirected graphs in [13], [12]. It is worth mentioning that the
+Lyapunov function used in the proof of Theorem 1 is partly motivated by [25] which designs
+adaptive consensus protocols for ﬁrst-order multi-agent systems with uncertainties.
+August 21, 2014
+DRAFT
+
+11
+V. EXTENSIONS TO THE CASE WITH MULTIPLE LEADERS
+In this section, we extend to consider the case where there exist more than one leader. In the
+presence of multiple leaders, the containment control problem arises, where the states of the
+followers are to be driven into the convex hull spanned by those of the leaders [26].
+The dynamics of the N + 1 agents are still described by (1). Without loss of generality, the
+agents indexed by 0, · · · , M (M < N −1), are the leaders whose control inputs are assumed to
+be zero and the agents indexed by M + 1, · · · , N, are the followers. The communication graph
+G among the N + 1 agents is assumed to satisfy the following assumption.
+Assumption 2: For each follower, there exists at least one leader that has a directed path to
+that follower.
+Clearly, Assumption 2 will reduce to Assumption 1 if only one leader exists. Under Assumption
+2, the Laplacian matrix L can be written as L =
+
+0(M+1)×(M+1)
+0(M+1)×(N−M)
+eL2
+eL1
+
+, where eL1 ∈
+R(N−M)×(N−M), eL2 ∈R(M+1)×(N−M), and the following result holds.
+Lemma 5: [26] Under Assumption 2, all the eigenvalues of eL1 have positive real parts, each
+entry of −eL−1
+1
+eL2 is nonnegative, and each row of −eL−1
+1
+eL2 has a sum equal to one.
+In the following, we will investigate if the proposed adaptive protocol (5) can solve the
+containment control problem for the case where G satisﬁes Assumption 2. In this case, ζ ≜
+[ξT
+M+1, · · · , ξT
+M+1]T , where ξi is deﬁned in (5), can be written into
+ζ = ( eL2 ⊗In)
+
+
+x0
+...
+xM
+
++ ( eL1 ⊗In)
+
+
+xM+1
+...
+xN
+
+.
+(15)
+Clearly, ζ = 0 if and only if
+
+
+xM+1
+...
+xN
+
+= −( eL−1
+1
+eL2 ⊗In)
+
+
+x0
+...
+xM
+
+, which, in light of Lemma
+5, implies that the states of the followers xi, i = M + 1, · · · , N, lie within the convex hull
+spanned by the states of the leaders. Thus, the containment control problem can be reduced to
+the asymptotical stability of ζ. By using (1), (5), and (15), we can obtain that ζ and ci satisfy
+˙ζ = [IN−M ⊗A + eL1 eC ˜ρ(ζ) ⊗BK]ζ,
+˙ci = ξT
+i Γξi,
+i = M + 1, · · · , N,
+August 21, 2014
+DRAFT
+
+12
+where ˜ρ(ζ) ≜diag(ρM+1(ξT
+M+1P −1ξM+1), · · · , ρN(ξT
+NP −1ξN)) and eC ≜diag(cM+1, · · · , cN).
+The following theorem can be shown by following similar steps in proving Theorem 1.
+Theorem 2: Supposing that G satisﬁes Assumption 2, the adaptive protocol (5) designed as in
+Theorem 1 can solve the containment control problem for the agents in (1) and each coupling
+weight ci converges to some ﬁnite steady-state value.
+Remark 4: Theorem 2 extends Theorem 1 to the case with multiple leaders. For the case
+with only one leader, Theorem 2 will reduce to Theorem 1. The containment control problem
+of general linear multi-agent systems was previously discussed in [27]. Contrary to the static
+controller in [27] whose design relies on the smallest real part of the eigenvalues of eL1, the
+adaptive protocol (5) depends on only local information and thus is fully distributed.
+VI. SIMULATION EXAMPLE
+0
+1
+6
+2
+5
+3
+4
+Fig. 1: The directed communication graph.
+In this section, a simulation example is provided for illustration.
+Consider a network of third-order integrators, described by (1), with
+A =
+
+
+0
+1
+0
+0
+0
+1
+0
+0
+0
+
+,
+B =
+
+
+0
+0
+1
+
+.
+The communication graph is given as in Fig. 1, where the node indexed by 0 is the leader which
+is only accessible to the node indexed by 1. The weights of the graph are randomly chosen
+within the interval (0, 3). It is easy to verify that the graph in Fig. 1 satisﬁes Assumption 1.
+August 21, 2014
+DRAFT
+
+13
+Solving the LMI (4) by using the SeDuMi toolbox [28] gives a solution
+P =
+
+
+3.0861
+−0.6245
+−0.5186
+−0.6245
+1.1602
+−0.5573
+−0.5186
+−0.5573
+0.9850
+
+.
+Thus, the feedback gain matrices in (5) are obtained as
+K = −
+h
+0.6285
+1.3525
+2.1113
+i
+,
+Γ =
+
+
+0.3950
+0.8500
+1.3269
+0.8500
+1.8292
+2.8554
+1.3269
+2.8554
+4.4574
+
+.
+To illustrate Theorem 1, let the initial states ci(0) and ρi(0) be randomly chosen within the
+interval [1, 3]. The consensus errors xi −x0, i = 1, · · · , 6, of the double integrators, under the
+adaptive protocol (5) with K, Γ, and ρi chosen as in Theorem 1, are depicted in in Fig. 2, which
+states that leader-follower consensus is indeed achieved. The coupling weights ci associated
+with the followers are drawn in Fig. 3, from which it can be observed that the coupling weights
+converge to ﬁnite steady-state values.
+0
+10
+20
+30
+40
+50
+−3
+−2.5
+−2
+−1.5
+−1
+−0.5
+0
+0.5
+1
+1.5
+t
+xi−x0
+Fig. 2: xi −x0, i = 1, · · · , 6, of third-order integrators under the adaptive protocol (5).
+August 21, 2014
+DRAFT
+
+14
+0
+10
+20
+30
+40
+50
+1
+1.2
+1.4
+1.6
+1.8
+2
+2.2
+2.4
+2.6
+2.8
+t
+ci
+Fig. 3: The adaptive coupling gains ci in (5).
+VII. CONCLUSION
+In this technical note, we have addressed the distributed consensus problem for a multi-agent
+system with general linear dynamics and a directed leader-follower communication graph. The
+main contribution of this technical note is that for any communication graph containing a directed
+spanning tree with the leader as the root, a distributed adaptive consensus protocol is designed,
+which, depending on only the agent dynamics and the relative state information of neighboring
+agents, is fully distributed. The case with multiple leaders has been also discussed.
+It is worth mentioning that in this technical note the control input of the leader is assumed
+to be zero. A future research direction is to extend the results in this technical note to the
+general case where the leader has a bounded control input or the leader is any reference signal
+with bounded derivatives. Another interesting topic for future study is to extend the proposed
+distributed adaptive protocol to the case of directed communication graphs without a leader or
+to the case where only relative output information is available.
+REFERENCES
+[1] W. Ren, R. Beard, and E. Atkins, “Information consensus in multivehicle cooperative control,” IEEE Control Systems
+Magazine, vol. 27, no. 2, pp. 71–82, 2007.
+[2] Y. Hong, G. Chen, and L. Bushnell, “Distributed observers design for leader-following control of multi-agent networks,”
+Automatica, vol. 44, no. 3, pp. 846–850, 2008.
+August 21, 2014
+DRAFT
+
+15
+[3] R. Olfati-Saber and R. Murray, “Consensus problems in networks of agents with switching topology and time-delays,”
+IEEE Transactions on Automatic Control, vol. 49, no. 9, pp. 1520–1533, 2004.
+[4] G. Antonelli, “Interconnected dynamic systems: An overview on distributed control,” IEEE Control Systems Magazine,
+vol. 33, no. 1, pp. 76–88, 2013.
+[5] M. Guo and D. Dimarogonas, “Consensus with quantized relative state measurements,” Automatica, vol. 49, no. 8, pp. 2531–
+2537, 2013.
+[6] Z. Li, Z. Duan, G. Chen, and L. Huang, “Consensus of multiagent systems and synchronization of complex networks: A
+uniﬁed viewpoint,” IEEE Transactions on Circuits and Systems I: Regular Papers, vol. 57, no. 1, pp. 213–224, 2010.
+[7] Z. Li, Z. Duan, and G. Chen, “Dynamic consensus of linear multi-agent systems,” IET Control Theory and Applications,
+vol. 5, no. 1, pp. 19–28, 2011.
+[8] S. Tuna, “Conditions for synchronizability in arrays of coupled linear systems,” IEEE Transactions on Automatic Control,
+vol. 54, no. 10, pp. 2416–2420, 2009.
+[9] J. Seo, H. Shim, and J. Back, “Consensus of high-order linear systems using dynamic output feedback compensator: Low
+gain approach,” Automatica, vol. 45, no. 11, pp. 2659–2664, 2009.
+[10] H. Zhang, F. Lewis, and A. Das, “Optimal design for synchronization of cooperative systems: State feedback, observer,
+and output feedback,” IEEE Transactions on Automatic Control, vol. 56, no. 8, pp. 1948–1952, 2011.
+[11] C. Ma and J. Zhang, “Necessary and sufﬁcient conditions for consensusability of linear multi-sgent systems,” IEEE
+Transactions on Automatic Control, vol. 55, no. 5, pp. 1263–1268, 2010.
+[12] Z. Li, W. Ren, X. Liu, and L. Xie, “Distributed consensus of linear multi-agent systems with adaptive dynamic protocols,”
+Automatica, vol. 49, no. 7, pp. 1986–1995, 2013.
+[13] Z. Li, W. Ren, X. Liu, and M. Fu, “Consensus of multi-agent systems with general linear and Lipschitz nonlinear dynamics
+using distributed adaptive protocols,” IEEE Transactions on Automatic Control, vol. 58, no. 7, pp. 1786–1791, 2013.
+[14] H. Su, G. Chen, X. Wang, and Z. Lin, “Adaptive second-order consensus of networked mobile agents with nonlinear
+dynamics,” Automatica, vol. 47, no. 2, pp. 368–375, 2011.
+[15] W. Yu, W. Ren, W. X. Zheng, G. Chen, and J. L¨u, “Distributed control gains design for consensus in multi-agent systems
+with second-order nonlinear dynamics,” Automatica, vol. 49, no. 7, pp. 2107–2115, 2013.
+[16] E. Sontag and A. Teel, “Changing supply functions in input/state stable systems,” IEEE Transactions on Automatic Control,
+vol. 40, no. 8, pp. 1476–1478, 1995.
+[17] W. Ren and R. Beard, “Consensus seeking in multiagent systems under dynamically changing interaction topologies,”
+IEEE Transactions on Automatic Control, vol. 50, no. 5, pp. 655–661, 2005.
+[18] D. Bernstein, Matrix Mathematics: Theory, Facts, and Formulas. Princeton University Press, 2009.
+[19] Z. Qu, Cooperative Control of Dynamical Systems: Applications to Autonomous Vehicles. London, UK: Springer-Verlag,
+2009.
+[20] A. Berman and R. Plemmons, Nonnegative Matrices in the Mathematical Sciences. New York, NY: Academic Press, Inc.,
+1979.
+[21] A. Das and F. Lewis, “Distributed adaptive control for synchronization of unknown nonlinear networked systems,”
+Automatica, vol. 46, no. 12, pp. 2014–2021, 2010.
+[22] H. Zhang, F. Lewis, and Z. Qu, “Lyapunov, adaptive, and optimal design techniques for cooperative systems on directed
+communication graphs,” IEEE Transactions on Industrial Electronics, vol. 59, no. 7, pp. 3026–3041, 2012.
+[23] S. Tuna, “LQR-based coupling gain for synchronization of linear systems,” arXiv preprint arXiv:0801.3390, 2008.
+August 21, 2014
+DRAFT
+
+16
+[24] M. Krsti´c, I. Kanellakopoulos, and P. Kokotovic, Nonlinear and Adaptive Control Design. New York: John Wiley & Sons,
+1995.
+[25] C. Wang, X. Wang, and H. Ji, “Leader-following consensus for an integrator-type nonlinear multi-agent systems using
+distributed adaptive protocol,” in Proceedings of the 10th IEEE International Conference on Control and Automation,
+pp. 1166–1171, 2013.
+[26] Y. Cao, W. Ren, and M. Egerstedt, “Distributed containment control with multiple stationary or dynamic leaders in ﬁxed
+and switching directed networks,” Automatica, vol. 48, no. 8, pp. 1586–1597, 2012.
+[27] Z. Li, W. Ren, X. Liu, and M. Fu, “Distributed containment control of multi-agent systems with general linear dynamics
+in the presence of multiple leaders,” International Journal of Robust and Nonlinear Control, vol. 23, no. 5, pp. 534–547,
+2013.
+[28] J. Sturm, “Using SeDuMi 1.02, a MATLAB toolbox for optimization over symmetric cones,” Optimization Methods and
+Software, vol. 11, no. 1, pp. 625–653, 1999.
+August 21, 2014
+DRAFT

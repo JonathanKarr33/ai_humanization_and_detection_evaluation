@@ -1,0 +1,2160 @@
+Tensor Decompositions for Signal Processing Applications
+From Two-way to Multiway Component Analysis∗
+A. Cichocki, D. Mandic, A-H. Phan, C. Caiafa, G. Zhou, Q. Zhao, and
+L. De Lathauwer
+Summary The widespread use of multi-sensor technology and the emergence of big datasets has
+highlighted the limitations of standard ﬂat-view matrix models and the necessity to move towards more
+versatile data analysis tools. We show that higher-order tensors (i.e., multiway arrays) enable such a fun-
+damental paradigm shift towards models that are essentially polynomial and whose uniqueness, unlike
+the matrix methods, is guaranteed under very mild and natural conditions. Beneﬁting from the power
+of multilinear algebra as their mathematical backbone, data analysis techniques using tensor decompo-
+sitions are shown to have great ﬂexibility in the choice of constraints that match data properties, and
+to ﬁnd more general latent components in the data than matrix-based methods. A comprehensive in-
+troduction to tensor decompositions is provided from a signal processing perspective, starting from the
+algebraic foundations, via basic Canonical Polyadic and Tucker models, through to advanced cause-effect
+and multi-view data analysis schemes. We show that tensor decompositions enable natural generaliza-
+tions of some commonly used signal processing paradigms, such as canonical correlation and subspace
+techniques, signal separation, linear regression, feature extraction and classiﬁcation. We also cover com-
+putational aspects, and point out how ideas from compressed sensing and scientiﬁc computing may be
+used for addressing the otherwise unmanageable storage and manipulation problems associated with
+big datasets. The concepts are supported by illustrative real world case studies illuminating the beneﬁts
+of the tensor framework, as efﬁcient and promising tools for modern signal processing, data analysis and
+machine learning applications; these beneﬁts also extend to vector/matrix data through tensorization.
+Keywords: ICA, NMF, CPD, Tucker decomposition, HOSVD, tensor networks, Tensor Train.
+1
+Introduction
+Historical notes. The roots of multiway analysis can be traced back to studies of homogeneous polyno-
+mials in the 19th century, contributors include Gauss, Kronecker, Cayley, Weyl and Hilbert — in mod-
+ern day interpretation these are fully symmetric tensors. Decompositions of non-symmetric tensors have
+been studied since the early 20th century [1], whereas the beneﬁts of using more than two matrices in fac-
+tor analysis [2] became apparent in several communities since the 1960s. The Tucker decomposition for
+tensors was introduced in psychometrics [3,4], while the Canonical Polyadic Decomposition (CPD) was
+independently rediscovered and put into an application context under the names of Canonical Decom-
+position (CANDECOMP) in psychometrics [5] and Parallel Factor Model (PARAFAC) in linguistics [6].
+Tensors were subsequently adopted in diverse branches of data analysis such as chemometrics, food in-
+dustry and social sciences [7,8]. When it comes to Signal Processing, the early 1990s saw a considerable
+interest in Higher-Order Statistics (HOS) [9] and it was soon realized that for the multivariate case HOS
+∗Preprint of feature paper which will be published in the IEEE Signal Processing Magazine (2014).
+1
+arXiv:1403.4462v1  [cs.NA]  17 Mar 2014
+
+are effectively higher-order tensors; indeed, algebraic approaches to Independent Component Analysis
+(ICA) using HOS [10–12] were inherently tensor-based. Around 2000, it was realized that the Tucker
+decomposition represents a MultiLinear Singular Value Decomposition (MLSVD) [13]. Generalizing the
+matrix SVD, the workhorse of numerical linear algebra, the MLSVD spurred the interest in tensors in
+applied mathematics and scientiﬁc computing in very high dimensions [14–16]. In parallel, CPD was
+successfully adopted as a tool for sensor array processing and deterministic signal separation in wireless
+communication [17, 18]. Subsequently, tensors have been used in audio, image and video processing,
+machine learning and biomedical applications, to name but a few. The signiﬁcant interest in tensors and
+their fast emerging applications are reﬂected in books [7,8,12,19–21] and tutorial papers [22–29] covering
+various aspects of multiway analysis.
+From a matrix to a tensor. Approaches to two-way (matrix) component analysis are well established,
+and include Principal Component Analysis (PCA), Independent Component Analysis (ICA), Nonnega-
+tive Matrix Factorization (NMF) and Sparse Component Analysis (SCA) [12, 19, 30]. These techniques
+have become standard tools for e.g., blind source separation (BSS), feature extraction, or classiﬁcation.
+On the other hand, large classes of data arising from modern heterogeneous sensor modalities have a
+multiway character and are therefore naturally represented by multiway arrays or tensors (see Section
+Tensorization).
+Early multiway data analysis approaches reformatted the data tensor as a matrix and resorted to
+methods developed for classical two-way analysis. However, such a “ﬂattened” view of the world and
+the rigid assumptions inherent in two-way analysis are not always a good match for multiway data. It is
+only through higher-order tensor decomposition that we have the opportunity to develop sophisticated
+models capturing multiple interactions and couplings, instead of standard pairwise interactions. In other
+words, we can only discover hidden components within multiway data if the analysis tools account for
+intrinsic multi-dimensional patterns present — motivating the development of multilinear techniques.
+In this article, we emphasize that tensor decompositions are not just matrix factorizations with addi-
+tional subscripts — multilinear algebra is much structurally richer than linear algebra. For example, even
+basic notions such as rank have a more subtle meaning, uniqueness conditions of higher-order tensor de-
+compositions are more relaxed and accommodating than those for matrices [31, 32], while matrices and
+tensors also have completely different geometric properties [20]. This boils down to matrices represent-
+ing linear transformations and quadratic forms, while tensors are connected with multilinear mappings
+and multivariate polynomials [29].
+2
+Notations and Conventions
+A tensor can be thought of as a multi-index numerical array, whereby the order of a tensor is the number
+of its “modes” or “dimensions”, these may include space, time, frequency, trials, classes, and dictionaries.
+A real-valued tensor of order N is denoted by A ∈RI1×I2×···×IN and its entries by ai1,i2,...,iN. Then, an N × 1
+vector a is considered a tensor of order one, and an N × M matrix A a tensor of order two. Subtensors are
+parts of the original data tensor, created when only a ﬁxed subset of indices is used. Vector-valued sub-
+tensors are called ﬁbers, deﬁned by ﬁxing every index but one, and matrix-valued subtensors are called
+slices, obtained by ﬁxing all but two indices (see Table 1). Manipulation of tensors often requires their
+reformatting (reshaping); a particular case of reshaping tensors to matrices is termed matrix unfolding
+or matricization (see Figure 4 (left)). Note that a mode-n multiplication of a tensor A with a matrix B
+amounts to the multiplication of all mode-n vector ﬁbers with B, and that in linear algebra the tensor
+(or outer) product appears in the expression for a rank-1 matrix: abT = a ◦b. Basic tensor notations are
+summarized in Table 1, while Table 2 outlines several types of products used in this paper.
+2
+
+Table 1: Basic notation.
+A, A, a, a
+tensor, matrix, vector, scalar
+A = [a1, a2, . . . , aR]
+matrix A with column vectors ar
+a(:, i2, i3, . . . , iN)
+ﬁber of tensor A obtained by ﬁxing all but one index
+A(:, :, i3, . . . , iN)
+matrix slice of tensor A obtained by ﬁxing all but two indices
+A(:, :, :, i4, . . . , iN)
+tensor slice of A obtained by ﬁxing some indices
+A(I1, I2, . . . , IN)
+subtensor of A obtained by restricting indices to belong to subsets
+In ⊆{1, 2, . . . , In}
+A(n) ∈RIn×I1I2···In−1In+1···IN
+mode-n matricization of tensor A ∈RI1×I2×···×IN whose entry at row
+in and column (i1 −1)I2 · · · In−1In+1 · · · IN + · · · + (iN−1 −1)IN + iN
+is equal to ai1i2...iN
+vec(A) ∈RIN IN−1···I1
+vectorization of tensor A ∈RI1×I2×···×IN with the entry at position
+i1 + ∑N
+k=2[(ik −1)I1I2 · · · Ik−1] equal to ai1i2...iN
+D = diag(λ1, λ2, . . . , λR)
+diagonal matrix with drr = λr
+D = diagN(λ1, λ2, . . . , λR)
+diagonal tensor of order N with drr···r = λr
+AT, A−1, A†
+transpose, inverse, and Moore-Penrose pseudo-inverse
+3
+Interpretable Components in Two-Way Data Analysis
+The aim of blind source separation (BSS), factor analysis (FA) and latent variable analysis (LVA) is to
+decompose a data matrix X ∈RI×J into the factor matrices A = [a1, a2, . . . , aR] ∈RI×R and B =
+[b1, b2, . . . , bR] ∈RJ×R as:
+X
+=
+A D BT + E =
+R
+∑
+r=1
+λr arbT
+r + E
+=
+R
+∑
+r=1
+λr ar ◦br + E,
+(1)
+where D = diag(λ1, λ2, . . . , λR) is a scaling (normalizing) matrix, the columns of B represent the un-
+known source signals (factors or latent variables depending on the tasks in hand), the columns of A
+represent the associated mixing vectors (or factor loadings), while E is noise due to an unmodelled data
+part or model error. In other words, model (1) assumes that the data matrix X comprises hidden com-
+ponents br (r = 1, 2, . . . , R) that are mixed together in an unknown manner through coefﬁcients A, or,
+equivalently, that data contain factors that have an associated loading for every data channel. Figure 2
+(top) depicts the model (1) as a dyadic decomposition, whereby the terms ar ◦br = arbT
+r are rank-1
+matrices.
+3
+
+Table 2: Deﬁnition of products.
+C = A ×n B
+mode-n product of A
+∈
+RI1×I2×···×IN
+and B
+∈
+RJn×In
+yields
+C
+∈
+RI1×···×In−1×Jn×In+1×···×IN
+with
+entries
+ci1···in−1 jn in+1···iN
+=
+∑In
+in=1 ai1···in−1 in in+1···iNbjn in and matrix representation C(n) = B A(n)
+C = JA; B(1), B(2), . . . , B(N)K
+full multilinear product, C = A ×1 B(1) ×2 B(2) · · · ×N B(N)
+C = A ◦B
+tensor or outer product of A ∈RI1×I2×···×IN and B ∈RJ1×J2×···×JM yields
+C ∈RI1×I2×···×IN×J1×J2×···×JM with entries ci1i2···iN j1j2···jN = ai1i2···iNbj1j2···jM
+X = a(1) ◦a(2) ◦· · · ◦a(N)
+tensor or outer product of vectors a(n) ∈RIn
+(n = 1, . . . , N) yields a rank-1
+tensor X ∈RI1×I2×···×IN with entries xi1i2...iN = a(1)
+i1 a(2)
+i2 . . . a(N)
+iN
+C = A ⊗B
+Kronecker product of A ∈RI1×I2 and B ∈RJ1×J2 yields C ∈RI1J1×I2J2 with
+entries c(i1−1)J1+j1,(i2−1)J2+j2 = ai1i2 bj1j2
+C = A ⊙B
+Khatri-Rao product of A = [a1, . . . , aR] ∈RI×R and B = [b1, . . . , bR] ∈
+RJ×R yields C ∈RIJ×R with columns cr = ar ⊗br
+The well-known indeterminacies intrinsic to this model are: (i) arbitrary scaling of components, and
+(ii) permutation of the rank-1 terms. Another indeterminacy is related to the physical meaning of the
+factors: if the model in (1) is unconstrained, it admits inﬁnitely many combinations of A and B. Standard
+matrix factorizations in linear algebra, such as the QR-factorization, Eigenvalue Decomposition (EVD),
+and Singular Value Decomposition (SVD), are only special cases of (1), and owe their uniqueness to hard
+and restrictive constraints such as triangularity and orthogonality. On the other hand, certain properties
+of the factors in (1) can be represented by appropriate constraints, making possible unique estimation or
+extraction of such factors. These constraints include statistical independence, sparsity, nonnegativity,
+exponential structure, uncorrelatedness, constant modulus, ﬁnite alphabet, smoothness and unimodality.
+Indeed, the ﬁrst four properties form the basis of Independent Component Analysis (ICA) [12, 33, 34],
+Sparse Component Analysis (SCA) [30], Nonnegative Matrix Factorization (NMF) [19], and harmonic
+retrieval [35].
+4
+Tensorization — Blessing of Dimensionality
+While one-way (vectors) and two-way (matrices) algebraic structures were respectively introduced as
+natural representations for segments of scalar measurements and measurements on a grid, tensors were
+initially used purely for the mathematical beneﬁts they provide in data analysis; for instance, it seemed
+natural to stack together excitation-emission spectroscopy matrices in chemometrics into a third-order
+tensor [7].
+The procedure of creating a data tensor from lower-dimensional original data is referred to as ten-
+sorization, and we propose the following taxonomy for tensor generation:
+1) Rearrangement of lower dimensional data structures. Large-scale vectors or matrices are readily ten-
+sorized to higher-order tensors, and can be compressed through tensor decompositions if they ad-
+mit a low-rank tensor approximation; this principle facilitates big data analysis [21, 27, 28] (see
+4
+
+I = 26
+(64 × 1)
+(8 × 8)
++ · · · +
+(2×2×2×2×2×2)
+z0
+z0 + ∆z
+z0 + 2∆z
+x0 + 2∆x
+x0 + ∆x
+x0
+y0
+y0 + 2∆y
+y0 + ∆y
+z
+x
+y
+Figure 1: Construction of tensors. Top: Tensorization of a vector or matrix into the so-called quantized format; in
+scientiﬁc computing this facilitates super-compression of large-scale vectors or matrices. Bottom: Tensor formed
+through the discretization of a trivariate function f (x, y, z).
+Figure 1 (top)). For instance, a one-way exponential signal x(k) = azk can be rearranged into a
+rank-1 Hankel matrix or a Hankel tensor [36]:
+H =
+
+
+
+
+
+x(0)
+x(1)
+x(2)
+· · ·
+x(1)
+x(2)
+x(3)
+· · ·
+x(2)
+x(3)
+x(4)
+· · ·
+...
+...
+...
+
+
+
+
+= a b ◦b,
+(2)
+where b = [1, z, z2, · · · ]T.
+Also, in sensor array processing, tensor structures naturally emerge when combining snapshots
+from identical subarrays [17].
+2) Mathematical construction. Among many such examples, the Nth-order moments (cumulants) of a
+vector-valued random variable form an Nth-order tensor [9], while in second-order ICA snapshots
+of data statistics (covariance matrices) are effectively slices of a third-order tensor [12, 37]. Also, a
+(channel × time) data matrix can be transformed into a (channel × time × frequency) or (channel × time
+× scale) tensor via time-frequency or wavelet representations, a powerful procedure in multichannel
+EEG analysis in brain science [19,38].
+3) Experiment design. Multi-faceted data can be naturally stacked into a tensor; for instance, in wire-
+5
+
+less communications the so-called signal diversity (temporal, spatial, spectral, ...) corresponds to
+the order of the tensor [18]. In the same spirit, the standard EigenFaces can be generalized to Ten-
+sorFaces by combining images with different illuminations, poses, and expressions [39], while the
+common modes in EEG recordings across subjects, trials, and conditions are best analyzed when
+combined together into a tensor [26].
+4) Naturally tensor data. Some data sources are readily generated as tensors (e.g., RGB color images,
+videos, 3D light ﬁeld displays) [40]. Also in scientiﬁc computing we often need to evaluate a dis-
+cretized multivariate function; this is a natural tensor, as illustrated in Figure 1 (bottom) for a trivari-
+ate function f (x, y, z) [21,27,28].
+The high dimensionality of the tensor format is associated with blessings — these include possibilities
+to obtain compact representations, uniqueness of decompositions, ﬂexibility in the choice of constraints,
+and generality of components that can be identiﬁed.
+5
+Canonical Polyadic Decomposition
+Deﬁnition. A Polyadic Decomposition (PD) represents an Nth-order tensor X ∈RI1×I2×···×IN as a linear
+combination of rank-1 tensors in the form
+X =
+R
+∑
+r=1
+λr b(1)
+r
+◦b(2)
+r
+◦· · · ◦b(N)
+r
+.
+(3)
+Equivalently, X is expressed as a multilinear product with a diagonal core:
+X
+=
+D ×1 B(1) ×2 B(2) · · · ×N B(N)
+=
+JD; B(1), B(2), . . . , B(N)K,
+(4)
+where D = diagN(λ1, λ2, . . . , λR) (cf. the matrix case in (1)). Figure 2 (bottom) illustrates these two
+interpretations for a third-order tensor. The tensor rank is deﬁned as the smallest value of R for which
+(3) holds exactly; the minimum rank PD is called canonical (CPD) and is desired in signal separation. The
+term CPD may also be considered as an abbreviation of CANDECOMP/PARAFAC decomposition, see
+Historical notes.
+The matrix/vector form of CPD can be obtained via the Khatri-Rao products as:
+X(n) = B(n)D
+
+B(N) ⊙· · · ⊙B(n+1) ⊙B(n−1) ⊙· · · ⊙B(1)T
+(5)
+vec(X) = [B(N) ⊙B(N−1) ⊙· · · ⊙B(1)] d.
+(6)
+where d = (λ1, λ2, . . . , λR)T.
+Rank. As mentioned earlier, rank-related properties are very different for matrices and tensors. For
+instance, the number of complex-valued rank-1 terms needed to represent a higher-order tensor can be
+strictly less than the number of real-valued rank-1 terms [20], while the determination of tensor rank is
+in general NP-hard [41]. Fortunately, in signal processing applications, rank estimation most often corre-
+sponds to determining the number of tensor components that can be retrieved with sufﬁcient accuracy,
+and often there are only a few data components present. A pragmatic ﬁrst assessment of the number
+of components may be through the inspection of the multilinear singular value spectrum (see Section
+Tucker Decomposition), which indicates the size of the core tensor in Figure 2 (bottom-right). Existing
+6
+
+X
+br
+BT
+a1
+b1
+aR
+bR
++ · · · +
+(I × J)
+λR
+λ1
+c1
+a1
+b1
+bR
+cR
+(I × R)
+(R × R)
+(R × J)
+aR
+λR
+λ1
+=
+∼=
+A
+ar
+(I × R)
+∼=
+A
+ar
+br
+(R × R × R)
+(R × J)
+(K × R)
+=
+BT
+D
+(I × J × K)
+cr
+C
+X
+D
++ · · · +
+Figure 2: Analogy between dyadic (top) and polyadic (bottom) decompositions; the Tucker format has a diagonal
+core.
+The uniqueness of these decompositions is a prerequisite for blind source separation and latent variable
+analysis.
+techniques for rank estimation include the CORCONDIA algorithm (core consistency diagnostic) which
+checks whether the core tensor is (approximately) diagonalizable [7], while a number of techniques oper-
+ate by balancing the approximation error versus the number of degrees of freedom for a varying number
+of rank-1 terms [42–44].
+Uniqueness. Uniqueness conditions give theoretical bounds for exact tensor decompositions. A clas-
+sical uniqueness condition is due to Kruskal [31], which states that for third-order tensors the CPD is
+unique up to unavoidable scaling and permutation ambiguities, provided that kB(1) + kB(2) + kB(3) ≥
+2R + 2, where the Kruskal rank kB of a matrix B is the maximum value ensuring that any subset of kB
+columns is linearly independent. In sparse modeling, the term (kB + 1) is also known as the spark [30].
+A generalization to Nth-order tensors is due to Sidiropoulos and Bro [45], and is given by:
+N
+∑
+n=1
+kB(n) ≥2R + N −1.
+(7)
+More relaxed uniqueness conditions can be obtained when one factor matrix has full column rank [46–
+48]; for a thorough study of the third-order case, we refer to [32]. This all shows that, compared to
+matrix decompositions, CPD is unique under more natural and relaxed conditions, that only require the
+components to be “sufﬁciently different” and their number not unreasonably large. These conditions do
+not have a matrix counterpart, and are at the heart of tensor based signal separation.
+Computation. Certain conditions, including Kruskal’s, enable explicit computation of the factor ma-
+trices in (3) using linear algebra (essentially, by solving sets of linear equations and by computing (gen-
+eralized) Eigenvalue Decomposition) [6,47,49,50]. The presence of noise in data means that CPD is rarely
+exact, and we need to ﬁt a CPD model to the data by minimizing a suitable cost function. This is typically
+achieved by minimizing the Frobenius norm of the difference between the given data tensor and its CP
+approximation, or alternatively by least absolute error ﬁtting when the noise is Laplacian [51]. Theoreti-
+cal Cram´er-Rao Lower Bound (CRLB) and Cram´er-Rao Induced Bound (CRIB) for the assessment of CPD
+performance were derived in [52] and [53].
+Since the computation of CPD is intrinsically multilinear, we can arrive at the solution through a se-
+7
+
+quence of linear sub-problems as in the Alternating Least Squares (ALS) framework, whereby the LS cost
+function is optimized for one component matrix at a time, while keeping the other component matrices
+ﬁxed [6]. As seen from (5), such a conditional update scheme boils down to solving overdetermined sets
+of linear equations.
+While the ALS is attractive for its simplicity and satisfactory performance for a few well separated
+components and at sufﬁciently high SNR, it also inherits the problems of alternating algorithms and is
+not guaranteed to converge to a stationary point. This can be rectiﬁed by only updating the factor matrix
+for which the cost function has most decreased at a given step [54], but this results in an N-times increase
+in computational cost per iteration. The convergence of ALS is not yet completely understood — it is
+quasi-linear close to the stationary point [55], while it becomes rather slow for ill-conditioned cases; for
+more detail we refer to [56,57].
+Conventional all-at-once algorithms for numerical optimization such as nonlinear conjugate gradi-
+ents, quasi-Newton or nonlinear least squares [58,59] have been shown to often outperform ALS for ill-
+conditioned cases and to be typically more robust to overfactoring, but come at a cost of a much higher
+computational load per iteration. More sophisticated versions use the rank-1 structure of the terms within
+CPD to perform efﬁcient computation and storage of the Jacobian and (approximate) Hessian; their com-
+plexity is on par with ALS while for ill-conditioned cases the performance is often superior [60,61].
+An important difference between matrices and tensors is that the existence of a best rank-R approxi-
+mation of a tensor of rank greater than R is not guaranteed [20,62] since the set of tensors whose rank is at
+most R is not closed. As a result, cost functions for computing factor matrices may only have an inﬁmum
+(instead of a minimum) so that their minimization will approach the boundary of that set without ever
+reaching the boundary point. This will cause two or more rank-1 terms go to inﬁnity upon convergence
+of an algorithm, however, numerically the diverging terms will almost completely cancel one another
+while the overall cost function will still decrease along the iterations [63]. These diverging terms indicate
+an inappropriate data model: the mismatch between the CPD and the original data tensor may arise due
+to an underestimated number of components, not all tensor components having a rank-1 structure, or
+data being too noisy.
+Constraints. As mentioned earlier, under quite mild conditions the CPD is unique by itself, without
+requiring additional constraints. However, in order to enhance the accuracy and robustness with respect
+to noise, prior knowledge of data properties (e.g., statistical independence, sparsity) may be incorporated
+into the constraints on factors so as to facilitate their physical interpretation, relax the uniqueness condi-
+tions, and even simplify computation [64–66]. Moreover, the orthogonality and nonnegativity constraints
+ensure the existence of the minimum of the optimization criterion used [63,64,67].
+Applications. The CPD has already been established as an advanced tool for signal separation in
+vastly diverse branches of signal processing and data analysis, such as in audio and speech process-
+ing, biomedical engineering, chemometrics, and machine learning [7,22,23,26]. Note that algebraic ICA
+algorithms are effectively based on the CPD of a tensor of the statistics of recordings; the statistical inde-
+pendence of the sources is reﬂected in the diagonality of the core tensor in Figure 2, that is, in vanishing
+cross-statistics [11,12]. The CPD is also heavily used in exploratory data analysis, where the rank-1 terms
+capture essential properties of dynamically complex signals [8]. Another example is in wireless com-
+munication, where the signals transmitted by different users correspond to rank-1 terms in the case of
+line-of-sight propagation [17]. Also, in harmonic retrieval and direction of arrival type applications, real
+or complex exponentials have a rank-1 structure, for which the use of CPD is natural [36,65].
+Example 1. Consider a sensor array consisting of K displaced but otherwise identical subarrays of
+I sensors, with ˜I = KI sensors in total. For R narrowband sources in the far ﬁeld, the baseband equiv-
+alent model of the array output becomes X = AST + E, where A ∈C˜I×R is the global array response,
+8
+
+S ∈CJ×R contains J snapshots of the sources, and E is noise. A single source (R = 1) can be obtained
+from the best rank-1 approximation of the matrix X, however, for R > 1 the decomposition of X is not
+unique, and hence the separation of sources is not possible without incorporating additional informa-
+tion. Constraints on the sources that may yield a unique solution are, for instance, constant modulus or
+statistical independence [12,68].
+Consider a row-selection matrix Jk ∈CI× ˜I that extracts the rows of X corresponding to the k-th sub-
+array, k = 1, . . . , K. For two identical subarrays, the generalized EVD of the matrices J1X and J2X corre-
+sponds to the well-known ESPRIT [69]. For the case K > 2, we shall consider JkX as slices of the tensor
+X ∈CI×J×K (see Section Tensorization). It can be shown that the signal part of X admits a CPD as in
+(3)–(4), with λ1 = · · · = λR = 1, JkA = B(1)diag(b(3)
+k1 , . . . , b(3)
+kR ) and B(2) = S [17], and the consequent
+source separation under rather mild conditions — its uniqueness does not require constraints such as sta-
+tistical independence or constant modulus. Moreover, the decomposition is unique even in cases when
+the number of sources R exceeds the number of subarray sensors I, or even the total number of sensors
+˜I. Notice that particular array geometries, such as linearly and uniformly displaced subarrays, can be
+converted into a constraint on CPD, yielding a further relaxation of the uniqueness conditions, reduced
+sensitivity to noise, and often faster computation [65].
+6
+Tucker Decomposition
+Figure 3 illustrates the principle of Tucker decomposition which treats a tensor X ∈RI1×I2×···×IN as a
+multilinear transformation of a (typically dense but small) core tensor G ∈RR1×R2×···×RN by the factor
+matrices B(n) = [b(n)
+1 , b(n)
+2 , . . . , b(n)
+Rn ] ∈RIn×Rn, n = 1, 2, . . . , N [3,4], given by
+X =
+R1
+∑
+r1=1
+R2
+∑
+r2=1
+· · ·
+RN
+∑
+rN=1
+gr1r2···rN
+
+b(1)
+r1 ◦b(2)
+r2 ◦· · · ◦b(N)
+rN
+
+(8)
+or equivalently
+X
+=
+G ×1 B(1) ×2 B(2) · · · ×N B(N)
+=
+JG; B(1), B(2), . . . , B(N)K.
+(9)
+Via the Kronecker products (see Table 2) Tucker decomposition can be expressed in a matrix/vector form
+as:
+X(n)
+=
+B(n)G(n)(B(N) ⊗· · · ⊗B(n+1) ⊗B(n−1) ⊗· · · ⊗B(1))T
+(10)
+vec(X)
+=
+[B(N) ⊗B(N−1) ⊗· · · ⊗B(1)] vec(G).
+(11)
+Although Tucker initially used the orthogonality and ordering constraints on the core tensor and factor
+matrices [3,4], we can also employ other meaningful constraints (see below).
+Multilinear rank. For a core tensor of minimal size, R1 is the column rank (the dimension of the
+subspace spanned by mode-1 ﬁbers), R2 is the row rank (the dimension of the subspace spanned by
+mode-2 ﬁbers), and so on. A remarkable difference from matrices is that the values of R1, R2, . . . , RN can
+be different for N ≥3. The N-tuple (R1, R2, . . . , RN) is consequently called the multilinear rank of the
+tensor X.
+9
+
+Figure 3: Tucker decomposition of a third-order tensor. The column spaces of A, B, C represent the signal sub-
+spaces for the three modes. The core tensor G is nondiagonal, accounting for possibly complex interactions among
+tensor components.
+Links between CPD and Tucker decomposition. Eq. (8) shows that Tucker decomposition can be
+considered as an expansion in rank-1 terms (polyadic but not necessary canonical), while (4) represents
+CPD as a multilinear product of a core tensor and factor matrices (but the core is not necessary minimal);
+Table 3 shows various other connections. However, despite the obvious interchangeability of notation,
+the CP and Tucker decompositions serve different purposes. In general, the Tucker core cannot be diag-
+onalized, while the number of CPD terms may not be bounded by the multilinear rank. Consequently,
+in signal processing and data analysis, CPD is typically used for factorizing data into easy to interpret
+components (i.e., the rank-1 terms), while the goal of unconstrained Tucker decompositions is most often
+to compress data into a tensor of smaller size (i.e., the core tensor) or to ﬁnd the subspaces spanned by
+the ﬁbers (i.e., the column spaces of the factor matrices).
+Uniqueness. The unconstrained Tucker decomposition is in general not unique, that is, factor ma-
+trices B(n) are rotation invariant. However, physically, the subspaces deﬁned by the factor matrices in
+Tucker decomposition are unique, while the bases in these subspaces may be chosen arbitrarily — their
+choice is compensated for within the core tensor. This becomes clear upon realizing that any factor matrix
+in (9) can be post-multiplied by any nonsingular (rotation) matrix; in turn, this multiplies the core tensor
+by its inverse, that is
+X
+=
+JG; B(1), B(2), . . . , B(N)K
+=
+JH; B(1)R(1), B(2)R(2), . . . , B(N)R(N)K,
+H
+=
+JG; R(1)−1, R(2)−1, . . . , R(N)−1K,
+(12)
+where R(n) are invertible.
+Multilinear SVD (MLSVD). Orthonormal bases in a constrained Tucker representation can be ob-
+tained via the SVD of the mode-n matricized tensor X(n) = UnΣnVT
+n (i.e., B(n) = Un, n = 1, 2, . . . , N).
+Due to the orthonormality, the corresponding core tensor becomes
+S = X ×1 UT
+1 ×2 UT
+2 · · · ×N UT
+N.
+(13)
+Then, the singular values of X(n) are the Frobenius norms of the corresponding slices of the core tensor
+S: (Σn)rn,rn = ∥S(:, :, . . . , rn, :, . . . , :)∥, with slices in the same mode being mutually orthogonal, i.e., their
+inner products are zero. The columns of Un may thus be seen as multilinear singular vectors, while the
+norms of the slices of the core are multilinear singular values [13]. As in the matrix case, the multilinear
+singular values govern the multilinear rank, while the multilinear singular vectors allow, for each mode
+10
+
+Table 3: Different forms of CPD and Tucker representations of a third-order tensor X ∈RI×J×K.
+CPD
+Tucker Decomposition
+Tensor representation, outer products
+X =
+R
+∑
+r=1
+λr ar ◦br ◦cr
+X =
+R1
+∑
+r1=1
+R2
+∑
+r2=1
+R3
+∑
+r3=1
+gr1 r2 r3 ar1 ◦br2 ◦cr3
+Tensor representation, multilinear products
+X = D ×1 A ×2 B ×3 C
+X = G ×1 A ×2 B ×3 C
+Matrix representations
+X(1) = A D (C ⊙B)T
+X(1) = A G(1) (C ⊗B)T
+X(2) = B D (C ⊙A)T
+X(2) = B G(2) (C ⊗A)T
+X(3) = C D (B ⊙A)T
+X(3) = C G(3) (B ⊗A)T
+Vector representation
+vec(X) = (C ⊙B ⊙A)d
+vec(X) = (C ⊗B ⊗A) vec(G)
+Scalar representation
+xijk =
+R
+∑
+r=1
+λr ai r bj r ck r
+xijk =
+R1
+∑
+r1=1
+R2
+∑
+r2=1
+R3
+∑
+r3=1
+gr1 r2 r3 ai r1 bj r2 ck r3
+Matrix slices Xk = X(:, :, k)
+Xk = A diag(ck1, ck2, . . . , ckR) BT
+Xk = A
+R3
+∑
+r3=1
+ckr3G(:, :, r3) BT
+separately, an interpretation as in PCA [8].
+Low multilinear rank approximation. Analogous to PCA, a large-scale data tensor X can be approxi-
+mated by discarding the multilinear singular vectors and slices of the core tensor that correspond to small
+multilinear singular values, that is, through truncated matrix SVDs. Low multilinear rank approximation
+is always well-posed, however, the truncation is not necessarily optimal in the LS sense, although a good
+estimate can often be made as the approximation error corresponds to the degree of truncation. When it
+comes to ﬁnding the best approximation, the ALS type algorithms exhibit similar advantages and draw-
+backs to those used for CPD [8,70]. Optimization-based algorithms exploiting second-order information
+have also been proposed [71,72].
+Constraints and Tucker-based multiway component analysis (MWCA). Besides orthogonality, con-
+straints that may help to ﬁnd unique basis vectors in a Tucker representation include statistical indepen-
+dence, sparsity, smoothness and nonnegativity [19,73,74]. Components of a data tensor seldom have the
+11
+
+I
+J
+K
+I
+...
+J
+J
+
+X(1)
+X(3)
+U1
+(SVD/PCA)
+1
+V
+
+X(:,:, )k
+...
+T
+K
+...
+I
+I
+...
+X(:, :)
+j,
+
+X(2)
+A2
+(NMF/SCA)
+...
+J
+K
+K
+...
+
+A3
+(ICA)
+B3
+T=S
+( ,:,:)
+X i
+
+
+
+1
+
+B2
+T
+Figure 4: Multiway Component Analysis (MWCA) for a third-order tensor, assuming that the components are:
+principal and orthogonal in the ﬁrst mode, nonnegative and sparse in the second mode and statistically indepen-
+dent in the third mode.
+same properties in its modes, and for physically meaningful representation different constraints may be
+required in different modes, so as to match the properties of the data at hand. Figure 4 illustrates the
+concept of MWCA and its ﬂexibility in choosing the mode-wise constraints; a Tucker representation of
+MWCA naturally accommodates such diversities in different modes.
+Other applications. We have shown that Tucker decomposition may be considered as a multilinear
+extension of PCA [8]; it therefore generalizes signal subspace techniques, with applications including
+classiﬁcation, feature extraction, and subspace-based harmonic retrieval [25, 39, 75, 76]. For instance, a
+low multilinear rank approximation achieved through Tucker decomposition may yield a higher Signal-
+to-Noise Ratio (SNR) than the SNR in the original raw data tensor, making Tucker decomposition a very
+natural tool for compression and signal enhancement [7,8,24].
+7
+Block Term Decompositions
+We have already shown that CPD is unique under quite mild conditions, a further advantage of ten-
+sors over matrices is that it is even possible to relax the rank-1 constraint on the terms, thus opening
+completely new possibilities in e.g. BSS. For clarity, we shall consider the third-order case, whereby, by
+replacing the rank-1 matrices b(1)
+r
+◦b(2)
+r
+= b(1)
+r b(2) T
+r
+in (3) by low-rank matrices ArBT
+r , the tensor X can
+be represented as (Figure 5, top):
+X =
+R
+∑
+r=1
+(ArBT
+r ) ◦cr.
+(14)
+Figure 5 (bottom) shows that we can even use terms that are only required to have a low multilinear rank
+(see also Section Tucker Decomposition), to give:
+X =
+R
+∑
+r=1
+Gr ×1 Ar ×2 Br ×3 Cr.
+(15)
+These so-called Block Term Decompositions (BTD) admit the modelling of more complex signal compo-
+nents than CPD, and are unique under more restrictive but still fairly natural conditions [77–79].
+12
+
+Figure 5: Block Term Decompositions (BTDs) ﬁnd data components that are structurally more complex than the
+rank-1 terms in CPD. Top: Decomposition into terms with multilinear rank (Lr, Lr, 1). Bottom: Decomposition into
+terms with multilinear rank (Lr, Mr, Nr).
+Example 3. To compare some standard and tensor approaches for the separation of short duration
+correlated sources, BSS was performed on ﬁve linear mixtures of the sources s1(t) = sin(6πt) and s2(t) =
+exp(10t) sin(20πt), which were contaminated by white Gaussian noise, to give the mixtures X = AS +
+E ∈R5×60, where S(t) = [s1(t), s2(t)]T and A ∈R5×2 was a random matrix whose columns (mixing
+vectors) satisfy aT
+1 a2 = 0.1, ∥a1∥= ∥a2∥= 1. The 3Hz sine wave did not complete a full period over the
+60 samples, so that the two sources had a correlation degree of
+|sT
+1 s2|
+∥s1∥2∥s2∥2 = 0.35. The tensor approaches,
+CPD, Tucker decomposition and BTD employed a third-order tensor X of size 24 × 37 × 5 generated
+from ﬁve Hankel matrices whose elements obey X(i, j, k) = X(k, i + j −1) (see Section Tensorization).
+The average squared angular error (SAE) was used as the performance measure. Figure 6 shows the
+simulation results, illustrating that:
+• PCA failed since the mixing vectors were not orthogonal and the source signals were correlated, both
+violating the assumptions for PCA.
+• ICA (using the JADE algorithm [10]) failed because the signals were not statistically independent, as
+assumed in ICA.
+• Low rank tensor approximation: a rank-2 CPD was used to estimate A as the third factor matrix,
+which was then inverted to yield the sources. The accuracy of CPD was compromised as the com-
+ponents of tensor X cannot be represented by rank-1 terms.
+• Low multilinear rank approximation: Tucker decomposition (TKD) for the multilinear rank (4, 4, 2)
+was able to retrieve the column space of the mixing matrix but could not ﬁnd the individual mixing
+vectors due to the non-uniqueness of TKD.
+• BTD in multilinear rank-(2, 2, 1) terms matched the data structure [78], and it is remarkable that the
+sources were recovered using as few as 6 samples in the noise-free case.
+13
+
+0.05
+0.1
+0.15
+0.2
+−0.3
+−0.2
+−0.1
+0
+0.1
+Time (seconds)
+s1
+ 
+ 
+s
+ˆsP C A
+ˆsI C A
+ˆsC P D
+0.05
+0.1
+0.15
+0.2
+−0.2
+−0.1
+0
+0.1
+Time (seconds)
+s1
+ 
+ 
+s
+ˆsC P D
+ˆsT K D
+ˆsBT D
+0.05
+0.1
+0.15
+0.2
+−0.2
+−0.1
+0
+0.1
+0.2
+0.3
+Time (seconds)
+s2
+ 
+ 
+s
+ˆsC P D
+ˆsT K D
+ˆsBT D
+ 
+ 
+0
+10
+20
+30
+40
+0
+20
+40
+60
+SNR (dB)
+SAE (dB)
+ 
+ 
+PCA
+ICA
+CPD
+TKD
+BTD
+Figure 6: Blind separation of the mixture of a pure sine wave and an exponentially modulated sine wave using
+PCA, ICA, CPD, Tucker decomposition (TKD) and BTD. The sources s1 and s2 are correlated and of short duration;
+the symbols ˆs1 and ˆs2 denote the estimated sources.
+8
+Higher-Order Compressed Sensing
+The aim of Compressed Sensing (CS) is to provide faithful reconstruction of a signal of interest when the
+set of available measurements is (much) smaller than the size of the original signal [80–83]. Formally, we
+have available M (compressive) data samples y ∈RM, which are assumed to be linear transformations of
+the original signal x ∈RI (M < I). In other words, y = Φx, where the sensing matrix Φ ∈RM×I is usually
+random. Since the projections are of a lower dimension than the original data, the reconstruction is an
+ill-posed inverse problem, whose solution requires knowledge of the physics of the problem converted
+into constraints. For example, a 2D image X ∈RI1×I2 can be vectorized as a long vector x = vec(X) ∈RI
+(I = I1I2) that admits sparse representation in a known dictionary B ∈RI×I, so that x = Bg, where the
+matrix B may be a wavelet or discrete cosine transform (DCT) dictionary. Then, faithful recovery of the
+original signal x requires ﬁnding the sparsest vector g such that:
+y = Wg, with ∥g∥0 ≤K,
+W = ΦB,
+(16)
+where ∥· ∥0 is the ℓ0-norm (number of non-zero entries) and K ≪I.
+14
+
+Since the ℓ0-norm minimization is not practical, alternative solutions involve iterative reﬁnements of
+the estimates of vector g using greedy algorithms such as the Orthogonal Matching Pursuit (OMP) algo-
+rithm, or the ℓ1-norm minimization algorithms (∥g∥1 = ∑I
+i=1 |gi|) [83]. Low coherence of the composite
+dictionary matrix W is a prerequisite for a satisfactory recovery of g (and hence x) — we need to choose
+Φ and B so that the correlation between the columns of W is minimum [83].
+When extending the CS framework to tensor data, we face two obstacles:
+• Loss of information, such as spatial and contextual relationships in data, when a tensor X ∈RI1×I2×···×IN
+is vectorized.
+• Data handling, since the size of vectorized data and the associated dictionary B ∈RI×I easily be-
+comes prohibitively large (see Section Curse of Dimensionality), especially for tensors of high
+order.
+Fortunately, tensor data are typically highly structured – a perfect match for compressive sampling –
+so that the CS framework relaxes data acquisition requirements, enables compact storage, and facilitates
+data completion (inpainting of missing samples due to a broken sensor or unreliable measurement).
+Kronecker-CS for ﬁxed dictionaries.
+In many applications, the dictionary and the sensing ma-
+trix admit a Kronecker structure (Kronecker-CS model), as illustrated in Figure 7 (top) [84]. In this
+way, the global composite dictionary matrix becomes W = W(N) ⊗W(N−1) ⊗· · · ⊗W(1), where each
+term W(n) = Φ(n)B(n) has a reduced dimensionality since B(n) ∈RIn×In and Φ(n) ∈RMn×In. Denote
+M = M1M2 · · · MN and I = I1I2 · · · IN, and since Mn ≤In, n = 1, 2, . . . , N, this reduces storage require-
+ments by a factor ∑n InMn
+MI
+. The computation of Wg is affordable since g is sparse, however, computing
+WTy is expensive but can be efﬁciently implemented through a sequence of products involving much
+smaller matrices W(n) [85]. We refer to [84] for links between the coherence of factors W(n) and the coher-
+ence of the global composite dictionary matrix W.
+Figure 7 and Table 3 illustrate that the Kronecker-CS model is effectively a vectorized Tucker de-
+composition with a sparse core. The tensor equivalent of the CS paradigm in (16) is therefore to ﬁnd the
+sparsest core tensor G such that:
+Y ∼= G ×1 W(1) ×2 W(2) · · · ×N W(N),
+(17)
+with ∥G∥0 ≤K, for a given set of mode-wise dictionaries B(n) and sensing matrices Φ(n) (n = 1, 2, . . . , N).
+Working with several small dictionary matrices, appearing in a Tucker representation, instead of a large
+global dictionary matrix, is an example of the use of tensor structure for efﬁcient representation, see also
+Section Curse of Dimensionality.
+A higher-order extension of the OMP algorithm, referred to as the Kronecker-OMP algorithm [85],
+requires K iterations to ﬁnd the K non-zero entries of the core tensor G. Additional computational ad-
+vantages can be gained if it can be assumed that the K non-zero entries belong to a small subtensor of G,
+as shown in Figure 7 (bottom); such a structure is inherent to e.g., hyperspectral imaging [85, 86] and
+3D astrophysical signals. More precisely, if the K = LN non-zero entries are located within a subtensor of
+size (L × L × · · · × L), where L ≪In, then the so-called N-way Block OMP algorithm (N-BOMP) requires
+at most NL iterations, which is linear in N [85]. The Kronecker-CS model has been applied in Magnetic
+Resonance Imaging (MRI), hyper-spectral imaging, and in the inpainting of multiway data [84,86].
+Approaches without ﬁxed dictionaries. In Kronecker-CS the mode-wise dictionaries B(n) ∈RIn×In
+can be chosen so as best to represent physical properties or prior knowledge about the data. They can
+also be learned from a large ensemble of data tensors, for instance in an ALS type fashion [86]. Instead
+of the total number of sparse entries in the core tensor, the size of the core (i.e., the multilinear rank) may
+15
+
+(
+)
+
+
+W
+y
+Sparse Vector Representation (Kronecker-CS)
+Measurement vector
+(compressed
+sensing)
+Sparse
+vector
+W
+(1)
+W
+(2)
+W
+(3)
+g
+1
+2
+3
+1 2 3
+(
+)
+M M M
+I I I
+
+1 2 3
+(
+)
+I I I
+
+
+1
+2
+3
+(
+)
+M M M
+1
+2
+3
+(
+)
+M
+M
+M
+
+
+1
+1
+(
+)
+M
+I
+
+1
+2
+3
+(
+)
+I
+I
+I
+
+
+2
+2
+(
+)
+M
+I
+
+Measurement tensor
+(compressed sensing)
+Block sparse
+core tensor
+3
+3
+(
+)
+M
+I
+
+Block Sparse Tucker Representation
+W
+(3)
+
+
+W
+(1)
+W
+(2)
+
+Figure 7: Compressed sensing with a Kronecker-structured dictionary. Top: Vector representation. Bottom: Tensor
+representation; Orthogonal Matching Pursuit (OMP) can perform faster if the sparse entries belong to a small
+subtensor, up to permutation of the columns of W(1), W(2), W(3).
+be used as a measure for sparsity so as to obtain a low-complexity representation from compressively
+sampled data [87,88]. Alternatively, a PD representation can be used instead of a Tucker representation.
+Indeed, early work in chemometrics involved excitation-emission data for which part of the entries was
+unreliable because of scattering; the CPD of the data tensor is then computed by treating such entries as
+missing [7]. While CS variants of several CPD algorithms exist [59,89], the “oracle” properties of tensor-
+based models are still not as well understood as for their standard models; a notable exception is CPD
+with sparse factors [90].
+Example 2. Figure 8 shows an original 3D (1024 × 1024 × 32) hyperspectral image X which contains
+scene reﬂectance measured at 32 different frequency channels, acquired by a low-noise Peltier-cooled
+digital camera in the wavelength range of 400–720 nm [91]. Within the Kronecker-CS setting, the tensor
+of compressive measurements Y was obtained by multiplying the frontal slices by random Gaussian
+sensing matrices Φ(1) ∈RM1×1024 and Φ(2) ∈RM2×1024 (M1, M2 < 1024) in the ﬁrst and second mode,
+respectively, while Φ(3) ∈R32×32 was the identity matrix (see Figure 8 (top)). We used Daubechies
+wavelet factor matrices B(1) = B(2) ∈R1024×1024 and B(3) ∈R32×32, and employed N-BOMP to recover
+the small sparse core tensor and, subsequently, reconstruct the original 3D image as shown in Figure 8
+16
+
+Original hyperspectral image - RGB display
+Reconstruction (SP=33%, PSNR = 35.51dB) - RGB display
+(1024 x 1024 x 32) 
+(256 x 256 x 32) 
+(1024 x 1024 x 32) 
+(256 x 256 x 32) 
+Kronecker-CS of a 32-channel hyperspectral image
+=
+Figure 8: Multidimensional compressed sensing of a 3D hyperspectral image using Tucker representation with a
+small sparse core in wavelet bases.
+17
+
+(bottom). For the Sampling Ratio SP=33% (M1 = M2 = 585) this gave the Peak Signal to Noise Ratio
+(PSNR) of 35.51dB, while taking 71 minutes to compute the required Niter = 841 sparse entries. For the
+same quality of reconstruction (PSNR=35.51dB), the more conventional Kronecker-OMP algorithm found
+0.1% of the wavelet coefﬁcients as signiﬁcant, thus requiring Niter = K = 0.001 × (1024 × 1024 × 32) =
+33, 555 iterations and days of computation time.
+9
+Large-Scale Data and Curse of Dimensionality
+The sheer size of tensor data easily exceeds the memory or saturates the processing capability of standard
+computers, it is therefore natural to ask ourselves how tensor decompositions can be computed if the ten-
+sor dimensions in all or some modes are large or, worse still, if the tensor order is high. The term curse
+of dimensionality, in a general sense, was introduced by Bellman to refer to various computational bottle-
+necks when dealing with high-dimensional settings. In the context of tensors, the curse of dimensionality
+refers to the fact that the number of elements of an Nth-order (I × I × · · · × I) tensor, IN, scales expo-
+nentially with the tensor order N. For example, the number of values of a discretized function in Figure
+1 (bottom), quickly becomes unmanageable in terms of both computations and storing as N increases.
+In addition to their standard use (signal separation, enhancement, etc.), tensor decompositions may be
+elegantly employed in this context as efﬁcient representation tools. The ﬁrst question is then which type
+of tensor decomposition is appropriate.
+Efﬁcient data handling. If all computations are performed on a CP representation and not on the raw
+data tensor itself, then instead of the original IN raw data entries, the number of parameters in a CP
+representation reduces to NIR, which scales linearly in N (see Table 4). This effectively bypasses the
+curse of dimensionality, while giving us the freedom to choose the rank R as a function of the desired
+accuracy [14]; on the other hand the CP approximation may involve numerical problems (see Section
+Canonical Polyadic Decomposition).
+Compression is also inherent to Tucker decomposition, as it reduces the size of a given data tensor from
+the original IN to (NIR + RN), thus exhibiting an approximate compression ratio of ( I
+R)N. We can then
+beneﬁt from the well understood and reliable approximation by means of matrix SVD, however, this is
+only meaningful for low N.
+Table 4: Storage complexities of tensor models for an Nth-order tensor X ∈RI×I×···×I, whose original storage
+complexity is O(IN).
+1. CPD
+O(NIR)
+2. Tucker
+O(NIR + RN)
+3. TT
+O(NIR2)
+4. QTT
+O(NR2 log2(I))
+Tensor networks. A numerically reliable way to tackle curse of dimensionality is through a concept
+from scientiﬁc computing and quantum information theory, termed tensor networks, which represents
+a tensor of a possibly very high order as a set of sparsely interconnected matrices and core tensors of
+low order (typically, order 3). These low-dimensional cores are interconnected via tensor contractions
+to provide a highly compressed representation of a data tensor. In addition, existing algorithms for the
+approximation of a given tensor by a tensor network have good numerical properties, making it possible
+18
+
+A
+G
+(1)
+B
+1
+1
+(
+)
+´
+I
+R
+1
+2
+2
+(
+)
+´
+´
+R
+I
+R
+2
+3
+3
+(
+)
+´
+´
+R
+I
+R
+3
+4
+4
+(
+)
+´
+´
+R
+I
+R
+5
+4
+(
+)
+´
+R
+I
+G (3)
+(1)
+(2)
+(3)
+Figure 9: Tensor Train (TT) decomposition of a ﬁfth-order tensor X ∈RI1×I2×···×I5, consisting of two matrix
+carriages and three third-order tensor carriages. The ﬁve carriages are connected through tensor contractions,
+which can be expressed in a scalar form as xi1,i2,i3,i4,i5 = ∑R1
+r1=1 ∑R2
+r2=1 · · · ∑R4
+r4=1 ai1,r1 g(1)
+r1,i2,r2 g(2)
+r2,i3,r3 g(3)
+r3,i4,r4 br4,i5.
+Figure 10: Efﬁcient computation of the CP and Tucker decompositions, whereby tensor decompositions are com-
+puted in parallel for sampled blocks, these are then merged to obtain the global components A, B, C and a core
+tensor G.
+to control the error and achieve any desired accuracy of approximation. For example, tensor networks
+allow for the representation of a wide class of discretized multivariate functions even in cases where the
+number of function values is larger than the number of atoms in the universe [21,27,28].
+Examples of tensor networks are the hierarchical Tucker (HT) decompositions and Tensor Trains (TT)
+(see Figure 9) [15, 16]. The TTs are also known as Matrix Product States (MPS) and have been used by
+physicists more than two decades (see [92, 93] and references therein). The PARATREE algorithm was
+developed in signal processing and follows a similar idea, it uses a polyadic representation of a data
+tensor (in a possibly nonminimal number of terms), whose computation then requires only the matrix
+SVD [94].
+For very large-scale data that exhibit a well-deﬁned structure, an even more radical approach can be
+employed to achieve a parsimonious representation — through the concept of quantized or quantic tensor
+networks (QTN) [27, 28]. For example, a huge vector x ∈RI with I = 2L elements can be quantized
+and tensorized through reshaping into a (2 × 2 × · · · × 2) tensor X of order L, as illustrated in Figure
+1 (top). If x is an exponential signal, x(k) = azk, then X is a symmetric rank-1 tensor that can be rep-
+resented by two parameters: the scaling factor a and the generator z (cf. (2) in Section Tensorization).
+Non-symmetric terms provide further opportunities, beyond the sum-of-exponential representation by
+symmetric low-rank tensors. Huge matrices and tensors may be dealt with in the same manner. For in-
+19
+
+stance, an Nth-order tensor X ∈RI1×···×IN, with In = qLn, can be quantized in all modes simultaneously
+to yield a (q × q × · · · × q) quantized tensor of higher order. In QTN, q is small, typically q = 2, 3, 4,
+for example, the binary encoding (q = 2) reshapes an Nth-order tensor with (2L1 × 2L2 × · · · × 2LN) el-
+ements into a tensor of order (L1 + L2 + · · · + LN) with the same number of elements. The tensor train
+decomposition applied to quantized tensors is referred to as the quantized TT (QTT); variants for other
+tensor representations have also been derived [27,28]. In scientiﬁc computing, such formats provide the
+so-called super-compression — a logarithmic reduction of storage requirements: O(IN) →O(N logq(I)).
+Computation of the decomposition/representation. Now that we have addressed the possibilities
+for efﬁcient tensor representation, the question that needs to be answered is how these representations
+can be computed from the data in an efﬁcient manner. The ﬁrst approach is to process the data in smaller
+blocks rather than in a batch manner [95]. In such a “divide-and-conquer” approach, different blocks
+may be processed in parallel and their decompositions carefully recombined (see Figure 10) [95,96]. In
+fact, we may even compute the decomposition through recursive updating, as new data arrive [97]. Such
+recursive techniques may be used for efﬁcient computation and for tracking decompositions in the case
+of nonstationary data.
+The second approach would be to employ compressed sensing ideas (see Section Higher-Order Com-
+pressed Sensing) to ﬁt an algebraic model with a limited number of parameters to possibly large data.
+In addition to completion, the goal here is a signiﬁcant reduction of the cost of data acquisition, manipu-
+lation and storage — breaking the Curse of Dimensionality being an extreme case.
+While algorithms for this purpose are available both for low rank and low multilinear rank represen-
+tation [59, 87], an even more drastic approach would be to directly adopt sampled ﬁbers as the bases in
+a tensor representation. In the Tucker decomposition setting we would choose the columns of the factor
+matrices B(n) as mode-n ﬁbers of the tensor, which requires addressing the following two problems: (i)
+how to ﬁnd ﬁbers that allow us to best represent the tensor, and (ii) how to compute the corresponding
+core tensor at a low cost (i.e., with minimal access to the data). The matrix counterpart of this problem
+(i.e., representation of a large matrix on the basis of a few columns and rows) is referred to as the pseu-
+doskeleton approximation [98], where the optimal representation corresponds to the columns and rows that
+intersect in the submatrix of maximal volume (maximal absolute value of the determinant). Finding the
+optimal submatrix is computationally hard, but quasi-optimal submatrices may be found by heuristic so-
+called “cross-approximation” methods that only require a limited, partial exploration of the data matrix.
+Tucker variants of this approach have been derived in [99–101] and are illustrated in Figure 11, while
+cross-approximation for the TT format has been derived in [102]. Following a somewhat different idea,
+a tensor generalization of the CUR decomposition of matrices samples ﬁbers on the basis of statistics
+derived from the data [103].
+10
+Multiway Regression — Higher Order PLS (HOPLS)
+Multivariate regression. Regression refers to the modelling of one or more dependent variables (responses),
+Y, by a set of independent data (predictors), X. In the simplest case of conditional MSE estimation, ˆy =
+E(y|x), the response y is a linear combination of the elements of the vector of predictors x; for multivariate
+data the Multivariate Linear Regression (MLR) uses a matrix model, Y = XP + E, where P is the matrix of
+coefﬁcients (loadings) and E the residual matrix. The MLR solution gives P =
+ XTX
+−1XTY, and involves
+inversion of the moment matrix XTX. A common technique to stabilize the inverse of the moment matrix
+XTX is principal component regression (PCR), which employs low rank approximation of X.
+Modelling structure in data — the PLS. Notice that in stabilizing multivariate regression PCR uses
+20
+
+!"#$%&'()&
+*'(+&,'(+&
+-./+&0&
+ 123%&45&6$78&$9:4;<2=&
+>$;<=&#?2@?1&$&A9=3
+Y
+G
+C(1)
+C(2)
+C(3)
+∼=
+C(2)
+-./+
+-
+!
+Figure 11: Tucker representation through ﬁber sampling and cross-approximation: the columns of factor matri-
+ces are sampled from the ﬁbers of the original data tensor X. Within MWCA the selected ﬁbers may be further
+processed using BSS algorithms.
+only information in the X-variables, with no feedback from the Y-variables. The idea behind the Partial
+Least Squares (PLS) method is to account for structure in data by assuming that the underlying system is
+governed by a small number, R, of speciﬁcally constructed latent variables, called scores, that are shared
+between the X- and Y-variables; in estimating the number R, PLS compromises between ﬁtting X and
+predicting Y. Figure 12 illustrates that the PLS procedure: (i) uses eigenanalysis to perform contraction of
+the data matrix X to the principal eigenvector score matrix T = [t1, . . . , tR] of rank R; (ii) ensures that the
+tr components are maximally correlated with the ur components in the approximation of the responses
+Y, this is achieved when the ur’s are scaled versions of the tr’s. The Y-variables are then regressed on the
+matrix U = [u1, . . . , uR]. Therefore, PLS is a multivariate model with inferential ability that aims to ﬁnd
+a representation of X (or a part of X) that is relevant for predicting Y, using the model
+X
+=
+T PT + E =
+R
+∑
+r=1
+tr pT
+r + E,
+(18)
+Y
+=
+U QT + F =
+R
+∑
+r=1
+ur qT
+r + F.
+(19)
+The score vectors tr provide an LS ﬁt of X-data, while at the same time the maximum correlation between
+t- and u-scores ensures a good predictive model for Y-variables. The predicted responses Ynew are then
+obtained from new data Xnew and the loadings P and Q.
+In practice, the score vectors tr are extracted sequentially, by a series of orthogonal projections fol-
+lowed by the deﬂation of X. Since the rank of Y is not necessarily decreased with each new tr, we may
+continue deﬂating until the rank of the X-block is exhausted, so as to balance between prediction accuracy
+and model order.
+The PLS concept can be generalized to tensors in the following ways:
+1. By unfolding multiway data. For example X(I × J × K) and Y(I × M × N) can be ﬂattened into
+long matrices X(I × JK) and Y(I × MN), so as to admit matrix-PLS (see Figure 12). However, the
+ﬂattening prior to standard bilinear PLS obscures structure in multiway data and compromises the
+interpretation of latent components.
+2. By low rank tensor approximation. The so-called N-PLS attempts to ﬁnd score vectors having maximal
+covariance with response variables, under the constraints that tensors X and Y are decomposed as
+a sum of rank-one tensors [104].
+21
+
+(
+)
+I
+M
+
+Y
+U
+QT
+(
+)
+I
+R
+
+=
+ur
+qr
+(
+)
+I
+N
+
+X
+T
+(
+)
+I
+R
+
+P
+T
+(
+)
+R
+N
+
+=
+r =1
+R
+tr
+pr
+
+
+(
+)
+R
+M
+
+
+r =1
+R
+T
+T
+Figure 12: The basic PLS model performs joint sequential low-rank approximation of the matrix of predictors X
+and the matrix of responses Y, so as to share (up to the scaling ambiguity) the latent components — columns of the
+score matrices T and U. The matrices P and Q are the loading matrices for predictors and responses, and E and F are
+the corresponding residual matrices.
+3. By a BTD-type approximation, as in the Higher Order PLS (HOPLS) model shown in Figure 13 [105].
+The use of block terms within HOPLS equips it with additional ﬂexibility, together with a more
+realistic analysis than unfolding-PLS and N-PLS.
+The principle of HOPLS can be formalized as a set of sequential approximate decompositions of the
+independent tensor X ∈RI1×I2×···×IN and the dependent tensor Y ∈RJ1×J2×···×JM (with I1 = J1), so as to
+ensure maximum similarity (correlation) between the scores tr and ur within the loadings matrices T and
+U, based on
+X ∼=
+R
+∑
+r=1
+G(r)
+X ×1 tr ×2 P(1)
+r
+· · · ×N P(N−1)
+r
+(20)
+Y ∼=
+R
+∑
+r=1
+G(r)
+Y ×1 ur ×2 Q(1)
+r
+· · · ×N Q(M−1)
+r
+.
+(21)
+A number of data-analytic problems can be reformulated as either regression or “similarity analysis”
+(ANOVA, ARMA, LDA, CCA), so that both the matrix and tensor PLS solutions can be generalized across
+exploratory data analysis.
+Example 4: Decoding of a 3D hand movement trajectory from the electrocorticogram (ECoG). The
+predictive power of tensor-based PLS is illustrated on a real-world example of the prediction of arm
+movement trajectory from ECoG. Fig. 14(left) illustrates the experimental setup, whereby 3D arm move-
+ment of a monkey was captured by an optical motion capture system with reﬂective markers afﬁxed to the
+left shoulder, elbow, wrist, and hand; for full detail see (http://neurotycho.org). The predictors (32
+ECoG channels) naturally build a fourth-order tensor X (time×channel no×epoch length×frequency)
+while the movement trajectories for the four markers (response) can be represented as a third-order ten-
+sor Y (time×3D marker position×marker no). The goal of the training stage is to identify the HOPLS
+parameters: G(r)
+X , G(r)
+Y , P(n)
+r
+, Q(n)
+r
+, see also Figure 13. In the test stage, the movement trajectories, Y∗, for
+the new ECoG data, X∗, are predicted through multilinear projections: (i) the new scores, t∗
+r , are found
+from new data, X∗, and the existing model parameters: G(r)
+X , P(1)
+r , P(2)
+r , P(3)
+r , (ii) the predicted trajectory is
+22
+
+
+
+
+t1
+tR
+1
+P
+(2)
+R
+P
+(2)
+1
+2
+3
+(
+)
+
+
+I
+I
+I
+2
+2
+(
+)
+
+L
+I
+2
+2
+(
+)
+
+L
+I
+1
+( )
+I
+1
+( )
+I
+3
+3
+(
+)
+
+I
+L
+3
+3
+(
+)
+
+I
+L
+1
+P
+(1)T
+R
+P
+(1)T
+=
+P(1)T
+2
+3
+(
+)
+
+
+R RL
+RL
+2
+2
+(
+)
+
+RL
+I
+1
+(
+)
+
+I
+R
+3
+3 3
+(
+)
+I
+R L
+
+T
+P
+(2)
+...
+
+
+
+u1
+uR
+1
+Q
+(2)
+R
+Q
+(2)
+1
+Q
+(1)T
+1
+2
+3
+(
+)
+
+
+I
+J
+J
+2
+2
+(
+)
+L
+J
+
+2
+2
+(
+)
+L
+J
+
+1
+( )
+I
+1
+( )
+I
+3
+3
+(
+)
+J
+L
+
+3
+3
+(
+)
+J
+L
+
+R
+Q(1)T
+=
+Q
+(1)
+2
+3
+(
+)
+R RL
+RL
+
+
+2
+2
+(
+)
+RL
+J
+
+1
+(
+)
+I
+R
+
+3
+3 3
+(
+)
+J
+R L
+
+U
+Q (2)
+...
+
+
+X
+Y
+X
+(1)
+X
+(
+)
+R
+Y
+(1)
+Y
+(
+)
+R
+Figure 13: The principle of Higher Order PLS (HOPLS) for third-order tensors. The core tensors GX and GY are
+block-diagonal. The BTD-type structure allows for the modelling of general components that are highly correlated
+in the ﬁrst mode.
+calculated as Y∗≈∑R
+r=1 G(r)
+Y ×1 t∗
+r ×2 Q(1)
+r
+×3 Q(2)
+r
+×4 Q(3)
+r . In the simulations, standard PLS was applied
+in the same way to the unfolded tensors.
+Figure 14(right) shows that although the standard PLS was able to predict the movement correspond-
+ing to each marker individually, such prediction is quite crude as the two-way PLS does not adequately
+account for mutual information among the four markers. The enhanced predictive performance of the
+BTD-based HOPLS (red line in Fig.14(right)) is therefore attributed to its ability to model interactions
+between complex latent components of both predictors and responses.
+23
+
+Figure 14: Prediction of arm movement from brain electrical responses. Left: Experiment setup. Middle: Construc-
+tion of the data and response tensors and training. Right: The new data tensor (bottom) and the predicted 3D arm
+movement trajectories (X, Y, Z coordinates) obtained by tensor-based HOPLS and standard matrix-based PLS
+(top).
+11
+Linked Multiway Component Analysis and Tensor Data Fusion
+Data fusion concerns joint analysis of an ensemble of data sets, such as multiple “views” of a particular
+phenomenon, where some parts of the “scene” may be visible in only one or a few data sets. Examples
+include fusion of visual and thermal images in low visibility conditions, or the analysis of human elec-
+trophysiological signals in response to a certain stimulus but from different subjects and trials; these are
+naturally analyzed together by means of matrix/tensor factorizations. The “coupled” nature of the anal-
+ysis of multiple datasets ensures that there may be common factors across the datasets, and that some
+components are not shared (e.g., processes that are independent of excitations or stimuli/tasks).
+The linked multiway component analysis (LMWCA) [106], shown in Figure 15, performs such de-
+composition into shared and individual factors, and is formulated as a set of approximate joint Tucker
+decompositions of a set of data tensors X(k) ∈RI1×I2×···×IN, (k = 1, 2, . . . , K):
+X(k) ∼= G(k) ×1 B(1,k) ×2 B(2,k) · · · ×N B(N,k),
+(22)
+where each factor matrix B(n,k) = [B(n)
+C , B(n,k)
+I
+] ∈RIn×Rn has: (i) components B(n)
+C
+∈RIn×Cn (with
+24
+
+(1)
+B
+(1,1)
+B
+(3,1)
+
+(1)
+B
+(2,1)T
+B
+(1, )
+B
+(3,
+)
+
+B
+(2,
+)T
+…
+(
+)
+I3
+3
+×
+(
+)
+I1 × I
+I
+2
+3
+×
+(
+)
+I1 ×
+1 (
+)
+1 ×
+2
+3
+×
+(
+)
+2 × I2
+(
+)
+BC
+(1) BI
+(1,1)
+BC
+(3) BI
+(3,1)
+BC
+(2)T
+BI
+(2,1)T
+BC
+(1) BI
+(1,
+)
+BC
+(3) BI
+(3,
+)
+BC
+(2)T
+BI
+(2, )T
+…
+R
+R
+R
+R
+R
+R
+K
+K
+K
+K
+K
+K
+K
+( )
+K
+Figure 15: Coupled Tucker decomposition for linked multiway component analysis (LMWCA). The data tensors
+have both shared and individual components. Constraints such as orthogonality, statistical independence, sparsity
+and non-negativity may be imposed where appropriate.
+0 ≤Cn ≤Rn) that are common (i.e., maximally correlated) to all tensors, and (ii) components B(n,k)
+I
+∈
+RIn×(Rn−Cn) that are tensor-speciﬁc. The objective is to estimate the common components B(n)
+C , the indi-
+vidual components B(n,k)
+I
+, and, via the core tensors G(k), their mutual interactions. As in MWCA (see Sec-
+tion Tucker Decomposition), constraints may be imposed to match data properties [73,76]. This enables
+a more general and ﬂexible framework than group ICA and Independent Vector Analysis, which also
+perform linked analysis of multiple data sets but assume that: (i) there exist only common components
+and (ii) the corresponding latent variables are statistically independent [107, 108], both quite stringent
+and limiting assumptions. As an alternative to Tucker decompositions, coupled tensor decompositions
+may be of a polyadic or even block term type [89,109].
+Example 5: Feature extraction and classiﬁcation of objects using LMWCA. Classiﬁcation based on
+common and distinct features of natural objects from the ETH-80 database
+(http://www.d2.mpi-inf.mpg.de/Datasets) was performed using LMWCA, whereby the dis-
+crimination among objects was performed using only the common features. This dataset consists of 3280
+images in 8 categories, each containing 10 objects with 41 views per object. For each category, the training
+data were organized in two distinct fourth-order (128 × 128 × 3 × I4) tensors, where I4 = 10 × 41 × 0.5p,
+with p the fraction of training data. LMWCA was applied to these two tensors to ﬁnd the common and
+individual features, with the number of common features set to 80% of I4. In this way, eight sets of com-
+mon features were obtained for each category. The test sample label was assigned to the category whose
+common features matched the new sample best (evaluated by canonical correlations) [110]. Figure 16
+shows the results over 50 Monte Carlo runs and compares LMWCA with the standard K-NN and LDA
+classiﬁers, the latter using 50 principal components as features. The enhanced classiﬁcation results for
+LMWCA are attributed to the fact that the classiﬁcation only makes use of the common components and
+is not hindered by components that are not shared across objects or views.
+25
+
+Sample images from different and same categories
+
+
+
+
+
+
+
+
+
+
+	
+	
+
+	
+	
+
+
+
+
+
+Find the class 
+whose common 
+features best 
+match the test 
+sample
+			
+
+Find
+whose
+featu
+match
+Classiﬁcation based on LMWCA
+10
+20
+30
+40
+50
+65
+70
+75
+80
+85
+90
+95
+Accuracy (%)
+Proportion of training data used (%)
+LWCA
+KNN−PCA
+LDA−PCA
+Performance comparison
+Figure 16: Classiﬁcation of color objects belonging to different categories. Due to using only common features,
+LMWCA achieves a high classiﬁcation rate, even when the training set is small.
+26
+
+12
+Software
+The currently available software resources for tensor decompositions include:
+• The Tensor Toolbox, a versatile framework for basic operations on sparse and dense tensors, in-
+cluding CPD and Tucker formats [111].
+• The TDALAB and TENSORBOX, which provide a user-friendly interface and advanced algorithms
+for CPD, nonnegative Tucker decomposition and MWCA [112,113].
+• The Tensorlab toolbox builds upon the complex optimization framework and offers numerical algo-
+rithms for computing the CPD, BTD and Tucker decompositions. The toolbox includes a library of
+constraints (e.g. nonnegativity, orthogonality) and the possibility to combine and jointly factorize
+dense, sparse and incomplete tensors [89].
+• The N-Way Toolbox, which includes (constrained) CPD, Tucker decomposition and PLS in the con-
+text of chemometrics applications [114]. Many of these methods can handle constraints (e.g., non-
+negativity, orthogonality) and missing elements.
+• The TT Toolbox, the Hierarchical Tucker Toolbox and the Tensor Calculus library provide tensor
+tools for scientiﬁc computing [115–117].
+• Code developed for multiway analysis is also available from the Three-Mode Company [118].
+13
+Conclusions and Future Directions
+We live in a world overwhelmed by data, from multiple pictures of Big Ben on various social web links to
+terabytes of data in multiview medical imaging, while we may need to repeat the scientiﬁc experiments
+many times to obtain ground truth. Each snapshot gives us a somewhat incomplete view of the same
+object, and involves different angles, illumination, lighting conditions, facial expressions, and noise.
+We have cast a light on tensor decompositions as a perfect match for exploratory analysis of such
+multifaceted data sets, and have illustrated their applications in multi-sensor and multi-modal signal
+processing. Our emphasis has been to show that tensor decompositions and multilinear algebra open
+completely new possibilities for component analysis, as compared with the “ﬂat view” of standard two-
+way methods.
+Unlike matrices, tensors are multiway arrays of data samples whose representations are typically
+overdetermined (fewer parameters in the decomposition than the number of data entries). This gives us
+an enormous ﬂexibility in ﬁnding hidden components in data and the ability to enhance both robustness
+to noise and tolerance to missing data samples and faulty sensors. We have also discussed multilinear
+variants of several standard signal processing tools such as multilinear SVD, ICA, NMF and PLS, and
+have shown that tensor methods can operate in a deterministic way on signals of very short duration.
+At present the uniqueness conditions of standard tensor models are relatively well understood and
+efﬁcient computation algorithms do exist, however, for future applications several challenging problems
+remain to be addressed in more depth:
+• A whole new area emerges when several decompositions which operate on different datasets are
+coupled, as in multiview data where some details of interest are visible in only one mode. Such
+techniques need theoretical support in terms of existence, uniqueness, and numerical properties.
+27
+
+• As the complexity of advanced models increases, their computation requires efﬁcient iterative al-
+gorithms, extending beyond the ALS class.
+• Estimation of the number of components in data, and the assessment of their dimensionality would
+beneﬁt from automation, especially in the presence of noise and outliers.
+• Both new theory and algorithms are needed to further extend the ﬂexibility of tensor models, e.g.,
+for the constraints to be combined in many ways, and tailored to the particular signal properties in
+different modes.
+• Work on efﬁcient techniques for saving and/or fast processing of ultra large-scale tensors is urgent,
+these now routinely occupy tera-bytes, and will soon require peta-bytes of memory.
+• Tools for rigorous performance analysis and rule of thumb performance bounds need to be further
+developed across tensor decomposition models.
+• Our discussion has been limited to tensor models in which all entries take values independently
+of one another.
+Probabilistic versions of tensor decompositions incorporate prior knowledge
+about complex variable interaction, various data alphabets, or noise distributions, and so promise
+to model data more accurately and efﬁciently [119,120].
+It is ﬁtting to conclude with a quote from Marcel Proust “The voyage of discovery is not in seeking new
+landscapes but in having new eyes”. We hope to have helped to bring to the eyes of the Signal Process-
+ing Community the multidisciplinary developments in tensor decompositions, and to have shared our
+enthusiasm about tensors as powerful tools to discover new landscapes. The future computational, vi-
+sualization and interpretation tools will be important next steps in supporting the different communities
+working on large-scale and big data analysis problems.
+References
+[1] F. L. Hitchcock, “Multiple invariants and generalized rank of a p-way matrix or tensor,” Journal of Mathematics
+and Physics, vol. 7, pp. 39–79, 1927.
+[2] R. Cattell, “Parallel proportional proﬁles and other principles for determining the choice of factors by rota-
+tion,” Psychometrika, vol. 9, pp. 267–283, 1944.
+[3] L. R. Tucker, “The extension of factor analysis to three-dimensional matrices,” in Contributions to Mathematical
+Psychology, H. Gulliksen and N. Frederiksen, Eds. New York: Holt, Rinehart and Winston, 1964, pp. 110–127.
+[4] ——, “Some mathematical notes on three-mode factor analysis,” Psychometrika, vol. 31, no. 3, pp. 279–311,
+September 1966.
+[5] J. Carroll and J.-J. Chang, “Analysis of individual differences in multidimensional scaling via an n-way gen-
+eralization of ’Eckart-Young’ decomposition,” Psychometrika, vol. 35, no. 3, pp. 283–319, September 1970.
+[6] R. A. Harshman, “Foundations of the PARAFAC procedure: Models and conditions for an explanatory mul-
+timodal factor analysis,” UCLA Working Papers in Phonetics, vol. 16, pp. 1–84, 1970.
+[7] A. Smilde, R. Bro, and P. Geladi, Multi-way Analysis: Applications in the Chemical Sciences.
+New York: John
+Wiley & Sons Ltd, 2004.
+[8] P. Kroonenberg, Applied Multiway Data Analysis.
+New York: John Wiley & Sons Ltd, 2008.
+[9] C. Nikias and A. Petropulu, Higher-Order Spectra Analysis: A Nonlinear Signal Processing Framework.
+Prentice
+Hall, 1993.
+28
+
+[10] J.-F. Cardoso and A. Souloumiac, “Blind beamforming for non-Gaussian signals,” in IEE Proceedings F (Radar
+and Signal Processing), vol. 140, no. 6.
+IET, 1993, pp. 362–370.
+[11] P. Comon, “Independent component analysis, a new concept?” Signal Processing, vol. 36, no. 3, pp. 287–314,
+1994.
+[12] P. Comon and C. Jutten, Eds., Handbook of Blind Source Separation: Independent Component Analysis and Appli-
+cations.
+Academic Press, 2010.
+[13] L. De Lathauwer, B. De Moor, and J. Vandewalle, “A multilinear singular value decomposition,” SIAM Jour-
+nal of Matrix Analysis and Applications, vol. 24, pp. 1253–1278, 2000.
+[14] G. Beylkin and M. Mohlenkamp, “Algorithms for numerical analysis in high dimensions,” SIAM J. Scientiﬁc
+Computing, vol. 26, no. 6, pp. 2133–2159, 2005.
+[15] J. Ballani, L. Grasedyck, and M. Kluge, “Black box approximation of tensors in hierarchical Tucker format,”
+Linear Algebra and its Applications, vol. 438, no. 2, pp. 639–657, 2013.
+[16] I. V. Oseledets, “Tensor-train decomposition,” SIAM J. Scientiﬁc Computing, vol. 33, no. 5, pp. 2295–2317, 2011.
+[17] N. Sidiropoulos, R. Bro, and G. Giannakis, “Parallel factor analysis in sensor array processing,” IEEE Trans-
+actions on Signal Processing, vol. 48, no. 8, pp. 2377–2388, 2000.
+[18] N. Sidiropoulos, G. Giannakis, and R. Bro, “Blind PARAFAC receivers for DS-CDMA systems,” IEEE Trans-
+actions on Signal Processing, vol. 48, no. 3, pp. 810–823, 2000.
+[19] A. Cichocki, R. Zdunek, A.-H. Phan, and S. Amari, Nonnegative Matrix and Tensor Factorizations: Applications
+to Exploratory Multi-way Data Analysis and Blind Source Separation.
+Chichester: Wiley, 2009.
+[20] J. Landsberg, Tensors: Geometry and Applications.
+AMS, 2012.
+[21] W. Hackbusch, Tensor Spaces and Numerical Tensor Calculus, ser. Springer series in computational mathematics.
+Heidelberg: Springer, 2012, vol. 42.
+[22] E. Acar and B. Yener, “Unsupervised multiway data analysis: A literature survey,” IEEE Transactions on
+Knowledge and Data Engineering, vol. 21, pp. 6–20, 2009.
+[23] T. Kolda and B. Bader, “Tensor decompositions and applications,” SIAM Review, vol. 51, no. 3, pp. 455–500,
+September 2009.
+[24] P. Comon, X. Luciani, and A. L. F. de Almeida, “Tensor decompositions, Alternating Least Squares and other
+Tales,” Jour. Chemometrics, vol. 23, pp. 393–405, 2009.
+[25] H. Lu, K. Plataniotis, and A. Venetsanopoulos, “A survey of multilinear subspace learning for tensor data,”
+Pattern Recognition, vol. 44, no. 7, pp. 1540–1551, 2011.
+[26] M. Mørup, “Applications of tensor (multiway array) factorizations and decompositions in data mining,”
+Wiley Interdisc. Rew.: Data Mining and Knowledge Discovery, vol. 1, no. 1, pp. 24–40, 2011.
+[27] B. Khoromskij, “Tensors-structured numerical methods in scientiﬁc computing: Survey on recent advances,”
+Chemometrics and Intelligent Laboratory Systems, vol. 110, no. 1, pp. 1–19, 2011.
+[28] L. Grasedyck, D. Kessner, and C. Tobler, “A literature survey of low-rank tensor approximation techniques,”
+CGAMM-Mitteilungen, vol. 36, pp. 53–78, 2013.
+[29] P. Comon, “Tensors: A brief survey,” IEEE Signal Processing Magazine, p. (accepted), 2014.
+[30] A. Bruckstein, D. Donoho, and M. Elad, “From sparse solutions of systems of equations to sparse modeling
+of signals and images,” SIAM Review, vol. 51, no. 1, pp. 34–81, 2009.
+[31] J. Kruskal, “Three-way arrays: rank and uniqueness of trilinear decompositions, with application to arith-
+metic complexity and statistics,” Linear Algebra and its Applications, vol. 18, no. 2, pp. 95 – 138, 1977.
+29
+
+[32] I. Domanov and L. De Lathauwer, “On the uniqueness of the canonical polyadic decomposition of third-
+order tensors — part i: Basic results and uniqueness of one factor matrix and part ii: Uniqueness of the
+overall decomposition,” SIAM J. Matrix Anal. Appl., vol. 34, no. 3, pp. 855–903, 2013.
+[33] A. Cichocki and S. Amari, Adaptive Blind Signal and Image Processing.
+John Wiley, Chichester, 2003.
+[34] A. Hyv¨arinen, “Independent component analysis: recent advances,” Philosophical Transactions of the Royal
+Society A: Mathematical, Physical and Engineering Sciences, vol. 371, no. 1984, 2013.
+[35] M. Elad, P. Milanfar, and G. H. Golub, “Shape from moments – an estimation theory perspective,” Signal
+Processing, IEEE Transactions on, vol. 52, no. 7, pp. 1814–1829, 2004.
+[36] N. Sidiropoulos, “Generalizing Caratheodory’s uniqueness of harmonic parameterization to N dimensions,”
+IEEE Trans. Information Theory, vol. 47, no. 4, pp. 1687–1690, 2001.
+[37] A. Belouchrani, K. Abed-Meraim, J.-F. Cardoso, and ´E. Moulines, “A blind source separation technique using
+second-order statistics,” IEEE Trans. Signal Processing, vol. 45, no. 2, pp. 434–444, 1997.
+[38] F. Miwakeichi, E. Martnez-Montes, P. Valds-Sosa, N. Nishiyama, H. Mizuhara, and Y. Yamaguchi, “De-
+composing EEG data into space−time−frequency components using parallel factor analysis,” NeuroImage,
+vol. 22, no. 3, pp. 1035–1045, 2004.
+[39] M. Vasilescu and D. Terzopoulos, “Multilinear analysis of image ensembles: Tensorfaces,” in Proc. European
+Conf. on Computer Vision (ECCV), vol. 2350, Copenhagen, Denmark, May 2002, pp. 447–460.
+[40] M. Hirsch, D. Lanman, G.Wetzstein, and R. Raskar, “Tensor displays,” in Int. Conf. on Computer Graphics and
+Interactive Techniques, SIGGRAPH 2012, Los Angeles, CA, USA, Aug. 5-9, 2012, Emerging Technologies Proceed-
+ings, 2012, pp. 24–42.
+[41] J. Hastad, “Tensor rank is NP-complete,” Journal of Algorithms, vol. 11, no. 4, pp. 644–654, 1990.
+[42] M. Timmerman and H. Kiers, “Three mode principal components analysis: Choosing the numbers of com-
+ponents and sensitivity to local optima,” British Journal of Mathematical and Statistical Psychology, vol. 53, no. 1,
+pp. 1–16, 2000.
+[43] E. Ceulemans and H. Kiers, “Selecting among three-mode principal component models of different types
+and complexities: A numerical convex-hull based method,” British Journal of Mathematical and Statistical Psy-
+chology, vol. 59, no. 1, pp. 133–150, May 2006.
+[44] M. Mørup and L. K. Hansen, “Automatic relevance determination for multiway models,” Journal of
+Chemometrics, Special Issue: In Honor of Professor Richard A. Harshman, vol. 23, no. 7-8, pp. 352 – 363, 2009.
+[Online]. Available: http://www2.imm.dtu.dk/pubdb/p.php?5806
+[45] N. Sidiropoulos and R. Bro, “On the uniqueness of multilinear decomposition of N-way arrays,” J. Chemo-
+metrics, vol. 14, no. 3, pp. 229–239, 2000.
+[46] T. Jiang and N. D. Sidiropoulos, “Kruskal’s permutation lemma and the identiﬁcation of CANDE-
+COMP/PARAFAC and bilinear models,” IEEE Trans. Signal Processing, vol. 52, no. 9, pp. 2625–2636, 2004.
+[47] L. De Lathauwer, “A link between the canonical decomposition in multilinear algebra and simultaneous
+matrix diagonalization,” SIAM J. Matrix Analysis Applications, vol. 28, no. 3, pp. 642–666, 2006.
+[48] A. Stegeman, “On uniqueness conditions for Candecomp/Parafac and Indscal with full column rank in one
+mode,” Linear Algebra and its Applications, vol. 431, no. 1–2, pp. 211–227, 2009.
+[49] E. Sanchez and B. Kowalski, “Tensorial resolution: a direct trilinear decomposition,” J. Chemometrics, vol. 4,
+pp. 29–45, 1990.
+[50] I. Domanov and L. De Lathauwer, “Canonical polyadic decomposition of third-order tensors: Reduction to
+generalized eigenvalue decomposition,” ESAT, KU Leuven, ESAT-SISTA Internal Report 13-36, 2013.
+[51] S. Vorobyov, Y. Rong, N. Sidiropoulos, and A. Gershman, “Robust iterative ﬁtting of multilinear models,”
+IEEE Transactions Signal Processing, vol. 53, no. 8, pp. 2678–2689, 2005.
+30
+
+[52] X. Liu and N. Sidiropoulos, “Cramer-Rao lower bounds for low-rank decomposition of multidimensional
+arrays,” IEEE Trans. on Signal Processing, vol. 49, no. 9, pp. 2074–2086, Sep. 2001.
+[53] P. Tichavsky, A. Phan, and Z. Koldovsky, “Cram´er-rao-induced bounds for candecomp/parafac tensor de-
+composition,” IEEE Transactions on Signal Processing, vol. 61, no. 8, pp. 1986–1997, 2013.
+[54] B. Chen, S. He, Z. Li, and S. Zhang, “Maximum block improvement and polynomial optimization,” SIAM
+Journal on Optimization, vol. 22, no. 1, pp. 87–107, 2012.
+[55] A. Uschmajew, “Local convergence of the alternating least squares algorithm for canonical tensor approxi-
+mation,” SIAM J. Matrix Anal. Appl., vol. 33, no. 2, pp. 639–652, 2012.
+[56] M. J. Mohlenkamp, “Musings on multilinear ﬁtting,” Linear Algebra and its Applications, vol. 438, no. 2, pp.
+834–852, 2013.
+[57] M. Razaviyayn, M. Hong, and Z.-Q. Luo, “A uniﬁed convergence analysis of block successive minimization
+methods for nonsmooth optimization,” SIAM Journal on Optimization, vol. 23, no. 2, pp. 1126–1153, 2013.
+[58] P. Paatero, “The multilinear engine: A table-driven least squares program for solving multilinear problems,
+including the n-way parallel factor analysis model,” Journal of Computational and Graphical Statistics, vol. 8,
+no. 4, pp. 854–888, Dec. 1999.
+[59] E. Acar, D. Dunlavy, T. Kolda, and M. Mørup, “Scalable tensor factorizations for incomplete data,”
+Chemometrics and Intelligent Laboratory Systems,
+vol. 106 (1),
+pp. 41–56,
+2011. [Online]. Available:
+http://www2.imm.dtu.dk/pubdb/p.php?5923
+[60] A.-H. Phan, P. Tichavsky, and A. Cichocki, “Low complexity Damped Gauss-Newton algorithms for CAN-
+DECOMP/PARAFAC,” SIAM Journal on Matrix Analysis and Applications (SIMAX), vol. 34, no. 1, pp. 126–147,
+2013.
+[61] L. Sorber, M. Van Barel, and L. De Lathauwer, “Optimization-based algorithms for tensor decompositions:
+Canonical Polyadic Decomposition, decomposition in rank-(Lr, Lr, 1) terms and a new generalization,” SIAM
+J. Optimization, vol. 23, no. 2, 2013.
+[62] V. de Silva and L.-H. Lim, “Tensor rank and the ill-posedness of the best low-rank approximation problem,”
+SIAM J. Matrix Anal. Appl., vol. 30, pp. 1084–1127, September 2008.
+[63] W. Krijnen, T. Dijkstra, and A. Stegeman, “On the non-existence of optimal solutions and the occurrence of
+“degeneracy” in the Candecomp/Parafac model,” Psychometrika, vol. 73, pp. 431–439, 2008.
+[64] M. Sørensen, L. De Lathauwer, P. Comon, S. Icart, and L. Deneire, “Canonical Polyadic Decomposition with
+orthogonality constraints,” SIAM J. Matrix Anal. Appl., vol. 33, no. 4, pp. 1190–1213, 2012.
+[65] M. Sørensen and L. De Lathauwer, “Blind signal separation via tensor decomposition with Vandermonde
+factor: Canonical polyadic decomposition,” IEEE Trans. Signal Processing, vol. 61, no. 22, pp. 5507–5519, Nov.
+2013.
+[66] G. Zhou and A. Cichocki, “Canonical Polyadic Decomposition based on a single mode blind source separa-
+tion,” IEEE Signal Processing Letters, vol. 19, no. 8, pp. 523–526, 2012.
+[67] L.-H. Lim and P. Comon, “Nonnegative approximations of nonnegative tensors,” Journal of Chemometrics,
+vol. 23, no. 7-8, pp. 432–441, 2009.
+[68] A. van der Veen and A. Paulraj, “An analytical constant modulus algorithm,” IEEE Transactions Signal Pro-
+cessing, vol. 44, pp. 1136–1155, 1996.
+[69] R. Roy and T. Kailath, “Esprit-estimation of signal parameters via rotational invariance techniques,” Acous-
+tics, Speech and Signal Processing, IEEE Transactions on, vol. 37, no. 7, pp. 984–995, 1989.
+[70] L. De Lathauwer, B. De Moor, and J. Vandewalle, “On the best rank-1 and rank-(R1, R2, . . . , RN) approxima-
+tion of higher-order tensors,” SIAM Journal of Matrix Analysis and Applications, vol. 21, no. 4, pp. 1324–1342,
+2000.
+31
+
+[71] B. Savas and L.-H. Lim, “Quasi-Newton methods on Grassmannians and multilinear approximations of ten-
+sors,” SIAM J. Scientiﬁc Computing, vol. 32, no. 6, pp. 3352–3393, 2010.
+[72] M. Ishteva, P.-A. Absil, S. Van Huffel, and L. De Lathauwer, “Best low multilinear rank approximation of
+higher-order tensors, based on the Riemannian trust-region scheme,” SIAM J. Matrix Analysis Applications,
+vol. 32, no. 1, pp. 115–135, 2011.
+[73] G. Zhou and A. Cichocki, “Fast and unique Tucker decompositions via multiway blind source separation,”
+Bulletin of Polish Academy of Science, vol. 60, no. 3, pp. 389–407, 2012.
+[74] A. Cichocki, “Generalized Component Analysis and Blind Source Separation Methods for Analyzing
+Mulitchannel Brain Signals,” in in Statistical and Process Models for Gognitive Neuroscience and Aging. Lawrence
+Erlbaum Associates, 2007, pp. 201–272.
+[75] M. Haardt, F. Roemer, and G. D. Galdo, “Higher-order SVD based subspace estimation to improve the param-
+eter estimation accuracy in multi-dimensional harmonic retrieval problems,” IEEE Trans. Signal Processing,
+vol. 56, pp. 3198 – 3213, Jul. 2008.
+[76] A. Phan and A. Cichocki, “Tensor decompositions for feature extraction and classiﬁcation of high dimen-
+sional datasets,” Nonlinear Theory and Its Applications, IEICE, vol. 1, no. 1, pp. 37–68, 2010.
+[77] L. De Lathauwer, “Decompositions of a higher-order tensor in block terms – Part I and II,” SIAM Journal
+on Matrix Analysis and Applications (SIMAX), vol. 30, no. 3, pp. 1022–1066, 2008, special Issue on Tensor
+Decompositions and Applications. [Online]. Available: http://publi-etis.ensea.fr/2008/De08e
+[78] L. De Lathauwer, “Blind separation of exponential polynomials and the decomposition of a tensor in rank-
+(Lr,Lr,1) terms,” SIAM J. Matrix Analysis Applications, vol. 32, no. 4, pp. 1451–1474, 2011.
+[79] L. De Lathauwer, “Block component analysis, a new concept for blind source separation,” in Proc. 10th Inter-
+national Conf. LVA/ICA, Tel Aviv, March 12-15,, 2012, pp. 1–8.
+[80] E. Cand`es, J. Romberg, and T. Tao, “Robust uncertainty principles: exact signal reconstruction from highly
+incomplete frequency information,” IEEE Transactions on Information Theory, vol. 52, no. 2, pp. 489–509, 2006.
+[81] E. J. Candes and T. Tao, “Near-optimal signal recovery from random projections: Universal encoding strate-
+gies?” Information Theory, IEEE Transactions on, vol. 52, no. 12, pp. 5406–5425, 2006.
+[82] D. L. Donoho, “Compressed sensing,” Information Theory, IEEE Transactions on, vol. 52, no. 4, pp. 1289–1306,
+2006.
+[83] Y. Eldar and G. Kutyniok, “Compressed Sensing: Theory and Applications,” New York: Cambridge Univ. Press,
+vol. 20, p. 12, 2012.
+[84] M. F. Duarte and R. G. Baraniuk, “Kronecker compressive sensing,” IEEE Transactions on Image Processing,
+vol. 21, no. 2, pp. 494–504, 2012.
+[85] C. Caiafa and A. Cichocki, “Computing sparse representations of multidimensional signals using Kronecker
+bases,” Neural Computaion, vol. 25, no. 1, pp. 186–220, 2013.
+[86] ——, “Multidimensional compressed sensing and their applications,” WIREs Data Mining and Knowledge
+Discovery, 2013 (accepted).
+[87] S. Gandy, B. Recht, and I. Yamada, “Tensor completion and low-n-rank tensor recovery via convex optimiza-
+tion,” Inverse Problems, vol. 27, no. 2, 2011.
+[88] M. Signoretto, Q. T. Dinh, L. De Lathauwer, and J. A. Suykens, “Learning with tensors: a framework based
+on convex optimization and spectral regularization,” Machine Learning, pp. 1–49, 2013.
+[89] L. Sorber, M. Van Barel, and L. De Lathauwer, “Tensorlab v1.0,” Feb. 2013. [Online]. Available:
+http://esat.kuleuven.be/sista/tensorlab/
+[90] N. Sidiropoulos and A. Kyrillidis, “Multi-way compressed sensing for sparse low-rank tensors,” IEEE Signal
+Processing Letters, vol. 19, no. 11, pp. 757–760, 2012.
+32
+
+[91] D. Foster, K. Amano, S. Nascimento, and M. Foster, “Frequency of metamerism in natural scenes.” Journal of
+the Optical Society of America A, vol. 23, no. 10, pp. 2359–2372, 2006.
+[92] A. Cichocki, “Era of big data processing: A new approach via tensor networks and tensor decompositions,
+(invited talk),” in Proc. of Int. Workshop on Smart Info-Media Systems in Asia (SISA2013), Nagoya, Japan, Sept.30–
+Oct.2, 2013.
+[93] R. Orus, “A Practical Introduction to Tensor Networks: Matrix Product States and Projected Entangled Pair
+States,” The Journal of Chemical Physics, 2013.
+[94] J. Salmi, A. Richter, and V. Koivunen, “Sequential unfolding SVD for tensors with applications in array signal
+processing,” IEEE Transactions on Signal Processing, vol. 57, pp. 4719–4733, 2009.
+[95] A.-H. Phan and A. Cichocki, “PARAFAC algorithms for large-scale problems,” Neurocomputing, vol. 74,
+no. 11, pp. 1970–1984, 2011.
+[96] S. K. Suter, M. Makhynia, and R. Pajarola, “Tamresh - tensor approximation multiresolution hierarchy for
+interactive volume visualization,” Comput. Graph. Forum, vol. 32, no. 3, pp. 151–160, 2013.
+[97] D. Nion and N. Sidiropoulos, “Adaptive algorithms to track the PARAFAC decomposition of a third-order
+tensor,” IEEE Trans. on Signal Processing, vol. 57, no. 6, pp. 2299–2310, Jun. 2009.
+[98] S. A. Goreinov, N. L. Zamarashkin, and E. E. Tyrtyshnikov, “Pseudo-skeleton approximations by matrices of
+maximum volume,” Mathematical Notes, vol. 62, no. 4, pp. 515–519, 1997.
+[99] C. Caiafa and A. Cichocki, “Generalizing the column-row matrix decomposition to multi-way arrays,” Linear
+Algebra and its Applications, vol. 433, no. 3, pp. 557–573, 2010.
+[100] S. A. Goreinov, “On cross approximation of multi-index array,” Doklady Math., vol. 420, no. 4, pp. 404–406,
+2008.
+[101] I. Oseledets, D. V. Savostyanov, and E. Tyrtyshnikov, “Tucker dimensionality reduction of three-dimensional
+arrays in linear time,” SIAM J. Matrix Analysis Applications, vol. 30, no. 3, pp. 939–956, 2008.
+[102] I. Oseledets and E. Tyrtyshnikov, “TT-cross approximation for multidimensional arrays,” Linear Algebra and
+its Applications, vol. 432, no. 1, pp. 70–88, 2010.
+[103] M. W. Mahoney, M. Maggioni, and P. Drineas, “Tensor-CUR decompositions for tensor-based data,” SIAM
+Journal on Matrix Analysis and Applications, vol. 30, no. 3, pp. 957–987, 2008.
+[104] R. Bro, “Multiway calibration. Multilinear PLS,” Journal of Chemometrics, vol. 10, pp. 47–61, 1996.
+[105] Q. Zhao, C. Caiafa, D. Mandic, Z. Chao, Y. Nagasaka, N. Fujii, L. Zhang, and A. Cichocki, “Higher-order
+partial least squares (HOPLS): A generalized multi-linear regression method,” IEEE Trans on Pattern Analysis
+and machine Intelligence (PAMI), vol. 35, no. 7, pp. 1660–1673, 2013.
+[106] A. Cichocki, “Tensors decompositions: New concepts for brain data analysis?” Journal of Control, Measure-
+ment, and System Integration (SICE), vol. 47, no. 7, pp. 507–517, 2011.
+[107] V. Calhoun, J. Liu, and T. Adali, “A review of group ICA for fMRI data and ICA for joint inference of imaging,
+genetic, and ERP data,” Neuroimage, vol. 45, pp. 163–172, 2009.
+[108] Y.-O. Li, T. Adali, W. Wang, and V. Calhoun, “Joint blind source separation by multiset canonical correlation
+analysis,” IEEE Transactions on Signal Processing, vol. 57, no. 10, pp. 3918 –3929, oct. 2009.
+[109] E. Acar, T. Kolda, and D. Dunlavy, “All-at-once optimization for coupled matrix and tensor factorizations,”
+CoRR, vol. abs/1105.3422, 2011.
+[110] G. Zhou, A. Cichocki, S. Xie, and D. Mandic, “Beyond Canonical Correlation Analysis:
+Common
+and
+individual
+features
+analysis,”
+IEEE
+Transactions
+on
+PAMI,
+2013.
+[Online].
+Available:
+http:
+//arxiv.org/abs/1212.3913,2012
+33
+
+[111] B. Bader, T. G. Kolda et al., “MATLAB tensor toolbox version 2.5,” Available online, Feb. 2012. [Online].
+Available: http://www.sandia.gov/∼tgkolda/TensorToolbox
+[112] G. Zhou and A. Cichocki, “TDALAB: Tensor Decomposition Laboratory,” LABSP, Wako-shi, Japan, 2013.
+[Online]. Available: http://bsp.brain.riken.jp/TDALAB/
+[113] A.-H. Phan, P. Tichavsk´y, and A. Cichocki, “Tensorbox: a matlab package for tensor decomposition,” LABSP,
+RIKEN, Japan, 2012. [Online]. Available: http://www.bsp.brain.riken.jp/∼phan/tensorbox.php
+[114] C. Andersson and R. Bro, “The N-way toolbox for MATLAB,” Chemometrics Intell. Lab. Systems, vol. 52, no. 1,
+pp. 1–4, 2000. [Online]. Available: http://www.models.life.ku.dk/nwaytoolbox
+[115] I. Oseledets, “TT-toolbox 2.2,” 2012. [Online]. Available: https://github.com/oseledets/TT-Toolbox
+[116] D. Kressner and C. Tobler, “htucker—A MATLAB toolbox for tensors in hierarchical Tucker format,”
+MATHICSE, EPF Lausanne, 2012. [Online]. Available: http://anchp.epﬂ.ch/htucker
+[117] M. Espig, M. Schuster, A. Killaitis, N. Waldren, P. W¨ahnert, S. Handschuh, and H. Auer, “Tensor Calculus
+library,” 2012. [Online]. Available: http://gitorious.org/tensorcalculus
+[118] P. Kroonenberg, “The three-mode company. A company devoted to creating three-mode software and
+promoting three-mode data analysis.” [Online]. Available: http://three-mode.leidenuniv.nl/
+[119] S. Zhe, Y. Qi, Y. Park, I. Molloy, and S. Chari, “DinTucker: Scaling up Gaussian process models on multidi-
+mensional arrays with billions of elements,” PAMI (in print) arXiv preprint arXiv:1311.2663, 2014.
+[120] K. Yilmaz and A. T. Cemgil, “Probabilistic latent tensor factorisation,” in Proc. of International Conference on
+Latent Variable analysis and Signal Separation, vol. 6365, 2010, pp. 346–353, cPCI-S.
+34

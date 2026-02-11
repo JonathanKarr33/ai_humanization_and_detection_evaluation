@@ -1,0 +1,2516 @@
+arXiv:1312.2372v2  [stat.CO]  28 Feb 2017
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+1
+Labeled Random Finite Sets and the Bayes
+Multi-Target Tracking Filter
+Ba-Ngu Vo∗, Ba-Tuong Vo†, Dinh Phung‡
+Abstract—An analytic solution to the multi-target Bayes re-
+cursion known as the δ-Generalized Labeled Multi-Bernoulli (δ-
+GLMB) ﬁlter has been recently proposed in [1]. As a sequel
+to [1], this paper details efﬁcient implementations of the δ-
+GLMB multi-target tracking ﬁlter. Each iteration of this ﬁlter
+involves an update operation and a prediction operation, both of
+which result in weighted sums of multi-target exponentials with
+intractably large number of terms. To truncate these sums, the
+ranked assignment and K-th shortest path algorithms are used
+in the update and prediction, respectively, to determine the most
+signiﬁcant terms without exhaustively computing all of the terms.
+In addition, using tools derived from the same framework, such
+as probability hypothesis density ﬁltering, we present inexpensive
+(relative to the δ-GLMB ﬁlter) look-ahead strategies to reduce
+the number of computations. Characterization of the L1-error in
+the multi-target density arising from the truncation is presented.
+Index Terms—Random ﬁnite set, marked point process, con-
+jugate prior, Bayesian estimation, target tracking.
+I. INTRODUCTION
+Multi-target ﬁltering involves the on-line estimation of an
+unknown and time-varying number of targets and their individ-
+ual states from a sequence of observations [2]–[4]. While the
+term multi-target ﬁltering is often used interchangeably with
+multi-target tracking, there is a subtle difference. In multi-
+target tracking we are also interested in the trajectories of
+the targets (indeed, real multi-target tracking systems require
+track labels). This work is concerned with a Bayesian multi-
+target ﬁltering solution that also provides estimates of target
+trajectories, hence the name multi-target tracking ﬁlter.
+The key challenges in multi-target ﬁltering/tracking include
+detection uncertainty, clutter, and data association uncer-
+tainty. To date, three major approaches to multi-target track-
+ing/ﬁltering have emerged as the main solution paradigms.
+These are, Multiple Hypotheses Tracking (MHT), [2], [5]–
+[7], Joint Probabilistic Data Association (JPDA) [2], [4], and
+Random Finite Set (RFS) [3].
+The random ﬁnite set (RFS) approach provides an ele-
+gant Bayesian formulation of the multi-target ﬁltering/tracking
+problem in which the collection of target states, referred to as
+Acknowledgement: This work is supported by the Australian Research
+Council under the Future Fellowship FT0991854 and Discovery Early Career
+Researcher Award DE120102388
+B.-N. Vo and B.-T. Vo are with the Department of Electrical and Com-
+puter Engineering, Curtin University, Bentley, WA 6102, Australia (email:
+{ba-ngu,ba-tuong}.vo@curtin.edu.au). D. Phung is with the Faculty of Sci-
+ence, Engineering & Built Environment, Deakin University, Geelong, VIC
+3220, Australia (email: dinh.phung@deakin.edu.au)
+the multi-target state, is treated as a ﬁnite set [3], [8]. The ra-
+tionale behind this representation traces back to a fundamental
+consideration in estimation theory–estimation error [9]. This
+mathematical framework subsequently became a very popular
+multi-target estimation method with applications in sonar [10],
+computer vision [11], [12], [13], [14], ﬁeld robotics [15], [16],
+[17], [18], [19] trafﬁc monitoring [20], [21], [22], cell biology
+[23], [13], [24], sensor network and distributed estimation [25],
+[26], [27], [28] etc.
+The centerpiece of the RFS approach is the Bayes multi-
+target ﬁlter [3], which recursively propagates the ﬁltering
+density of the multi-target state forward in time. This ﬁlter
+is also a (multi-target) tracker when target identities or labels
+are incorporated into individual target states. Due to the nu-
+merical complexity of Bayes multi-target ﬁlter, the Probability
+Hypothesis Density (PHD) [8], Cardinalized PHD (CPHD)
+[29], and multi-Bernoulli ﬁlters [30], [9] have been developed
+as approximations. These ﬁlters, in principle, are not multi-
+target trackers because they rest on the premise that targets
+are indistinguishable.
+In [1], [31], the notion of labeled RFSs is introduced to
+address target trajectories and their uniqueness. The key results
+include conjugate priors that are closed under the Chapman-
+Kolmogorov equation, and an analytic solution to the Bayes
+multi-target tracking ﬁlter known as the δ-generalized labeled
+multi-Bernoulli (δ-GLMB) ﬁlter. Although a simulation result
+was presented to verify the solution, speciﬁc implementation
+details were not given.
+As a sequel to [1], the aim of this paper is to complement
+its theoretical contributions with practical algorithms that will
+facilitate the development of applications in signal processing
+and related ﬁelds. In particular, we present an efﬁcient and
+highly parallelizable implementation of the δ-GLMB ﬁlter.
+Each iteration of the δ-GLMB ﬁlter involves multi-target ﬁlter-
+ing and prediction densities that are weighted sums of multi-
+target exponentials. While these sums are expressible in closed
+forms, the number of terms grows super-exponentially in time.
+Furthermore, it is not tractable to exhaustively compute all the
+terms of the multi-target densities ﬁrst and then truncate by
+discarding those deemed insigniﬁcant.
+The key innovation is the truncation of the multi-target
+densities without exhaustively computing all their components.
+The multi-target ﬁltering and prediction densities are truncated
+using the ranked assignment and K-shortest paths algorithms,
+respectively. Techniques such as PHD ﬁltering are used as
+inexpensive look-ahead strategies to drastically reduce the
+number of calls to ranked assignment and K-shortest paths
+algorithms. Moreover, we establish that truncation by discard-
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+2
+ing δ-GLMB components with small weights minimizes the
+L1 error in the multi-target density. To our best knowledge,
+this is the ﬁrst result regarding the effect of truncation on the
+multi-target probability law.
+The paper is organized as follows. Background on labeled
+RFS and the δ-GLMB ﬁlter is provided in section II. Section
+III establishes the L1-distance between a δ-GLMB density
+and its truncated version. Sections IV and V present efﬁcient
+implementations δ-GLMB ﬁlter update and prediction respec-
+tively. Section VI details the multi-target state estimation, and
+discusses look-ahead strategies to reduce the computational
+load. Numerical results are presented in Section VII and
+concluding remarks are given in Section VIII.
+II. BACKGROUND
+This section summarizes the labeled RFS formulation of
+the multi-target tracking problem and the δ-GLMB ﬁlter pro-
+posed in [1]. Labeled RFS is summarized in subsection II-A,
+followed by Bayes multi-target ﬁltering basics in subsections
+II-B, II-C and II-D. The δ-GLMB multi-target density and
+recursion are summarized in subsections II-E and II-F.
+Throughout the paper, we use the standard inner product
+notation ⟨f, g⟩≜
+R
+f(x)g(x)dx, and the following multi-
+object exponential notation hX ≜Q
+x∈X h(x), where h is
+a real-valued function, with h∅= 1 by convention. We denote
+a generalization of the Kroneker delta that takes arbitrary
+arguments such as sets, vectors, etc., by
+δY (X) ≜
+
+1, if X = Y
+0, otherwise
+,
+and the inclusion function, a generalization of the indicator
+function, by
+1Y (X) ≜
+ 1, if X ⊆Y
+0, otherwise
+.
+We also write 1Y (x) in place of 1Y ({x}) when X = {x}.
+A. Labeled RFS
+An RFS is simply a ﬁnite-set-valued random variable [32],
+[33]. In this paper we use the Finite Set Statistics (FISST)
+notion of integration/density to characterize RFSs [3], [8].
+Treatments of RFS in the context of multi-target ﬁltering can
+be found in [3], [34], [35].
+To incorporate target identity, each state x ∈X is augmented
+with a unique label ℓ∈L= {αi : i ∈N}, where N denotes
+the set of positive integers and the αi’s are distinct.
+Let L : X×L →L be the projection L((x, ℓ)) = ℓ, then a
+ﬁnite subset X of X×L has distinct labels if and only if X and
+its labels L(X) = {L(x) : x ∈X} have the same cardinality,
+i.e. δ|X|(|L(X)|) = 1. The function ∆(X) ≜δ|X|(|L(X)|) is
+called the distinct label indicator.
+Deﬁnition 1 A labeled RFS with state space X and (discrete)
+label space L is an RFS on X×L such that each realization
+has distinct labels.
+The unlabeled version of a labeled RFS is obtained by
+simply discarding the labels. Consequently, the cardinality
+distribution (the distribution of the number of objects) of a
+labeled RFS is the same as its unlabeled version.
+For the rest of the paper, single-object states are represented
+by lowercase letters (e.g. x, x), while multi-object states are
+represented by uppercase letters (e.g. X, X), symbols for
+labeled states and their distributions are bolded to distinguish
+them from unlabeled ones (e.g. x, X, π, etc.), spaces are
+represented by blackboard bold (e.g. X, Z, L, N, etc.), and
+the class of ﬁnite subsets of a space X is denoted by F(X).
+The integral of a function f :X×L →R is given by
+Z
+f(x)dx =
+X
+ℓ∈L
+Z
+X
+f((x, ℓ))dx.
+B. Bayesian Multi-target Filtering
+To incorporate target tracks in the Bayes multi-target ﬁl-
+tering framework, targets are identiﬁed by an ordered pair
+of integers ℓ= (k, i), where k is the time of birth, and
+i ∈N is a unique index to distinguish objects born at the
+same time. Figure 1 illustrates the assignment of labels to
+target trajectories. The label space for objects born at time
+k, denoted as Lk, is then {k} × N. An object born at time
+k, has state x ∈X×Lk. The label space for targets at
+time k (including those born prior to k), denoted as L0:k,
+is constructed recursively by L0:k = L0:k−1 ∪Lk. A multi-
+object state X at time k, is a ﬁnite subset of X×L0:k. Note
+that L0:k−1 and Lk are disjoint.
+VWDWHVSDFH
+WLPH
+WUDFNV
+
+
+«
+
+
+
+PXOWLWDUJHWVWDWHV
+Fig. 1. An example of label assignments. The two tracks born at time 1 are
+given labels (1,1) and (1,2), while the only track born at time 4 is given label
+(4,1). Notice also the difference between multi-target states and target tracks.
+Suppose that at time k, there are N(k) target states
+xk,1, . . . , xk,N(k), each taking values in the (labeled) state
+space X × L, and M(k) measurements zk,1, . . . , zk,M(k) each
+taking values in an observation space Z. In the random ﬁnite
+set formulation, the set of targets and observations, at time k,
+[3], [8] are treated as the multi-target state and multi-target
+observation, respectively
+Xk = {xk,1, . . . , xk,N(k)},
+Zk = {zk,1, . . . , zk,M(k)}.
+The multi-target posterior density captures all information
+on the set of target trajectories conditioned on the measure-
+ment history Z0:k = (Z0, ..., Zk), and is given recursively for
+k ≥1 by
+π0:k(X0:k|Z0:k)
+∝gk(Zk|Xk)fk|k−1(Xk|Xk−1)π0:k−1(X0:k−1|Z0:k−1),
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+3
+where X0:k = (X0, ..., Xk), gk(·|·) is the multi-target likeli-
+hood function at time k, fk|k−1(·|·) is the multi-target tran-
+sition density to time k. The multi-target likelihood function
+encapsulates the underlying models for detections and false
+alarms while the multi-target transition density encapsulates
+the underlying models of target motions, births and deaths.
+Multi-target ﬁltering is concerned with the marginal of
+the multi-target posterior density, at the current time. Let
+πk(·|Zk) denote the multi-target ﬁltering density at time k,
+and πk+1|k denote the multi-target prediction density to time
+k + 1 (formally πk and πk+1|k should be written respectively
+as πk(·|Z0:k), and πk+1|k(·|Z0:k), but for simplicity we omit
+the dependence on past measurements). Then, the multi-target
+Bayes ﬁlter propagates πk in time [3], [8] according to the
+following update and prediction
+πk(Xk|Zk) =
+gk(Zk|Xk)πk|k−1(Xk)
+R
+gk(Zk|X)πk|k−1(X)δX,
+(1)
+πk+1|k(Xk+1) =
+Z
+fk+1|k(Xk+1|Xk)πk(Xk|Zk)δXk,
+(2)
+where the integral is a set integral deﬁned for any function
+f : F(X×L) →R by
+Z
+f(X)δX =
+∞
+X
+i=0
+1
+i!
+Z
+f({x1, ..., xi})d(x1, ..., xi).
+The multi-target ﬁltering density captures all information on
+the multi-target state, such as the number of targets and their
+states, at the current time.
+For convenience, in what follows we omit explicit references
+to the time index k, and denote L ≜L0:k, B ≜Lk+1, L+≜L∪
+B, π≜πk, π+≜πk+1|k, g≜gk, f≜fk+1|k.
+C. Measurement likelihood function
+For a given multi-target state X, at time k, each state
+(x, ℓ)
+∈
+X is either detected with probability pD (x, ℓ)
+and generates a point z with likelihood g(z|x, ℓ), or missed
+with probability 1 −pD(x, ℓ). The multi-object observation
+Z = {z1, ..., z|Z|} is the superposition of the detected points
+and Poisson clutter with intensity function κ.
+Deﬁnition 2 An association map (for the current time) is a
+function θ : L →{0, 1, ..., |Z|} such that θ(i) = θ(i′) >
+0 implies i = i′. The set Θ of all such association maps is
+called the association map space. The subset of association
+maps with domain I is denoted by Θ(I).
+An association map describes which tracks generated which
+measurements, i.e. track ℓgenerates measurement zθ(ℓ) ∈Z,
+with undetected tracks assigned to 0. The condition θ(i) =
+θ(i′) > 0 implies i = i′, means that a track can generate at
+most one measurement at any point in time.
+Assuming that, conditional on X, detections are indepen-
+dent, and that clutter is independent of the detections, the
+multi-object likelihood is given by
+g(Z|X) = e−⟨κ,1⟩κZ
+X
+θ∈Θ(L(X))
+[ψZ(·; θ)]X
+(3)
+where
+ψZ(x, ℓ; θ) =
+(
+pD(x,ℓ)g(zθ(ℓ)|x,ℓ)
+κ(zθ(ℓ))
+,
+if θ(ℓ) > 0
+1 −pD(x, ℓ),
+if θ(ℓ) = 0
+(4)
+Equation (3) is equivalent to the likelihood function given by
+(54) in [1], and is more convenient for implementation.
+D. Multi-target transition kernel
+Given the current multi-object state X, each state (x, ℓ) ∈X
+either continues to exist at the next time step with probability
+pS(x, ℓ) and evolves to a new state (x+, ℓ+) with probability
+density f(x+|x, ℓ)δℓ(ℓ+), or dies with probability 1−pS(x, ℓ).
+The set of new targets born at the next time step is distributed
+according to
+fB(Y) = ∆(Y)wB(L(Y)) [pB]Y
+(5)
+where wB and pB are given parameters of the multi-target
+birth density fB, deﬁned on X×B. Note that fB(Y) = 0 if Y
+contains any element y with L(y) /∈B. The birth model (5)
+covers both labeled Poisson and labeled multi-Bernoulli [1].
+The multi-target state at the next time X+ is the superposi-
+tion of surviving targets and new born targets. Assuming that
+targets evolve independently of each other and that births are
+independent of surviving targets, it was shown in [1] that the
+multi-target transition kernel is given by
+f (X+|X) = fS(X+ ∩(X × L)|X)fB(X+ −(X × L))
+(6)
+where
+fS(W|X) = ∆(W)∆(X)1L(X)(L(W)) [Φ(W; ·)]X (7)
+Φ(W; x, ℓ) =
+
+pS(x, ℓ)f(x+|x, ℓ), if (x+, ℓ) ∈W
+1 −pS(x, ℓ),
+if ℓ/∈L(W)
+.(8)
+E. Delta-Generalized Labeled Multi-Bernoulli
+The δ-generalized labeled multi-Bernoulli ﬁlter is a solu-
+tion to the Bayes multi-target ﬁlter based on the family of
+generalized labeled multi-Bernoulli (GLMB) distributions
+π(X) = ∆(X)
+X
+ξ∈Ξ
+w(ξ)(L(X))
+h
+p(ξ)iX
+,
+where Ξ is a discrete space, each p(ξ)(·, ℓ) is a prob-
+ability density, and each w(ξ)(I)
+is
+non-negative with
+P
+(I,ξ)∈F(L)×Ξ w(ξ)(I) = 1. A GLMB can be interpreted as
+a mixture of multi-target exponentials [1]. While this family
+is closed under the Bayes recursion [1], it is not clear how
+numerical implementation can be accomplished. Fortunately,
+an alternative form of the GLMB, known as δ-GLMB
+π(X) = ∆(X)
+X
+(I,ξ)∈F(L)×Ξ
+ω(I,ξ)δI(L(X))
+h
+p(ξ)iX
+,
+(9)
+where ω(I,ξ) = w(ξ)(I), provides a representation that facil-
+itates numerical implementation. Note that the δ-GLMB can
+be obtained from the GLMB by using the identity w(ξ)(J) =
+P
+I∈F(L) w(ξ)(I)δI(J), since the summand is non-zero if and
+only if I = J.
+In the δ-GLMB initial multi-target prior
+π0(X) = ∆(X)
+X
+I∈F(L0)
+ω(I)
+0 δI(L(X))pX
+0 ,
+(10)
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+4
+each I ∈F(L0) represents a set of tracks labels born at time
+0, ω(I)
+0
+represents the weight of the hypothesis that I is the set
+of track labels at time 0, and p0(·, ℓ) is the probability density
+of the kinematic state of track ℓ∈I. For example, suppose
+that there are 2 possibilities:
+1) 0.3 chance of 1 target with label (0, 2), and density
+p0(·, (0, 2)) = N(·; m, P2),
+2) 0.7 chance of 2 targets with labels (0, 1), (0, 2)
+and respective densities p0(·, (0, 1))
+=
+N(·; 0, P1),
+p0(·, (0, 2)) = N(·; m, P2).
+Then the δ-GLMB representation is
+π0(X)=0.3δ{(0,2)}(L(X))pX
+0 + 0.7δ{(0,1),(0,2)}(L(X))pX
+0 .
+Note that the initial prior (10) is a δ-GLMB with Ξ = ∅. For δ-
+GLMB ﬁltering and prediction densities that are conditioned
+on measurements up to time k, the discrete space Ξ is the
+space of association map histories Θ0:k ≜Θ0×...×Θk, where
+Θt denotes the association map space at time t. In particular,
+as shown in [1], for each k ≥0 the ﬁltering and prediction
+densities are δ-GLMB densities:
+πk(X|Zk) = ∆(X)
+X
+(I,ξ)∈F(L0:k)×Θ0:k
+ω(I,ξ)
+k
+δI(L(X))
+h
+p(ξ)
+k (·|Zk)
+iX
+(11)
+πk+1|k(X) = ∆(X)
+X
+(I,ξ)∈F(L0:k+1)×Θ0:k
+ω(I,ξ)
+k+1|kδI(L(X))
+h
+p(ξ)
+k+1|k
+iX
+(12)
+Each I ∈F(L0:k) represents a set of track labels at time
+k, and each ξ = (θ0, ..., θk) ∈Θ0:k represents a history
+of association maps up to time k, which also contains the
+history of target labels encapsulating both births and deaths.
+The pair (I, ξ) ∈F(L0:k)×Θ0:k is called a hypothesis, and its
+associated weight ω(I,ξ)
+k
+can be interpreted as the probability
+of the hypothesis. Similarly the pair (I, ξ) ∈F(L0:k+1)×Θ0:k
+is called a prediction hypothesis, with probability ω(I,ξ)
+k+1|k.
+The densities p(ξ)
+k (·, ℓ) and p(ξ)
+k+1|k(·, ℓ) are the ﬁltering and
+prediction densities of the kinematic state of track ℓfor
+association map history ξ.
+F. Delta Generalized Labeled Multi-Bernoulli Recursion
+The δ-GLMB ﬁlter recursively propagates a δ-GLMB ﬁl-
+tering density forward in time via the Bayes update and
+prediction equations (2) and (1). Closed form solutions to the
+update and prediction of the δ-GLMB ﬁlter are given by the
+following results [1].
+Proposition 3 If the current multi-target prediction density
+is a δ-GLMB of the form (9), then the multi-target ﬁltering
+density is a δ-GLMB given by
+π(X|Z) = ∆(X)
+X
+(I,ξ)∈F(L)×Ξ
+X
+θ∈Θ(I)
+ω(I,ξ,θ)(Z)δI(L(X))
+h
+p(ξ,θ)(·|Z)
+iX
+(13)
+where Θ(I) denotes the subset of current association maps
+with domain I,
+ω(I,ξ,θ)(Z) ∝ω(I,ξ)[η(ξ,θ)
+Z
+]I,
+(14)
+η(ξ,θ)
+Z
+(ℓ) =
+D
+p(ξ)(·, ℓ), ψZ(·, ℓ; θ)
+E
+,
+(15)
+p(ξ,θ)(x, ℓ|Z) = p(ξ)(x, ℓ)ψZ(x, ℓ; θ)
+η(ξ,θ)
+Z
+(ℓ)
+,
+(16)
+Proposition 4 If the current multi-target ﬁltering density is a
+δ-GLMB of the form (9), then the multi-target prediction to
+the next time is a δ-GLMB given by
+π+(X+) = ∆(X+)
+X
+(I+,ξ)∈F(L+)×Ξ
+ω(I+,ξ)
++
+δI+(L(X+))
+h
+p(ξ)
++
+iX+
+(17)
+where
+ω(I+,ξ)
++
+= ω(ξ)
+S (I+ ∩L)wB(I+ ∩B)
+(18)
+ω(ξ)
+S (L) = [η(ξ)
+S ]L X
+I⊇L
+[1 −η(ξ)
+S ]I−Lω(I,ξ)
+(19)
+η(ξ)
+S (ℓ) =
+D
+pS(·, ℓ), p(ξ)(·, ℓ)
+E
+(20)
+p(ξ)
++ (x, ℓ) = 1L(ℓ)p(ξ)
+S (x, ℓ) + 1B(ℓ)pB(x, ℓ)
+(21)
+p(ξ)
+S (x, ℓ) =
+
+pS(·, ℓ)f(x|·, ℓ), p(ξ)(·, ℓ)
+
+η(ξ)
+S (ℓ)
+(22)
+Note from Propositions 3 and 4 that the actual value of the
+association history ξ is not used in the calculations, it is used
+merely as an indexing variable. On the other hand, the value
+of the label set I is used in the calculations.
+III. CHARACTERIZING TRUNCATION ERROR
+A δ-GLMB is completely characterized by the set of param-
+eters {(ω(I,ξ), p(ξ)) : (I, ξ) ∈F(L)×Ξ}. For implementation
+it is convenient to consider the set of δ-GLMB parameters
+as an enumeration of all hypotheses (with positive weight)
+together with their associated weights and track densities
+{(I(h), ξ(h), ω(h), p(h))}H
+h=1, as shown in Figure 2, where
+ω(h) ≜ω(I(h),ξ(h)) and p(h) ≜p(ξ(h)). Implementing the δ-
+GLMB ﬁlter then amounts to recursively propagating the set
+of δ-GLMB parameters forward in time.
+I(1) =
+I(2) =
+...
+I(h) =
+...
+{ℓ(1)
+1 , . . . , ℓ(1)
+|I(1)|}
+{ℓ(2)
+1 , . . . , ℓ(2)
+|I(2)|}
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+ξ(1)
+ξ(2)
+...
+ξ(h)
+...
+ω(1)
+ω(2)
+...
+ω(h)
+...
+p(1)(·, ℓ(1)
+1 )
+p(2)(·, ℓ(2)
+1 )
+p(h)(·, ℓ(h)
+1 )
+...
+...
+...
+...
+...
+p(1)(·, ℓ(1)
+|I(1)|)
+p(2)(·, ℓ(2)
+|I(2)|)
+p(h)(·, ℓ(h)
+|I(h)|)
+Fig. 2.
+An enumeration of a δ-GLMB parameter set with each component
+indexed by an integer h. The hypothesis for component h is (I(h), ξ(h)) while
+its weight and associated track densities are ω(h) and p(h)(·, ℓ), ℓ∈I(h).
+Since the number of hypotheses grows super-exponentially
+with time, it is necessary to reduce the number of components
+in the δ-GLMB parameter set, at each time step. A simple
+solution is to truncate the δ-GLMB density by discarding
+“insigniﬁcant” hypotheses.
+The effect of truncation on the probability law of the
+multi-target state has not been characterized even though
+this truncation is widely used in MHT and JPDA. In the
+RFS approach the probability law of the multi-target state is
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+5
+completely captured in the multi-target density. Consequently,
+the effect of discarding hypotheses in a δ-GLMB density can
+be characterized by the difference/dissimilarity between the
+untruncated and truncated δ-GLMB densities. The following
+result establishes the L1-error between a δ-GLMB density and
+its truncated version.
+Proposition 5 Let ∥f∥1 ≜
+R
+|f(X)| δX denote the L1-norm
+of f : F(X×L) →R, and for a given H ⊆F(L) × Ξ let
+fH(X) = ∆(X)
+X
+(I,ξ)∈H
+ω(I,ξ)δI(L(X))
+h
+p(ξ)iX
+be an unnormalized δ-GLMB density (i.e. does not necessarily
+integrate to 1). If T ⊆H then
+||fH −fT||1
+=
+X
+(I,ξ)∈H−T
+ω(I,ξ),
+
+fH
+||fH||1
+−
+fT
+||fT||1
+
+1
+≤
+2||fH||1 −||fT||1
+||fH||1
+,
+Proof:
+∥fH −fT∥1
+=
+Z 
+∆(X)
+X
+(I,ξ)∈H−T
+ω(I,ξ)δI(L(X))
+h
+p(ξ)iX
+
+δX
+=
+X
+(I,ξ)∈H−T
+ω(I,ξ)
+Z
+∆(X)δI(L(X))
+h
+p(ξ)iX
+δX
+=
+X
+(I,ξ)∈H−T
+ω(I,ξ) X
+L⊆L
+δI(L),
+(by Lemma 3 of [1])
+=
+X
+(I,ξ)∈H−T
+ω(I,ξ).
+Now note that ∥fH −fT∥1 = ||fH||1 −||fT||1, moreover,
+
+fH
+||fH||1
+−
+fT
+||fT||1
+
+1
+≤
+Z 
+∆(X)
+X
+(I,ξ)∈T
+ω(I,ξ)
+||fH||1
+−ω(I,ξ)
+||fT||1
+
+δI(L(X))
+h
+p(ξ)iX
+
+δX
++
+Z 
+∆(X)
+X
+(I,ξ)∈H−T
+ω(I,ξ)
+||fH||1
+δI(L(X))
+h
+p(ξ)iX
+
+δX
+=
+X
+(I,ξ)∈T
+
+ω(I,ξ)
+||fH||1
+−ω(I,ξ)
+||fT||1
+ +
+X
+(I,ξ)∈H−T
+ω(I,ξ)
+||fH||1
+= 1 −||fT||1
+||fH||1
++ ||fH||1 −||fT||1
+||fH||1
+= 2||fH||1 −||fT||1
+||fH||1
+.□
+It follows from the above result that the intuitive strategy of
+keeping δ-GLMB components with high weights and discard-
+ing those with the smallest weights minimizes the L1-error in
+the truncated multi-target density.
+In the δ-GLMB recursion, it is not tractable to exhaustively
+compute all the components ﬁrst and then discard those with
+small weights. The trick is to perform the truncation without
+having to propagate all the components.
+IV. DELTA-GLMB UPDATE
+This section presents a tractable implementation of the δ-
+GLMB update by truncating the multi-target ﬁltering density
+without computing all the hypotheses and their weights, via
+the ranked assignment algorithm. Subsection IV-A summarizes
+the ranked assignment problem in the context of truncating the
+δ-GLMB ﬁltering density. Subsection IV-B details the compu-
+tation of the updated δ-GLMB parameters and subsection IV-C
+presents the δ-GLMB update algorithm.
+A. Ranked Assignment Problem
+Note from the δ-GLMB weight update (14) that each
+hypothesis (I, ξ) with weight ω(I,ξ) generates a new set of
+hypotheses (I, (ξ, θ)), θ ∈Θ(I), with weights ω(I,ξ,θ)(Z)
+∝ω(I,ξ)[η(ξ,θ)
+Z
+]I. For a given hypothesis (I, ξ), if we can
+generate the association maps θ ∈Θ(I) in decreasing order
+of [η(ξ,θ)
+Z
+]I, then the highest weighted components can be se-
+lected without exhaustively computing all the new hypothesis
+and their weights. This can be accomplished by solving the
+following ranked assignment problem.
+Enumerating Z = {z1, ..., z|Z|}, I = {ℓ1, ..., ℓ|I|}, each
+association map θ ∈Θ(I) can be represented by an |I| × |Z|
+assignment matrix S consisting of 0 or 1 entries with every
+row and column summing to either 1 or 0. For i ∈{1, ..., |I|},
+j ∈{1, ..., |Z|}, Si,j = 1 if and only if the jth measurement
+is assigned to track ℓi, i.e. θ(ℓi) = j. An all-zero row i means
+that track ℓi is misdetected while an all-zero column j means
+that measurement zj is a false alarm. Conversion from S to θ
+is given by θ(ℓi) = P|Z|
+j=1 jδ1(Si,j).
+The cost matrix of an optimal assignment problem is the
+|I| × |Z| matrix:
+C(I,ξ)
+Z
+=
+
+
+C1,1
+· · ·
+C1,|Z|
+...
+...
+...
+C|I|,1
+· · ·
+C|I|,|Z|
+
+
+(23)
+where for i ∈{1, ..., |I|}, j ∈{1, ..., |Z|}
+Ci,j = −ln
+ 
+p(ξ)(·, ℓi), pD(·, ℓi)g(zj|·, ℓi)
+
+
+p(ξ)(·, ℓi), 1 −pD(·, ℓi)
+
+κ(zj)
+!
+(24)
+is the cost of the assigning the jth measurement to track ℓi
+(Subsection IV-B details the numerical computation of Ci,j).
+The cost of an assignment (matrix) S is the combined costs
+of every measurement to target assignments, which can be
+succinctly written as the Frobenius inner product
+tr(ST C(I,ξ)
+Z
+) =
+|I|
+X
+i=1
+|Z|
+X
+j=1
+Ci,jSi,j.
+Substituting (4) into equation (15), it follows that the cost of
+S (and the corresponding association map θ) is related to the
+ﬁltered hypothesis weight ω(I,ξ,θ)(Z) ∝ω(I,ξ)[η(ξ,θ)
+Z
+]I by
+h
+η(ξ,θ)
+Z
+iI
+= exp
+
+−tr(ST C(I,ξ)
+Z
+)
+Y
+ℓ∈I
+D
+p(ξ)(·, ℓ), 1 −pD(·, ℓ)
+E
+.
+The optimal assignment problem seeks an assignment ma-
+trix S∗(and corresponding association map θ∗) that minimizes
+the cost tr(S∗T C(I,ξ)
+Z
+) [36]. The ranked assignment problem
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+6
+seeks an enumeration of the least cost assignment matrices in
+non-decreasing order [37]. Consequently, solving the ranked
+optimal assignment problem with cost matrix C(I,ξ)
+Z
+generates,
+starting from θ∗, an enumeration of association maps θ in
+order of non-increasing [η(ξ,θ)
+Z
+]I (and weights ω(I,ξ,θ)(Z) ∝
+ω(I,ξ)[η(ξ,θ)
+Z
+]I).
+Remark: The standard ranked assignment formulation in-
+volves square cost and assignment matrices with rows and
+columns of the assignment matrix summing to 1. Ranked
+assignment problems with non-square matrices can be refor-
+mulated with square matrices by introducing dummy variables.
+The optimal assignment problem, is a well-known combi-
+natorial problem, introduced by Kuhn [36], who also proposed
+the Hungarian algorithm to solve it in polynomial time.
+Munkres further observed that it is strongly polynomial [38].
+The ranked assignment problem is a generalization to enumer-
+ate the T least cost assignments, which was ﬁrst solved by
+Murty [37]. Murty’s algorithm needs an effective bipartite as-
+signment algorithm such as Munkres [38] or Jonker-Volgenant
+[39]. In the context of multi-target tracking, ranked assignment
+algorithms with O(T |Z|4) complexity have been proposed
+for MHT in [40], [41], [42]. More efﬁcient algorithms with
+O(T |Z|3) complexity have been proposed in [44], [45], [46],
+with the latter showing better efﬁciency for large |Z|. For
+further details on ranked assignment solutions in MHT, we
+refer the reader to [2], [43].
+B. Computing update parameters
+We now detail the computation of the cost matrix C(I,ξ)
+Z
+in (23) for the ranked assignment problem and the parameters
+η(ξ,θ)
+Z
+(ℓ), p(ξ,θ)(·, ℓ|Z) of the updated δ-GLMB components.
+1) Gaussian mixture: For a linear Gaussian multi-target
+model, pD(x, ℓ) = pD, g(z|x, ℓ) = N(z; Hx, R), where
+N(·; m, P) denotes a Gaussian density with mean m and
+covariance P, H is the observation matrix, and R is the obser-
+vation noise covariance. The Gaussian mixture representation
+provides the most general setting for linear Gaussian models.
+Suppose that each single target density p(ξ)(·, ℓ) is a Gaussian
+mixture of the form
+J(ξ)(ℓ)
+X
+i=1
+w(ξ)
+i
+(ℓ)N(x; m(ξ)
+i (ℓ), P (ξ)
+i
+(ℓ)).
+(25)
+Then
+Ci,j = −ln
+ 
+pD
+PJ(ξ)(ℓi)
+k=1
+w(ξ)
+k (ℓi)q(ξ)
+k (zj; ℓi)
+(1 −pD)κ(zj)
+!
+(26)
+Moreover, for the updated association history (ξ, θ),
+η(ξ,θ)
+Z
+(ℓ) =
+J(ξ)(ℓ)
+X
+i=1
+w(ξ,θ)
+Z,i (ℓ)
+(27)
+p(ξ,θ)(x, ℓ|Z) =
+J(ξ)(ℓ)
+X
+i=1
+w(ξ,θ)
+Z,i (ℓ)
+η(ξ,θ)
+Z
+(ℓ)
+N(x; m(ξ,θ)
+Z,i (ℓ), P(ξ,θ)
+i
+(ℓ)) (28)
+where
+w(ξ,θ)
+Z,i (ℓ) = w(ξ)
+i (ℓ)
+(
+pDq(ξ)
+i (zθ(ℓ);ℓ)
+κ(zθ(ℓ))
+if θ(ℓ) > 0
+(1 −pD)
+if θ(ℓ) = 0
+q(ξ)
+i (z; ℓ) = N(z;Hm(ξ)
+i (ℓ), HP(ξ)
+i (ℓ)HT +R)
+m(ξ,θ)
+Z,i (ℓ) =
+(
+m(ξ)
+i (ℓ)+K(ξ,θ)
+i
+(ℓ)(zθ(ℓ)−Hm(ξ)
+i (ℓ)) if θ(ℓ) > 0
+m(ξ)
+i (ℓ)
+if θ(ℓ) = 0
+P (ξ,θ)
+i
+(ℓ) = [I −K(ξ,θ)
+i
+(ℓ)H]P (ξ)
+i (ℓ),
+K(ξ,θ)
+i
+(ℓ) =
+(
+P (ξ)
+i (ℓ)HTh
+HP (ξ)
+i (ℓ)HT +R
+i−1
+if θ(ℓ) > 0
+0
+if θ(ℓ) = 0
+.
+When the measurement model parameters depend on the label
+ℓ, we simply substitute pD = pD(ℓ), H = H(ℓ), R = R(ℓ)
+into the above equations.
+2) Sequential Monte Carlo: For a sequential Monte Carlo
+approximation, suppose that each of the single target den-
+sity p(ξ)(·, ℓ) is represented as a set of weighted samples
+{(w(ξ)
+n (ℓ), x(ξ)
+n (ℓ))}J(ξ)(ℓ)
+n=1
+. Then
+Ci,j = −ln
+
+
+
+
+
+J(ξ)(ℓi)
+P
+n=1
+w(ξ)
+n (ℓi)pD(x(ξ)
+n (ℓi), ℓi)g(zj|x(ξ)
+n (ℓi), ℓi)
+J(ξ)(ℓi)
+P
+n=1
+w(ξ)
+n (ℓi)(1 −pD(x(ξ)
+n (ℓi), ℓi))κ(zj)
+
+
+
+
+.
+(29)
+Moreover, for a given updated association history (ξ, θ),
+η(ξ,θ)
+Z
+(ℓ) =
+J(ξ)(ℓ)
+X
+n=1
+w(ξ)
+n (ℓ)ψZ(x(ξ)
+n (ℓ), ℓ; θ),
+(30)
+and p(ξ,θ)(·, ℓ|Z) is represented by the following set of
+weighted samples
+( 
+ψZ(x(ξ)
+n (ℓ), ℓ; θ)w(ξ)
+n (ℓ)
+η(ξ,θ)
+Z
+(ℓ)
+, x(ξ)
+n (ℓ)
+!)J(ξ)(ℓ)
+n=1
+.
+(31)
+C. Filtering Density Truncation
+Given the δ-GLMB prediction density π with enumerated
+parameter set {(I(h), ξ(h), ω(h), p(h))}H
+h=1, the δ-GLMB ﬁlter-
+ing density (13) can be written as
+π(X|Z) =
+H
+X
+h=1
+π(h)(X|Z)
+(32)
+where
+π(h)(X|Z)
+=
+∆(X)
+|Θ(I(h))|
+X
+j=1
+ω(h,j)δI(h)(L(X))
+h
+p(h,j)iX
+,
+ω(h,j)
+≜
+ω(I(h),ξ(h),θ(h,j))(Z),
+p(h,j)
+≜
+p(ξ(h),θ(h,j))(·|Z).
+Each δ-GLMB prediction component (indexed by) h generates
+Θ(I(h))
+ components for the δ-GLMB ﬁltering density.
+A simple and highly parallelizable strategy for truncating
+the ﬁltered δ-GLMB (32) is to truncate π(h)(·|Z). For each
+h = 1, ..., H, solving the ranked optimal assignment problem
+with cost matrix C(I(h),ξ(h))
+Z
+discussed in subsection IV-A
+yields θ(h,j), j = 1, ..., T (h), the T (h) hypotheses with highest
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+7
+I(1) =
+I(2) =
+...
+I(h) =
+...
+{ℓ(1)
+1 , . . . , ℓ(1)
+|I(1)|}
+{ℓ(2)
+1 , . . . , ℓ(2)
+|I(2)|}
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+ξ(1)
+ξ(2)
+...
+ξ(h)
+...
+ω(1)
+ω(2)
+...
+ω(h)
+...
+p(1)(·, ℓ(1)
+1 )
+p(2)(·, ℓ(2)
+1 )
+p(h)(·, ℓ(h)
+1 )
+...
+...
+...
+...
+...
+p(1)(·, ℓ(1)
+|I(1)|)
+p(2)(·, ℓ(2)
+|I(2)|)
+p(h)(·, ℓ(h)
+|I(h)|)
+   ❅
+❅
+   ❅
+❅
+✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭
+✏✏✏✏✏✏✏✏✏✏
+I(h) =
+I(h) =
+...
+I(h) =
+...
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+(ξ(h), θ(h,1))
+(ξ(h), θ(h,2))
+...
+(ξ(h), θ(h,j))
+...
+ω(h,1)
+ω(h,2)
+...
+ω(h,j)
+...
+p(h,1)(·, ℓ(h)
+1 )
+p(h,2)(·, ℓ(h)
+1 )
+p(h,j)(·, ℓ(h)
+1 )
+...
+...
+...
+...
+...
+p(h,1)(·, ℓ(h)
+|I(h)|)
+p(h,2)(·, ℓ(h)
+|I(h)|)
+p(h,j)(·, ℓ(h)
+|I(h)|)
+Fig. 3. δ-GLMB update. Component h of the prior generates a (large) set of
+posterior components. The ranked assignment algorithm determines the T (h)
+components with highest weights ω(h,1) ≥ω(h,2) ≥... ≥ω(h,T (h)).
+weights in non-increasing order, as illustrated in Figure 3.
+Consequently, the truncated version of π(h)(·|Z) is
+ˆπ(h)(X|Z) = ∆(X)
+T (h)
+X
+j=1
+ω(h,j)δI(h)(L(X))
+h
+p(h,j)iX
+.
+It follows from Proposition 5 that the truncated density
+ˆπ(·|Z) = PH
+h=1 ˆπ(h)(·|Z) minimizes the L1-distance from
+the ﬁltered δ-GLMB over all truncations with T (h) compo-
+nents for each h = 1, ..., H. The truncated density, with a total
+of T = PH
+h=1 T (h) components, is normalized (by the sum of
+the weights) to give the truncated ﬁltered δ-GLMB. Table 1
+summarizes the update operation via pseudo code. Note that
+both the outer and inner for-loops can be parallelized.
+Speciﬁc values for the number of requested components
+T (h) are generally user speciﬁed and application dependent. A
+generic strategy is to choose T (h) =
+
+ω(h)Jmax
+
+where Jmax
+is the desired overall number of hypotheses. The alternative
+strategy of keeping the T = Jmax strongest components of
+π(·|Z) would yield a smaller L1-error. However, in addition
+to an H-fold increase in the dimension of the resulting ranked
+assignment problem, parallelizability is lost.
+V. DELTA-GLMB PREDICTION
+This subsection presents an implementation of the δ-GLMB
+prediction using the K-shortest path algorithm to truncate
+the predicted δ-GLMB without computing all the prediction
+hypotheses and their weights.
+The prediction density given in Proposition 4 has a compact
+form but is difﬁcult to implement due to the sum over all
+supersets of L in (19). We use an equivalent form for the
+prediction, eq. (58) in [1]:
+π+(X+)
+=
+∆(X+)
+X
+(I,ξ)∈F(L)×Ξ
+ω(I,ξ) X
+J∈F(I)
+[η(ξ)
+S ]J[1 −η(ξ)
+S ]I−J
+Table 1. Update
+• input: {(I(h), ξ(h), ω(h), p(h), T (h))}H
+h=1, Z
+• output: {(I(h,j), ξ(h,j), ω(h,j), p(h,j))}(H,T (h))
+(h,j)=(1,1)
+for h = 1 : H
+C(h)
+Z
+:= C(I(h),ξ(h))
+Z
+according to (23), (26)/(29)
+{θ(h,j)}T (h)
+j=1 := ranked assignment(Z, I(h), C(h)
+Z , T (h))
+for j = 1 : T (h)
+η(h,j)
+Z
+:= η(ξ(h),θ(h,j))
+Z
+according to (27)/(30)
+p(h,j) := p(ξ(h),θ(h,j))(·|Z)
+according to (28)/(31)
+ω(h,j) := ω(h) h
+η(h,j)
+Z
+iI(h)
+I(h,j) := I(h)
+ξ(h,j) := (ξ(h),θ(h,j))
+end
+end
+normalize weights {ω(h,j)}(H,T (h))
+(h,j)=(1,1)
+×
+X
+L∈F(B)
+wB(L)δJ∪L(L(X+))
+h
+p(ξ)
++
+iX+
+,
+(33)
+Note that analogous to the update, each current hypothesis
+(I, ξ) with weight ω(I,ξ) generates a set of prediction hypothe-
+ses (J ∪L, ξ), J ⊆I, L ⊆B, with weights ω(I,ξ)
+S
+(J)wB(L),
+where
+ω(I,ξ)
+S
+(J) = ω(I,ξ)[η(ξ)
+S ]J[1 −η(ξ)
+S ]I−J
+(34)
+Intuitively, each predicted label set J ∪L consists of a
+surviving label set J with weight ω(I,ξ)
+S
+(J) and a birth label set
+L with weight wB(L). The weight ω(I,ξ)
+S
+(J) can be interpreted
+as the probability that the current label set is I, and the labels
+in J survives to the next time while the remaining labels I −J
+die. The birth label set L and the surviving label set J are
+mutually exclusive since the space of new labels B cannot
+contain any existing labels. Since the weight of J ∪L is the
+product ω(I,ξ)
+S
+(J)wB(L),
+we can truncate the double sum
+over J and L by separately truncating the sum over J and the
+sum over L.
+Subsection V-A discusses the K-shortest paths problem in
+the context of truncating the δ-GLMB prediction. Subsection
+V-B details the computation of the prediction δ-GLMB pa-
+rameters and subsection V-C presents the δ-GLMB prediction
+algorithm.
+A. K-Shortest Paths Problem
+Consider a given hypothesis (I, ξ), and note that the weight
+of a surviving label set J ⊆I can be rewritten as
+ω(I,ξ)
+S
+(J) = ω(I,ξ)[1 −η(ξ)
+S ]I
+"
+η(ξ)
+S
+1 −η(ξ)
+S
+#J
+If we can generate the surviving label sets J
+⊆
+I in
+non-increasing order of [η(ξ)
+S /(1 −η(ξ)
+S )]J, then the highest
+weighted survival sets for hypothesis (I, ξ) can be selected
+without exhaustively computing all the survival hypotheses
+weights. This can be accomplished by solving the K-shortest
+path problem in the directed graph of Figure 4.
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+8
+( , )
+1
+( )
+I
+C
+  
+1 
+2 
+( , )
+2
+( )
+I
+C
+  
+S
+0
+.
+.
+.
+E
+0
+( , )
+| |
+(
+)
+I
+I
+C
+  
+| |I 
+Fig. 4. A directed graph with nodes ℓ1,...,ℓ|I| ∈I, and corresponding costs
+C(I,ξ)(ℓ1),...,C(I,ξ)(ℓ|I|). S and E are the start and end nodes respectively.
+Deﬁne a cost vector C(I,ξ) =
+
+C(I,ξ)(ℓ1), ..., C(I,ξ)(ℓ|I|)
+
+,
+where
+C(I,ξ)(ℓj) = −ln
+"
+η(ξ)
+S (ℓj)
+1 −η(ξ)
+S (ℓj)
+#
+(35)
+is the cost of node ℓj ∈I (the numerical computation of
+C(I,ξ)(ℓj) is detailed in Subsection V-B). The nodes are
+ordered in non-decreasing costs and the distance from node
+ℓj to ℓj′ is deﬁned as
+d(ℓj, ℓj′) =
+
+C(I,ξ)(ℓj′),
+if j′ > j
+∞,
+otherwise
+Hence, a path from S to E which traverses the set of nodes
+J ⊆I accumulates a total distance of
+X
+ℓ∈J
+C(I,ξ)(ℓ)
+=
+−
+X
+ℓ∈J
+ln
+
+η(ξ)
+S (ℓ)/(1 −η(ξ)
+S (ℓ))
+
+=
+−ln
+
+[η(ξ)
+S (ℓ)/(1 −η(ξ)
+S (ℓ)]J
+.
+The shortest path from S to E traverses the set of nodes
+J∗⊆I with the shortest distance P
+ℓ∈J∗C(I,ξ)(ℓ) and hence
+largest [η(ξ)
+S /(1 −η(ξ)
+S )]J∗. The K-shortest paths problem
+seeks K subsets of I with the shortest distances in non-
+decreasing order. Consequently, solving the K-shortest path
+problem generates, starting from J∗, an enumeration of subsets
+J of I in order of non-increasing [η(ξ)
+S /(1 −η(ξ)
+S )]J.
+For the target births we use a labeled multi-Bernoulli birth
+model where
+wB(L)
+=
+Y
+ℓ∈B
+
+1 −r(ℓ)
+B
+ Y
+ℓ∈L
+1B(ℓ)r(ℓ)
+B
+1 −r(ℓ)
+B
+,
+pB(x, ℓ)
+=
+p(ℓ)
+B (x).
+Thus, solving the K-shortest paths problem with cost vector
+CB =
+
+CB(ℓ1), ..., CB(ℓ|B|)
+
+, where
+CB(ℓj) = −ln
+h
+r(ℓj)
+B
+/(1 −r(ℓj)
+B
+)
+i
+(36)
+is the cost of node ℓj, yields the subsets of B with the best
+birth weights.
+Remark: It is possible to obtain the overall K best compo-
+nents by extending the directed graphs to include birth nodes
+with appropriate costs. However, our experience indicated that
+since the birth weights wB(L) are quite small compared to
+surviving weights ω(I,ξ)
+S
+(J), many components with births
+will be discarded and new births may not detected by the
+ﬁlter. To avoid dropping new tracks, a very large K is
+required to retain hypothesis with births. On the other hand
+the proposed separate truncation strategy ensures that there
+are hypotheses with births to accommodate new tracks, and is
+highly parallelizable.
+The K-shortest paths algorithm is a well-known solution
+to the combinatorial problem of ﬁnding the K paths with
+minimum total cost from a given source to a given destination
+in a weighted network [47]. This problem can be solved with
+complexity O (|I| log(|I|) + K). In our case the nodes have
+negative values, hence the Bellman-Ford algorithm [48], [49]
+was employed. This problem can also be solved by ranked
+assignment algorithms, however K-shortest paths algorithm is
+much more efﬁcient. Note that the ranking of the association
+maps cannot be formulated as the K-shortest path problem,
+due to the constraint that each target can only generate at most
+one measurement.
+B. Computing prediction parameters
+This subsection details the computation of the parameters
+η(ξ)
+S (ℓ) and p(ξ)
++ (·, ℓ) of the prediction δ-GLMB components.
+1) Gaussian mixture: For a linear Gaussian multi-target
+model, pS(x, ℓ) = pS, f(x+|x, ℓ) = N(x+; Fx, Q), where F
+is the state transition matrix, Q is the process noise covariance
+and the birth density parameter p(ℓ)
+B (x) is a Gaussian mixture.
+If the single target density p(ξ)(·, ℓ) is a Gaussian mixture of
+the form (25). Then,
+η(ξ)
+S (ℓ) = pS,
+(37)
+p(ξ)
++ (x, ℓ) = 1L(ℓ)
+J(ξ)(ℓ)
+X
+i=1
+w(ξ)
+i (ℓ)N(x; m(ξ)
+S,i(ℓ), P (ξ)
+S,i (ℓ))+1B(ℓ)p(ℓ)
+B (x)
+(38)
+where
+m(ξ)
+S,i(ℓ)
+=
+Fm(ξ)
+i (ℓ),
+P (ξ)
+S,i (ℓ)
+=
+Q + FP (ξ)
+i
+(ℓ)F T .
+When the motion model parameters depend on the label ℓ,
+we simply substitute pS = pS(ℓ), F = F(ℓ), Q = Q(ℓ)
+into the above equations. With η(ξ)
+S (ℓ) evaluated, the node
+cost C(I,ξ)(ℓ) for the K-shortest paths problem can then be
+computed by (35).
+2) Sequential Monte Carlo:
+For a sequential Monte
+Carlo approximation, suppose that each single target den-
+sity p(ξ)(·, ℓ) is represented as a set of weighted sample
+{(w(ξ)
+i
+(ℓ), x(ξ)
+i (ℓ))}J(ξ)(ℓ)
+i=1
+and that the birth density p(ℓ)
+B (·) is
+represented by {(w(ξ)
+B,i(ℓ), x(ξ)
+B,i(ℓ))}B(ξ)(ℓ)
+i=1
+. Then,
+η(ξ)
+S (ℓ) =
+J(ξ)(ℓ)
+X
+i=1
+w(ξ)
+i
+(ℓ)pS(x(ξ)
+i (ℓ), ℓ)
+(39)
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+9
+and p(ξ)
++ (x, ℓ) is represented by
+n
+(1L(ℓ) ˜w(ξ)
+S,i(ℓ), x(ξ)
+S,i(ℓ))
+oJ(ξ)(ℓ)
+i=1
+∪
+n
+(1B(ℓ)w(ξ)
+B,i(ℓ), x(ξ)
+B,i(ℓ))
+oB(ξ)(ℓ)
+i=1
+,
+(40)
+where
+x(ξ)
+S,i(ℓ) ∼q(ξ)(·|x(ξ)
+i (ℓ), ℓ, Z), i = 1, ..., J(ξ)(ℓ),
+w(ξ)
+S,i(ℓ) =
+w(ξ)
+i
+(ℓ)f(x(ξ)
+S,i(ℓ)|x(ξ)
+i (ℓ))pS(x(ξ)
+i (ℓ), ℓ)
+q(ξ)(x(ξ)
+S,i(ℓ)|x(ξ)
+i (ℓ), ℓ, Z)
+,
+˜w(ξ)
+S,i(ℓ) =
+w(ξ)
+S,i(ℓ)
+PJ(ξ)(ℓ)
+i=1
+w(ξ)
+S,i(ℓ)
+,
+and q(ξ)(·|x(ξ)
+i (ℓ), ℓ, Z) is a proposal density.
+C. Prediction Density Truncation
+Given the current δ-GLMB ﬁltering density π(·|Z) with
+enumerated parameter set {(I(h), ξ(h), ω(h), p(h))}H
+h=1, then
+the δ-GLMB prediction (33) becomes
+π+(X+) =
+H
+X
+h=1
+π(h)
++ (X+),
+where
+π(h)
++ (X+) =
+∆(X+)
+X
+J⊆I(h)
+X
+L⊆B
+ω(I(h),ξ(h))
+S
+(J)wB(L)δJ∪L(L(X+))
+h
+p(ξ(h))
++
+iX+
+.
+The δ-GLMB ﬁltered component (indexed by) h generates
+2|I(h)|+|B|components for the δ-GLMB prediction.
+I(1) =
+I(2) =
+...
+I(h) =
+...
+{ℓ(1)
+1 , . . . , ℓ(1)
+|I(1)|}
+{ℓ(2)
+1 , . . . , ℓ(2)
+|I(2)|}
+{ℓ(h)
+1 , . . . , ℓ(h)
+|I(h)|}
+ξ(1)
+ξ(2)
+...
+ξ(h)
+...
+ω(1)
+ω(2)
+...
+ω(h)
+...
+p(1)(·, ℓ(1)
+1 )
+p(2)(·, ℓ(2)
+1 )
+p(h)(·, ℓ(h)
+1 )
+...
+...
+...
+...
+...
+p(1)(·, ℓ(1)
+|I(1)|)
+p(2)(·, ℓ(2)
+|I(2)|)
+p(h)(·, ℓ(h)
+|I(h)|)
+   ❅
+❅
+   ❅
+❅
+✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭✭
+✘✘✘✘✘✘✘✘✘✘✘✘✘✘
+J(h,1) =
+J(h,2) =
+...
+J(h,j) =
+...
+{ℓ(h,1)
+1
+, . . . , ℓ(1)
+|J(h,1)|}
+{ℓ(h,2)
+1
+, . . . , ℓ(h,2)
+|J(h,2)|}
+{ℓ(h,j)
+1
+, . . . , ℓ(h,j)
+|J(h,j)|}
+ξ(h)
+ξ(h)
+...
+ξ(h)
+...
+ω(h,1)
+S
+ω(h,2)
+S
+...
+ω(h,j)
+S
+...
+p(h)
+S (·, ℓ(h,1)
+1
+)
+p(h)
+S (·, ℓ(h,2)
+1
+)
+p(h)
+S (·, ℓ(h,j)
+1
+)
+...
+...
+...
+...
+...
+p(h)
+S (·, ℓ(h,1)
+|J(h,1)|)
+p(h)
+S (·, ℓ(h,2)
+|J(h,2)|)
+p(h)
+S (·, ℓ(h,j)
+|J(h,j)|)
+Fig. 5.
+Prediction of survival components. Component h of the prior,
+generates all subsets of I(h) , i.e. J(h,j), j = 1,..., 2|I(h)| with weights
+ω(h,j)
+S
+≜ω(I(h),ξ(h))
+S
+(J(h,j)). The K-shortest paths algorithm determines
+the K(h) subsets with largest weights ω(h,1)
+S
+≥ω(h,2)
+S
+≥... ≥ω(h,K(h))
+S
+.
+A simple and highly parallelizable strategy for truncating
+the prediction δ-GLMB π+ is to truncate each π(h)
++
+as follows.
+For each h = 1, ..., H, we solve the K-shortest paths problem
+Table 2. Prediction
+• input: {(I(h), ξ(h), ω(h), p(h), K(h))}H
+h=1
+• input: KB, {(r(ℓ)
+B , p(ℓ)
+B )}ℓ∈B,
+• output {(I(h,j,b)
++
+, ω(h,j,b)
++
+, p(h)
++ )}(H,K(h),KB)
+(h,j,b)=(1,1,1)
+compute CB according to (36)
+{L(b)}KB
+b=1 := k shortest path(B, CB, KB)
+for b = 1 : KB
+ω(b)
+B :=
+Q
+ℓ∈L(b) r(ℓ)
+B
+Q
+ℓ∈B−L(b)
+h
+1 −r(ℓ)
+B
+i
+end
+for h = 1 : H
+η(h)
+S
+:= η(ξ(h))
+S
+according to (37)/(39)
+C(h) := C(I(h),ξ(h)) according to (35)
+{J(h,j)}K(h)
+j=1
+:= k shortest path(I(h), C(h), K(h))
+for (j, b) = (1, 1) : (K(h), KB)
+I(h,j,b)
++
+:= J(h,j) ∪L(b)
+ω(h,j,b)
++
+:= ω(h) h
+η(h)
+S
+iJ(h,j) h
+1 −η(h)
+S
+iI(h)−J(h,j)
+ω(b)
+B
+end
+p(h)
++
+:= p(ξ(h))
++
+according to (38)/(40)
+end
+normalize weights {ω(h,j,b)
++
+}(H,K(h),KB)
+(h,j,b)=(1,1,1)
+with cost vector C(I(h),ξ(h)) to obtain J(h,j), j = 1, ..., K(h),
+the K(h) subsets of I(h) with highest survival weights as
+depicted in Figure 5. We also solve the K-shortest paths
+problem with cost vector CB to obtain L(b), b = 1, ..., KB,
+the KB birth subsets with highest birth weights. Consequently
+for each h, the truncated version of π(h)
++
+is
+ˆπ(h)
++ (X+)=∆(X+)
+K(h)
+X
+j=1
+KB
+X
+b=1
+ω(h,j,b)
++
+δJ(h,j)∪L(b)(L(X+))
+h
+p(h)
++
+iX+
+,
+where
+ω(h,j,b)
++
+≜
+ω(I(h),ξ(h))
+S
+(J(h,j))wB(L(b))
+p(h)
++
+≜
+p(ξ(h))
++
+.
+Since the weights of the (untruncated) prediction density
+sum to 1, it follows from Proposition 5 that the resulting
+truncated density ˆπ+ = PH
+h=1 ˆπ(h)
++ , which has a total of
+T = KB
+PH
+h=1 K(h) components, incurs an L1 truncation
+error of
+1 −
+H
+X
+h=1
+K(h)
+X
+j=1
+KB
+X
+b=1
+ω(h,j,b)
++
+.
+Moreover, the truncated density minimizes the L1-distance
+from the predicted δ-GLMB over all truncations with K(h)
+components for each h = 1, ..., H, and KB components for the
+births. The ﬁnal expression for the approximation is obtained
+by normalizing the truncated density. Table 2 shows the pseudo
+code for the prediction operation. Note that all three for-loops
+can be implemented in parallel.
+Speciﬁc values for the number of requested components
+K(h) and KB are generally user speciﬁed and application de-
+pendent. A generic strategy is to choose K(h) =
+
+ω(h)Jmax
+
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+10
+where Jmax is the desired overall number of hypotheses,
+and to choose KB such that the resulting truncation captures
+a desired proportion (say 99%) of the probability mass of
+the birth density. The alternative strategy of keeping the
+T = Jmax strongest components of π+ would yield a smaller
+L1-error than the proposed strategy. However, in addition to
+an (H + KB)-fold increase in the dimension of the resulting
+problem, parallelizability is lost.
+Remark: As noted previously, the actual value of the asso-
+ciation history ξ(h) is not needed in the update and prediction
+calculations, it is used merely as an index for the track density
+p(ξ(h)). Since the track density is now equivalently indexed by
+h, i.e. p(h) ≜p(ξ(h)), in practice it is not necessary to propagate
+ξ(h). Nonetheless, for clarity of exposition we have retained
+ξ(h) in the update and prediction pseudo codes.
+VI. DELTA GLMB FILTER
+The main steps of the δ-GLMB ﬁlter algorithm is summa-
+rized in the following pseudo code:
+Main Loop (Filter)
+for k = 1 : K
+Prediction
+Update
+Compute State Estimates
+end
+In Subsection VI-A we describe the multi-target state esti-
+mation process in the “Compute State Estimate” module. Sub-
+section VI-B presents look-ahead strategies to reduce number
+of calls to the ranked optimal assignment and K-shortest paths
+algorithms.
+A. Multi-target state estimation
+Given a multi-target ﬁltering density, several multi-target
+state estimators are available. The Joint Multi-object Estimator
+and Marginal Multi-object Estimator are Bayes optimal, but
+difﬁcult to compute [3]. A simple and intuitive multi-target
+estimator for a δ-GLMB density is the multi-Bernoulli esti-
+mator, which selects the set of tracks or labels L ⊆L with
+existence probabilities above a certain threshold, and for the
+states of the tracks, the maximum a posteriori (MAP) or the
+mean estimates from the densities p(ξ)(·, ℓ), ℓ∈L. From [1],
+the existence probability of track ℓis given by the sum of the
+weights of all hypotheses containing track ℓ:
+X
+(I,ξ)∈F(L)×Ξ
+ω(I,ξ)1I(ℓ).
+An alternative multi-target estimate is the MAP or the mean
+estimate of the states of the hypothesis with the highest weight.
+In this work we use a suboptimal but tractable version
+of the Marginal Multi-object Estimator by ﬁnding the MAP
+cardinality estimate from the cardinality distribution [1]:
+ρ(n) =
+X
+(I,ξ)∈Fn(L)×Ξ
+ω(I,ξ),
+Table 3. Compute State Estimate
+• input: Nmax, {(I(h,j), ξ(h,j), ω(h,j), p(h,j))}(H,T (h))
+(h,j)=(1,1)
+• output: ˆX
+ρ(n) := PH
+h=1
+PT (h)
+j=1 ω(h,j)δn(|I(h,j)|) ; n = 0, ..., Nmax
+ˆN := arg max ρ
+(ˆh, ˆ) := arg max(h,j) ω(h,j)δ ˆ
+N(|I(h,j)|)
+ˆX : = {(x, ℓ) : ℓ∈I(ˆh,ˆ), x =
+Z
+yp(ˆh,ˆ)(y, ℓ)dy}
+where Fn(L) denotes the class of ﬁnite subsets of L with
+exactly n elements. We then ﬁnd the labels and the mean
+estimates of the states from the highest weighted component
+that has the same cardinality as the MAP cardinality estimate.
+Table 3 shows the pseudo code for the multi-target state
+estimation
+B. PHD look-ahead
+In this subsection we use the PHD/CPHD update and
+prediction [8], [29], [50]–[52] to look-ahead and identify
+the prediction/update components that generate signiﬁcant
+updated/predicted components. This is analogous to the idea
+of using a measurement driven proposal in the particle ﬁlter,
+to guide particles towards important areas of the state space
+[53], [54].
+Recall that each prediction component generates a set of
+update components. Typically, more than 90% of the best
+predicted components generate update components with neg-
+ligible weights. Since updating is expensive, it is important to
+minimize the number of prediction components to be updated
+(and hence the number of calls to the ranked assignment
+algorithm). Knowing in advance which prediction components
+would generate signiﬁcant update components will save sub-
+stantial computations. Similarly, further saving in computa-
+tions can be achieved by knowing in advance which update
+components would generate signiﬁcant prediction components.
+The PHD/CPHD ﬁlter is a good approximation to the multi-
+target Bayes ﬁlter and is inexpensive compared to the δ-GLMB
+update. Moreover, integration of the PHD ﬁlter within the δ-
+GLMB ﬁlter is seamless as both ﬁlters are developed from
+the same RFS framework. Indeed, the PHD of (the unlabeled
+version of) a δ-GLMB of the form (9) is given by [1]:
+v(x) =
+X
+(I,ξ)∈F(L)×Ξ
+v(I,ξ)(x)
+where
+v(I,ξ)(x)=
+X
+ℓ∈I
+ω(I,ξ)p(ξ)(x, ℓ).
+is the PHD of hypothesis (I, ξ). Assuming that the detection
+probability and single measurement likelihood do not depend
+on the labels, the updated PHD is given by (see [8], [50], [51])
+v(x|Z) =
+X
+(I,ξ)∈F(L)×Ξ
+ˆv(I,ξ)(x|Z),
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+11
+where the constituent updated PHD ˆv(I,ξ)(·|Z) due to hypoth-
+esis (I, ξ) is given by
+ˆv(I,ξ)(x|Z) = (1 −pD(x))v(I,ξ)(x)
++
+X
+z∈Z
+pD(x)g(z|x)v(I,ξ)(x)
+κ(z) +
+P
+(I,ξ)∈F(L)×Ξ
+
+pDg(z|·), v(I,ξ),
+Note that ˆv(I,ξ)(·|Z) is not the same as the updated PHD of
+v(I,ξ) given by
+v(I,ξ)(x|Z) = (1 −pD(x))v(I,ξ)(x)
++
+X
+z∈Z
+pD(x)g(z|x)v(I,ξ)(x)
+κ(z) +
+
+pD(x)g(z|x), v(I,ξ)(x)
+.
+The
+ratio
+of
+the
+constituent
+updated
+PHD
+mass
+R
+ˆv(I,ξ)(x|Z)dx to the total updated PHD mass
+R
+v(x|Z)dx
+can be thought of as a selection criteria and is a good indicator
+of the signiﬁcance of hypothesis (I, ξ) after the update. A
+higher score indicates a greater signiﬁcance. The proposed
+look-ahead strategy selects prediction hypotheses with highest
+constituent updated PHD masses that together makes up most
+(say 95%) of the total updated PHD mass. These PHD masses
+can be readily computed with O(|Z|) complexity, using SMC
+[50] or Gaussian mixtures [51]. Further improvement can be
+achieved by replacing the PHD update with the CPHD update
+with O(|Z|3) complexity [29], [52]. Note that the δ-GLMB
+update can reuse the computations in the PHD/CPHD update
+such as the Kalman gain and other variables.
+A similar strategy can be employed to identify updated com-
+ponents that generates weak prediction hypotheses. Using the
+constituent predicted PHD masses as the selection criterion,
+we select updated hypotheses whose combined predicted PHD
+mass makes up most of the total predicted PHD mass.
+A parallelizable look-ahead strategy can be formulated
+using the updated PHD v(I,ξ)(·|Z). The relative cardinality
+error
+R
+v(I,ξ)(x|Z)dx −|I|
+ /|I| of hypothesis (I, ξ) is a
+measure of how well it explains the observed data Z, and
+is a possible selection criterion. Additional selection criteria
+are possible with the CPHD update since the cardinality
+distribution is available. Consider the PHD v(I,ξ) of hypoth-
+esis (I, ξ) and a Poisson cardinality distribution ρ(I,ξ) with
+mean
+R
+v(I,ξ)(x)dx. If hypothesis (I, ξ) explains the observed
+data well, then the CPHD updated cardinality distribution
+ρ(I,ξ)(·|Z) should be close to δ|I|. Hence, a possible se-
+lection criterion is the Kullback-Leibler divergence between
+ρ(I,ξ)(·|Z) and δ|I|. In both cases a lower score indicates a
+greater signiﬁcance for hypothesis (I, ξ) after the update.
+Regardless of the particular look ahead strategy used, the
+selection criterion yields an unnormalized score for each
+hypothesis or component, which generally indicates how well
+the component explains the observed data. Thus for implemen-
+tation a normalized score for each component can be derived
+such that a higher score indicates a better ﬁt. A generic method
+for setting T (h) is then to choose its value to be proportional
+to the normalized score for component (I(h), ξ(h)) and the
+desired overall number of components Jmax.
+VII. NUMERICAL EXAMPLE
+A non-linear example has been presented in [1]. In this
+section, we compare the performance of the δ-GLMB and
+CPHD ﬁlters with a linear Gaussian example and hence Gaus-
+sian mixture implementation. A typical scenario is employed
+to highlight the susceptibility of the CPHD ﬁlter to the so
+called “spooky effect” [55]. The term spooky effect refers
+to phenomenon where the CPHD ﬁlter encounters a missed
+detection for a particular track and signiﬁcantly reduces the
+weight of the undetected track by shifting part of its mass to
+other targets. The δ-GLMB ﬁlter is generally immune to the
+spooky effect since it does not use an i.i.d. approximation of
+the ﬁltering density and hence cannot shift the probability mass
+of individual tracks between each other. Furthermore the δ-
+GLMB ﬁlter is generally able to correct for CPHD look ahead
+errors, since the weights of the CPHD-generated hypotheses
+are computed exactly from the δ-GLMB update.
+Consider a set of multi-target trajectories on the two dimen-
+sional region [−1000, 1000]m × [−1000, 1000]m, as shown
+in Figure 6. The duration of the scenario is K = 100s. All
+targets travel in straight paths and with different but constant
+velocities. The number of targets is time varying due to births
+and deaths. There is a crossing of 3 targets at the origin
+at time k = 20, and a crossing of two pairs of targets at
+position (±300, 0) at time k = 40. The targets also become
+more dispersed as the time increases in order to elucidate the
+estimation errors caused by the spooky effect.
+-1000 -800 -600 -400 -200
+0
+200
+400
+600
+800 1000
+-1000
+-800
+-600
+-400
+-200
+0
+200
+400
+600
+800
+1000
+x coordinate (m)
+y coordinate (m)
+Fig. 6.
+Multiple trajectories in the xy plane. Start/Stop positions for each
+track are shown with ◦/△. Targets become more dispersed with increasing
+time.
+The kinematic target state is a vector of planar position
+and velocity xk = [ px,k, py,k, ˙px,k, ˙py,k ]T . Measurements are
+noisy vectors of planar position only zk = [ zx,k, zy,k ]T . The
+single-target state space model is linear Gaussian according
+to transition density fk|k−1(xk|xk−1) = N(xk; Fkxk−1, Qk)
+and likelihood gk(zk|xk) = N(zk; Hkxk, Rk) with parameters
+Fk =
+I2
+∆I2
+02
+I2
+
+Qk = σ2
+ν
+"
+∆4
+4 I2
+∆3
+2 I2
+∆3
+2 I2
+∆2I2
+#
+Hk =
+I2
+02
+
+Rk = σ2
+εI2
+where In and 0n denote the n × n identity and zero matrices
+respectively, ∆= 1s is the sampling period, σν = 5m/s2
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+12
+and σε = 10m are the standard deviations of the process
+noise and measurement noise. The survival probability is
+pS,k = 0.99 and the birth model is a Labeled Multi-Bernoulli
+RFS with parameters πB = {r(i)
+B , p(i)
+B }3
+i=1 where r(i)
+B = 0.04
+and p(i)
+B (x) = N(x; m(i)
+B , PB) with m(1)
+B
+= [ 0, 0, 100, 0 ]T ,
+m(2)
+B
+= [ −100, 0, −100, 0 ]T , m(3)
+B
+= [ 100, 0, −100, 0 ]T ,
+PB = diag([ 10, 10, 10, 10 ]T )2. The detection probability
+is pD,k = 0.88 and clutter follows a Poisson RFS with an
+average intensity of λc = 1.65×10−5 m−2 giving an average
+of 66 false alarms per scan.
+The δ-GLMB ﬁlter is capped to 10000 components and is
+coupled with the parallel CPHD look ahead strategy described
+in the previous section. The CPHD ﬁlter is similarly capped to
+10000 components through pruning and merging of mixture
+components. Results are shown over 100 Monte Carlo trials.
+Figures 7 and 8 show the mean and standard deviation of the
+estimated cardinality versus time. Figures 9 and 10 show the
+Optimal Sub-Pattern Assignment (OSPA) distance [56] and
+its localization and cardinality components for c = 100m and
+p = 1.
+It can be seen that both ﬁlters estimate the target cardinal-
+ity accurately, with the δ-GLMB exhibiting better estimated
+cardinality variance. However the δ-GLMB ﬁlter signiﬁcantly
+outperforms the CPHD ﬁlter on the overall miss distance.
+Examination of the localization and cardinality components
+reveals that the δ-GLMB ﬁlter outperforms the CPHD ﬁlter
+on both components. The improved cardinality performance is
+attributed mainly due to a lower estimated cardinality variance.
+The improved localization performance is attributed to two
+factors: (a) the spooky effect causes CPHD ﬁlter to temporarily
+drop tracks which are subjected to missed detections and to
+declare multiple estimates for existing tracks in place of the
+dropped tracks, and (b) the δ-GLMB ﬁlter is generally able to
+better localize targets due to a more accurate propagation of
+the ﬁltering density.
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+0
+2
+4
+6
+8
+10
+Time
+Cardinality Statistics
+ 
+ 
+True
+GLMB Est
+Std
+Fig. 7. Cardinality statistics for δ-GLMB ﬁlter (100 Monte Carlo trials)
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+0
+2
+4
+6
+8
+10
+Time
+Cardinality Statistics
+ 
+ 
+True
+CPHD Est
+Std
+Fig. 8. Cardinality statistics for CPHD ﬁlter (100 Monte Carlo trials)
+VIII. CONCLUDING REMARKS
+This paper detailed the ﬁrst implementation of the δ-GLMB
+multi-target tracking ﬁlter that is general enough to accom-
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+0
+20
+40
+60
+80
+100
+Time
+OSPA (m)(c=100, p=1)
+ 
+ 
+CPHD
+GLMB
+Fig. 9.
+OSPA distance for δ-GLMB and CPHD ﬁlters (100 Monte Carlo
+trials)
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+0
+20
+40
+60
+80
+100
+Time
+OSPA Loc (m)(c=100, p=1)
+ 
+ 
+10
+20
+30
+40
+50
+60
+70
+80
+90
+100
+0
+20
+40
+60
+80
+100
+Time
+OSPA Card (m)(c=100, p=1)
+ 
+ 
+CPHD
+GLMB
+Fig. 10. OSPA components for δ-GLMB and CPHD ﬁlters (100 Monte Carlo
+trials)
+modate unknown and time-varying number of targets, non-
+linear target dynamics, non-uniform probability of detection
+and clutter intensity. A salient feature of this implementation
+is the high parallelizability. The key innovation lies in the
+truncation of δ-GLMB densities without exhaustive computa-
+tion of all the components and the integration of PHD look-
+ahead to reduce the number of computations. Furthermore, it is
+established that truncation of a δ-GLMB density by keeping
+the highest weighted components minimizes the L1-error in
+the multi-target densities.
+It is also of interest to examine information theoretic cri-
+teria, such as the Kullback-Leibler divergence, for δ-GLMB
+truncation/approximation. Implementations using other multi-
+target ﬁlters (in place of the ranked assignment algorithm) to
+generate the signiﬁcant δ-GLMB components can be explored
+to reduce numerical complexity. Approximation of δ-GLMB
+by other families, for example the labeled multi-Bernoulli–a
+GLMB with only one term [57]–is another venue for further
+work.
+REFERENCES
+[1] B.-T. Vo, and B.-N. Vo, “Labeled Random Finite Sets and multi-object
+conjugate priors,” IEEE Trans. Signal Processing, Vol. 61, No. 13, pp.
+3460–3475, 2013.
+[2] S. Blackman and R. Popoli, Design and Analysis of Modern Tracking
+Systems, Artech House, 1999.
+[3] R. Mahler, Statistical
+Multisource-Multitarget
+Information Fusion,
+Artech House, 2007.
+[4] Y. Bar-Shalom, P. K. Willett, and X. Tian, Tracking and Data Fusion:
+A Handbook of Algorithms, YBS Publishing, 2011.
+[5] D. Reid, “An algorithm for tracking multiple targets,” IEEE Trans.
+Automatic Control, Vol. 24, No. 6, pp. 843–854, 1979.
+
+PREPRINT: IEEE TRANSACTIONS ON SIGNAL PROCESSING, VOL. 62, NO. 24, PP. 6554–6567, 2014
+13
+[6] T. Kurien, “Issues in the design of Practical Multitarget Tracking algo-
+rithms,” in Multitarget-Multisensor Tracking: Advanced Applications, Y.
+Bar-Shalom (Ed), Artech House, pp. 43–83, 1990.
+[7] M. Mallick, S. Coraluppi, and C. Carthel, “Multi-target tracking using
+Multiple Hypothesis Tracking,” in Integrated Tracking, Classiﬁcation,
+and Sensor Management: Theory and Applications, M. Mallick, V.
+Krishnamurthy, B.-N. Vo (Eds.), Wiley/IEEE, pp. 165–201, 2012.
+[8] R. Mahler, “Multi-target Bayes ﬁltering via ﬁrst-order multi-target
+moments,” IEEE Transactions of Aerospace and Electronic Systems, Vol.
+39, No. 4, pp. 1152–1178, 2003.
+[9] B.-N. Vo, B.-T. Vo, N.-T. Pham, and D. Suter, “Joint detection and
+estimation of multiple objects from image observations,” IEEE Trans.
+Signal Procesing, Vol. 58, No. 10, pp. 5129–5241, 2010.
+[10] D. E. Clark, I. T. Ruiz, Y. Petillot, and J. Bell, “Particle PHD ﬁlter
+multiple target tracking in sonar image,” IEEE Trans. Aerospace &
+Electronic Systems, Vol. 43, No. 1, pp. 409–416, 2007.
+[11] N. T. Pham, W. Huang, and S. H. Ong, “Tracking multiple objects using
+Probability Hypothesis Density ﬁlter and color measurements,” IEEE Int.
+Conf. Multimedia and Expo, pp. 1511–1514, July 2007,.
+[12] E. Maggio, M. Taj, and A. Cavallaro,“Efﬁcient multitarget visual track-
+ing using random ﬁnite sets,” IEEE Trans. Circuits & Systems for Video
+Technology, Vol. 18, No. 8, pp. 1016–1027, 2008.
+[13] R. Hoseinnezhad, B.-N.Vo, D. Suter, and B.-T. Vo, “Visual tracking of
+numerous targets via multi-Bernoulli ﬁltering of image data,” Pattern
+Recognition, Vol. 45, No. 10, pp. 3625–3635, 2012.
+[14] R. Hoseinnezhad, B.-N. Vo and B.-T. Vo, “Visual tracking in background
+subtracted image sequences via multi-Bernoulli ﬁltering”, IEEE Trans.
+Signal Processing, Vol. 61, No. 2, pp. 392–397, 2013.
+[15] J. Mullane, B.-N. Vo, M. Adams, and B.-T. Vo, “A Random Finite Set
+approach to Bayesian SLAM,” IEEE Trans. Robotics, Vol. 27, No. 2,
+pp. 268–282, 2011.
+[16] F. Zhang, H. Stahle, A. Gaschler, C. Buckl, and A. Knoll, “Single camera
+visual odometry based on Random Finite Set Statistics,” IEEE/RSJ Int.
+Conf. Intelligent Robots and Systems (IROS), pp. 559–566, Oct. 2012.
+[17] D. Moratuwage, B.-N. Vo, D. Wang, and H. Wang, “Extending Bayesian
+RFS SLAM to multi-vehicle SLAM”, 12th Int. Conf. Control, Automa-
+tion, Robotics & Vision, (ICARCV’12), Guangzhou, China, Dec. 2012.
+[18] D. Moratuwage, D. Wang, and B.-N. Vo, ”Collaborative multi-vehicle
+SLAM with moving object tracking”, IEEE Int. Conf. Robotics &
+Automation, (ICRA’13), Karlsruhe, Germany, May 2013.
+[19] C.-S. Lee, D.E. Clark, and J. Salvi, “SLAM with dynamic targets via
+single-cluster PHD ﬁltering,” IEEE Journal of Selected Topics in Signal
+Processing, Vol. 7, No. 3, pp. 543–552, 2013.
+[20] G. Battistelli, L. Chisci, S. Morrocchi, F. Papi, A. Benavoli, A. D.
+Lallo, A. Farina, and A. Graziano, “Trafﬁc intensity estimation via PHD
+ﬁltering,” 5th European Radar Conf., Amsterdam, The Netherlands, pp.
+340–343, Oct. 2008.
+[21] L. Mihaylova, “Probability Hypothesis Density ﬁltering for real-time
+trafﬁc state estimation and prediction,” Network and Heterogeneous
+Media. An Applied Mathematics Journal, 2013.
+[22] D. Meissner, S. Reuter, and K. Dietmayer, “Road user tracking at inter-
+sections using a multiple-model PHD ﬁlter,” IEEE Intelligent Vehicles
+Symposium (IV), pp. 377–382, June 2013.
+[23] R. Juang, A. Levchenko, and P. Burlina, “Tracking cell motion using
+GM-PHD,” Int. Symp. Biomedical Imaging, pp. 1154–1157, June 2009.
+[24] S. H. Rezatoﬁghi, S. Gould, B.-N. Vo, K. Mele, W. Hughes, and R.
+Hartley, “A multiple model Probability Hypothesis Density tracker for
+time-lapse cell microscopy sequences,” Int. Conf. Inf. Proc. Medical
+Imaging (IPMI), May 2013.
+[25] X. Zhang, “Adaptive control and reconﬁguration of mobile wireless sen-
+sor networks for dynamic multi-target tracking,” IEEE Trans. Automatic
+Control, Vol. 56, No. 10, pp. 2429–2444, 2011.
+[26] J. Lee and K. Yao, “Initialization of multi-Bernoulli Random Finite Sets
+over a sensor tree,” Int. Conf. Acoustics, Speech & Signal Processing
+(ICASSP), pp. 25–30, Mar. 2012.
+[27] G. Battistelli, L. Chisci, C. Fantacci, A. Farina, and A. Graziano,
+“Consensus CPHD ﬁlter for distributed multitarget tracking,” IEEE
+Journal on Selected Topics in Signal Processing, Vol. 7, No. 3, pp.
+508–520, 2013.
+[28] M. Uney, D.E Clark, S.J. Julier, “Distributed fusion of PHD ﬁlters
+via exponential mixture densities,” IEEE Journal on Selected Topics
+in Signal Processing, Vol. 7, No. 3, pp. 521–531, 2013.
+[29] R. Mahler, “PHD ﬁlters of higher order in target number,” IEEE Trans.
+Aerospace & Electronic Systems, Vol. 43, No. 3, pp. 1523–1543 2007.
+[30] B.-T. Vo, B.-N. Vo, and A. Cantoni, “The cardinality balanced multi-
+target multi-Bernoulli ﬁlter and its implementations,” IEEE Trans. Signal
+Processing, Vol. 57, No. 2, pp. 409–423, 2009.
+[31] B.-T. Vo, and B.-N. Vo, “A Random Finite Set conjugate prior and
+application to multi-target tracking,” Proc. 7th Int. Conf. Intelligent
+Sensors, Sensor Networks & Information Processing (ISSNIP’2011),
+Adelaide, Australia, Dec. 2011.
+[32] D.J. Daley and D. Vere-Jones, An Introduction to the Theory of Point
+Processes, Springer, New York, 1988.
+[33] D. Stoyan, W., Kendall, and J. Mecke Stochastic geometry and its
+applications (2nd Ed). Chichester: Wiley, 1995.
+[34] B.-T. Vo, Random Finite Sets in Multi-Object Filtering, PhD Thesis,
+University of Western Australia, 2008.
+[35] B. Ristic, Particle Filters for Random Set Models, Springer, 2013.
+[36] H. Kuhn, “The Hungarian method for the assignment problem,” Naval
+Research Logistics Quarterly, Vol. 2, pp. 83–97, 1955
+[37] K. G. Murty, “An algorithm for ranking all the assignments in order
+of increasing cost,” Operations Research, Vol. 16, No. 3, pp. 682–687,
+1968.
+[38] J. Munkres, “Algorithms for assignment and transportation problems,”
+Journal of the Society for Industrial and Applied Mathematics, Vol. 5,
+No. 1, Mar. 1957.
+[39] R. Jonker, and T. Volgenant, “A shortest augmenting path algorithm for
+dense and sparse linear assignment problems,” Computing Vol. 38, No.
+11, pp. 325–340, Nov. 1987.
+[40] R. Danchick and G. E. Newman, “A fast method for ﬁnding the exact
+N-best hypotheses for multitarget tracking”, IEEE Trans. Aerospace &
+Electronic Systems, Vol. 29, No. 2, pp. 555–560, 1993.
+[41] I. Cox, and M. Miller, “On ﬁnding ranked assignments with applica-
+tion to multitarget tracking and motion correspondence,” IEEE Trans.
+Aerospace & Electronic Systems, Vol. 32, No. 1, pp. 486–489, 1995.
+[42] I. Cox, and S. Hingorani “An efﬁcient implementation of Reid’s multiple
+hypothesis tracking algorithm and its evaluation for the purpose of visual
+tracking,” IEEE Trans. Pattern Analysis & Machine Intelligence, Vol. 18,
+No. 2, pp. 138–150, 1996.
+[43] K. R. Pattipati, R. L. Popp, and T. T. Kirubarajan, “Survey of Assign-
+ment Techniques for Multitarget Tracking,” in Multitarget-Multisensor
+Tracking: Applications and Advances, Vol. 3, Y. Bar-Shalom and D.
+Blair (Eds.), Artech House, pp. 77–159, 2000.
+[44] M. Miller, H. Stone, and I. Cox, “Optimizing Murty’s ranked assignment
+method,” IEEE Trans. Aerospace & Electronic Systems, Vol. 33, No. 3,
+pp. 851–862, 1997.
+[45] M. Pascoal, M. Captivo, and J. Clımaco, “A note on a new variant of
+Murty’s ranking assignments algorithm,” 4OR: Quarterly Journal of the
+Belgian, French and Italian Operations Research Societies, Vol. 1, No.
+3, pp. 243–255, 2003.
+[46] C. Pedersen, L. Nielsen, and K. Andersen, “An algorithm for ranking
+assignments using reoptimization, ” Computers & Operations Research,
+Vol. 35, No. 11, pp. 3714–3726, 2008.
+[47] D. Eppstein, “Finding the k shortest paths,” SIAM Journal on computing,
+Vol. 28, No. 2, pp. 652–673, 1998.
+[48] R. Bellman, “On a routing problem,” Quarterly of Applied Mathematics,
+Vol. 16, pp. 87–90, 1958
+[49] L. R. Ford, and D. R. Fulkerson, Flow in Networks, Princeton University
+Press, 1962.
+[50] B.-N. Vo, S. Singh and A. Doucet, “Sequential Monte Carlo methods for
+multi-target ﬁltering with Random Finite Sets,” IEEE Trans. Aerospace
+& Electronic Systems, Vol. 41, No. 4, pp. 1224–1245, 2005.
+[51] B.-N. Vo and W.-K. Ma, “The Gaussian mixture Probability Hypothesis
+Density ﬁlter”, IEEE Trans. Signal Processing, Vol. 54, No. 11, pp.
+4091–4104, 2006.
+[52] B.-T. Vo, B.-N. Vo, and A. Cantoni, “Analytic implementations of the
+Cardinalized Probability Hypothesis Density ﬁlter,” IEEE Trans. Signal
+Processing, Vol. 55, No. 7, pp. 3553–3567, 2007.
+[53] A. Doucet, S. J. Godsill, and C. Andrieu, “On sequential Monte Carlo
+sampling methods for Bayesian ﬁltering,” Stat. Comp., Vol. 10, pp. 197–
+208, 2000.
+[54] B. Ristic, S. Arulampalam, and N. Gordon, Beyond the Kalman ﬁlter:
+Particle Filters for Tracking Applications, Artech House, 2004.
+[55] D. Franken, M. Schmidt, and M. Ulmke, “Spooky action at a distance
+in the Cardinalized Probability Hypothesis Density ﬁlter,” IEEE Trans.
+Aerospace and Electronic Systems, Vol. 45, No. 4, pp. 1657–1664, 2009.
+[56] D. Schuhmacher, B.-T. Vo, and B.-N. Vo, “A consistent metric for
+performance evaluation of multi-object ﬁlters,” IEEE Trans. Signal
+Processing, Vol. 56, No. 8, pp. 3447–3457, 2008.
+[57] S. Reuter, B.-T. Vo, B.-N. Vo, and K. Dietmayer, ”The labelled multi-
+Bernoulli ﬁlter,” IEEE Trans. Signal Processing, Vol. 62, No. 12, pp.
+3246–3260, 2014.

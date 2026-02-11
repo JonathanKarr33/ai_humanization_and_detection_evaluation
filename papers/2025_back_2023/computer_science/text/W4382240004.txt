@@ -1,0 +1,1255 @@
+Spatio-Temporal Self-Supervised Learning for Traffic Flow Prediction
+Jiahao Ji1*, Jingyuan Wang1,2†, Chao Huang3,
+Junjie Wu2, Boren Xu1, Zhenhe Wu1, Junbo Zhang4,5, Yu Zheng4,5
+1School of Computer Science & Engineering, Beihang University, China
+2School of Economics & Management, Beihang University, China
+3Department of Computer Science, Musketeers Foundation Institute of Data Science, University of Hong Kong, China
+4JD Intelligent Cities Research, Beijing, China
+5JD iCity, JD Technology, Beijing, China
+Abstract
+Robust prediction of citywide traffic flows at different time
+periods plays a crucial role in intelligent transportation sys-
+tems. While previous work has made great efforts to model
+spatio-temporal correlations, existing methods still suffer
+from two key limitations: i) Most models collectively predict
+all regions’ flows without accounting for spatial heterogene-
+ity, i.e., different regions may have skewed traffic flow distri-
+butions. ii) These models fail to capture the temporal hetero-
+geneity induced by time-varying traffic patterns, as they typ-
+ically model temporal correlations with a shared parameter-
+ized space for all time periods. To tackle these challenges, we
+propose a novel Spatio-Temporal Self-Supervised Learning
+(ST-SSL) traffic prediction framework which enhances the
+traffic pattern representations to be reflective of both spatial
+and temporal heterogeneity, with auxiliary self-supervised
+learning paradigms. Specifically, our ST-SSL is built over an
+integrated module with temporal and spatial convolutions for
+encoding the information across space and time. To achieve
+the adaptive spatio-temporal self-supervised learning, our ST-
+SSL first performs the adaptive augmentation over the traf-
+fic flow graph data at both attribute- and structure-levels. On
+top of the augmented traffic graph, two SSL auxiliary tasks
+are constructed to supplement the main traffic prediction
+task with spatial and temporal heterogeneity-aware augmen-
+tation. Experiments on four benchmark datasets demonstrate
+that ST-SSL consistently outperforms various state-of-the-art
+baselines. Since spatio-temporal heterogeneity widely exists
+in practical datasets, the proposed framework may also cast
+light on other spatial-temporal applications. Model imple-
+mentation is available at https://github.com/Echo-Ji/ST-SSL.
+1
+Introduction
+Robust traffic flow prediction across different spatial regions
+at different time periods is crucial for advancing intelligent
+transportation systems (Zhang et al. 2020). For example, ac-
+curate traffic prediction results can not only enable effec-
+tive traffic controls in a timely manner, but also mitigate
+tragedies caused by the sudden traffic flow spike. In general,
+*The paper was done when J. Ji interned at JD Intelligent Cities
+Research supervised by J. Zhang (msjunbozhang@outlook.com).
+†Corresponding author: jywang@buaa.edu.cn
+Copyright © 2023, Association for the Advancement of Artificial
+Intelligence (www.aaai.org). All rights reserved.
+Morning
+Evening
+Nighttime
+Evening
+Transportation hub
+Residential area
+A
+B
+(a) Regions with different functions
+(b) Spatial heterogeneity
+(c) Temporal heterogeneity
+Figure 1: Illustration of our motivation, i.e., the spatial and
+temporal heterogeneity of traffic flow data.
+traffic prediction aims to forecast the traffic volume (e.g.,
+inflow and outflow of each region at a given time), from
+past traffic observations. Recent advances have significantly
+boosted the research of traffic flow prediction with vari-
+ous deep learning techniques, e.g., convolutional neural net-
+works over region grids (Zhang, Zheng, and Qi 2017), graph
+neural networks for spatial dependency modeling (Zhang
+et al. 2021), and attention mechanism for spatial informa-
+tion aggregation (Zheng et al. 2020). Although significant
+efforts have been made to improve the traffic flow predic-
+tion results, existing models still face two key shortcomings.
+The first limitation is the lack of modeling spatial het-
+erogeneity exhibited with skewed traffic distributions across
+different regions. Taking Fig. 1(a) for example, A and B are
+two real-world regions in Beijing with different urban func-
+tions, namely the residential area and transportation hub.
+We can observe their quite different traffic flow distributions
+from Fig. 1(b). However, most existing models ignore such
+spatial heterogeneity and are easily biased towards popular
+regions with higher traffic volume, which make them insuffi-
+cient to learn quality citywide traffic pattern representations.
+While some studies attempt to capture the heterogeneous
+flow distributions with multiple parameter sets over differ-
+ent regions (Pan et al. 2019b; Bai et al. 2020), the involved
+large parameter size may lead to the suboptimal issue over
+the skewed-distributed traffic data. Worse still, the high com-
+putational and memory cost of these methods make them
+infeasible to handle large-scale traffic data in practical ur-
+ban scenarios. In addition, meta-learning has been used in
+The Thirty-Seventh AAAI Conference on Artificial Intelligence (AAAI-23)
+4356
+
+recent approaches (Pan et al. 2019a; Ye et al. 2022) to con-
+sider the difference of region traffic distributions. However,
+the effectiveness of those models largely relies on the col-
+lected handcrafted region spatial characteristics, e.g., nearby
+points of interest and density of road networks, which limits
+the model representation generalization ability.
+Furthermore, current traffic prediction methods model the
+temporal dynamics with a shared parameter space for all
+time periods, which can hardly precisely preserve the tempo-
+ral heterogeneity in the latent embedding space. In real-life
+scenarios, traffic patterns of different regions vary over time,
+e.g., from morning to evening, which results in the temporal
+heterogeneity as shown in Fig. 1(c). Nevertheless, the pa-
+rameter space differentiation strategy adopted in (Song et al.
+2020; Li and Zhu 2021) assumes that the temporal hetero-
+geneity is static across the entire time periods, which is not
+always held, e.g., evening traffic patterns can be significantly
+different for workdays and holidays shown in Fig. 1(c).
+To effectively model both spatial and temporal het-
+erogeneity, we present a novel Spatio-Temporal Self-
+Supervised Learning framework for predicting traffic flow.
+To encode spatial-temporal traffic patterns, our ST-SSL is
+built over a graph neural network which integrates tempo-
+ral and spatial convolutions for information aggregation. To
+capture the spatial heterogeneity, we design a spatial self-
+supervised learning paradigm to augment the traffic flow
+graph at both data-level and structure-level, which is adap-
+tive to the heterogeneous region traffic distributions. Then,
+the auxiliary self-supervision with a soft clustering paradigm
+is introduced to be aware of the diverse spatial patterns
+among different regions. To inject the temporal heterogene-
+ity into our latent representation space, we empower ST-SSL
+to maintain dedicated representations of temporal traffic dy-
+namics with temporal self-supervised learning paradigm.
+We summarize the key contributions of this work as follows:
+• To the best of our knowledge, we are the first to propose a
+novel self-supervised learning framework to model spa-
+tial and temporal heterogeneity in traffic flow prediction.
+This paradigm may shed light on other practical spatio-
+temporal applications, such as air quality prediction.
+• We propose an adaptive heterogeneity-aware data aug-
+mentation scheme over the graph-structured spatial-
+temporal graph against the noise perturbation.
+• Two self-supervised learning tasks are incorporated to
+supplement the main traffic prediction task by enforcing
+the model discrimination ability with the awareness of
+both spatial and temporal traffic heterogeneity.
+• Extensive experiments are conducted on four real-world
+public datasets to show the consistent performance supe-
+riority achieved by our ST-SSL across various settings.
+2
+Preliminaries
+Definition 1 (Spatial Region). We partition a city into N =
+I × J disjoint geographical grids, in which each grid is
+considered as a spatial region rn(1 ≤n ≤N). We use
+V = {r1, . . . , rN} to denote the spatial region set in a city.
+Definition 2 (Traffic Flow Graph (TFG)). A traffic flow
+graph is defined as G = (V, E, A, Xt−T :t), where V is the
+set of spatial regions (nodes) with the size of |V| = N, and E
+is a set of edges connecting two spatially adjacent regions in
+V. The adjacent matrix of our traffic flow graph is denoted
+as A ∈RN×N. We represent the citywide traffic inflow and
+outflow data over previous T time steps with a traffic tensor
+Xt−T :t ∈RT ×N×2 = (Xt−T , . . . , Xt). The traffic volume
+information of all regions V at the t-th time slot is denoted
+as Xt ∈RN×2.
+Problem Statement. Given the historical traffic flow graph
+G till the current time step, we aim to learn a predictive func-
+tion which accurately estimates the traffic volume of all re-
+gions at the future time step t + 1, i.e., Xt+1 ∈RN×2.
+3
+Methodology
+This section elaborates on the technical details of our ST-
+SSL model with the overall architecture shown in Fig. 2.
+3.1
+Spatio-Temporal Encoder
+We firstly propose a spatio-temporal (ST) encoder to jointly
+preserve the ST contextual information over the traffic flow
+graph, so as to jointly model the sequential patterns of traffic
+data across different time steps and the geographical correla-
+tions among spatial regions. Towards this end, we integrate
+the temporal convolutional component with the graph con-
+volutional propagation network as the backbone for spatial-
+temporal relational representation.
+For encoding the temporal traffic patterns, we adopt the 1-
+D causal convolution along the time dimension with a gated
+mechanism (Yu, Yin, and Zhu 2018). Specifically, our tem-
+poral convolution (TC) takes the traffic flow tensor as the
+input and outputs a time-aware embedding for each region:
+(Bt−Tout, . . . , Bt) = TC (Xt−T , . . . , Xt) ,
+(1)
+where Bt ∈RN×D denotes the region embedding matrix
+at the time step t. The n-th row bt,n ∈RD corresponds to
+the embedding of region rn. Here, D denotes the embedding
+dimensionality. Tout is the length of the output embedding
+sequence after convolutional operations in TC encoder.
+For capturing the region-wise spatial correlations, we de-
+sign our spatial convolution (SC) encoder based on a graph-
+based message passing mechanism presented as follows:
+Et = SC (Bt, A) .
+(2)
+A is the region adjacency matrix of G. After our SC encoder,
+we can obtain the refined embeddings (Et−Tout, . . . , Et) of
+all regions by injecting the geographical context.
+Our ST encoder is built with a “sandwich” block structure,
+in which TC →SC →TC is each individual block. By stack-
+ing multiple blocks, we can obtain a sequence of embedding
+matrix (Ht−T ′, . . . , Ht) with the temporal dimension of T ′
+after several convolutions. After ST encoder-based embed-
+ding propagation and aggregation, the temporal dimension
+T ′ reduces to zero and we generate the final embedding ma-
+trix H ∈RN×D for our ST encoder, in which each row
+hn ∈RD denotes the final embedding of region rn.
+In the next subsection, we will perform the adaptive aug-
+mentation over the (Bt−T , . . . , Bt) output from the first TC
+encoder layer (Sec 3.2), and self-supervised learning with
+the spatial-temporal heterogeneity modeling based on the fi-
+nal region embedding matrix H (Sec 3.3-Sec 3.4).
+4357
+
+Augmented 
+TFG   a
+Shared
+MLP
+Ground Truth
+(b)
+(c)
+ST Encoder
+ST Encoder
+p
+t
+s
+H
+H
+Cluster
+Predict
+Self-supervise
+H
+H
+ˆZ
+Z
+joint
+H H
+Fusion
+time t
+time t`
+Aggregated
+Embedding 
+at time t
+Positive pair
+Negative pair
+(b)
+(c)
+(a)
+:
+t T t
+B
+Traffic-
+level:
+Topology-
+level:
+Input TFG
+Adaptive Graph Augmentation
+mask
+Figure 2: (a): The overall architecture of ST-SSL. (b): Spatial heterogeneity modeling. (c): Temporal heterogeneity modeling.
+3.2
+Adaptive Graph Augmentation on TFG
+We devise two phases of graph augmentation schemes on
+TFG G = (V, E, A, Xt−T :t) with traffic-level data aug-
+mentation and graph topology-level structure augmentation,
+which is adaptive to the learned heterogeneity-aware region
+dependencies in terms of their traffic regularities.
+Region-wise Heterogeneity Measurement.
+For a region
+rn, its embedding sequence (bt−T,n, . . . , bt,n) within T
+time steps from rows of (Bt−T , . . . , Bt) is used to gener-
+ate an overall embedding as:
+un =
+t
+X
+τ=t−T
+pτ,n · bτ,n, where pτ,n = b⊤
+τ,n · w0.
+(3)
+un is the aggregated representation over region rn’s em-
+bedding sequence across different time steps based on the
+derived aggregation weight pτ,n. Here, τ is the index of
+the time step range (t −T, t). The aggregation weight pτ,n
+reflects the relevance between the time step-specific traffic
+pattern (bτ,n) and the overall traffic transitional regulari-
+ties (un). bτ,n is region rn’s embedding at time step τ and
+w0 ∈RD is a learnable parameter vector for transformation.
+In our ST-SSL model, we propose to estimate the hetero-
+geneity degree between two regions, to be reflective of their
+traffic distribution difference over time below:
+qm,n =
+u⊤
+mun
+∥um∥∥un∥.
+(4)
+Note that a larger qm,n score indicates the higher traffic pat-
+tern dependencies between region rm and rn, thus resulting
+in the lower heterogeneity degree.
+Heterogeneity-guided Data Augmentation.
+In our ST-
+SSL, we propose to perform data augmentation from both
+the traffic-level and graph topology-level elaborated below:
+Traffic-level Augmentation. Inspired by the data augmen-
+tation strategy in (Zhu et al. 2021), we design an augmen-
+tation operator over the constructed traffic tensor Xt−T :t,
+which is adaptive to the learned time-aware traffic pattern
+dependencies of each region. In particular, we aim to mask
+less relevant traffic volume at τ-th time step of region rn
+against noise perturbation, based on a derived mask prob-
+ability ρτ,n draw from a Bernoulli distribution i.e., ρτ,n ∼
+Bern(1 −pτ,n). The higher ρτ,n value indicates that region
+rn’s traffic volume xτ,n at τ-th time step is more likely to be
+masked, due to its lower relevance to the overall traffic reg-
+ularities of region rn. The augmented data with the traffic-
+level augmentation is denoted as ˜
+Xt−T :t.
+Graph Topology-level Augmentation. In addition to the
+traffic-level augmentation, we propose to further perform
+the topology-level augmentation over the region traffic flow
+graph G. By doing so, ST-SSL can not only debias the re-
+gion connections with low inter-correlated traffic patterns,
+but also capture the long-range region dependencies with
+the global urban context. Towards this end, i) Given two
+spatially adjacent regions rm and rn, their connection edge
+(rm, rn) ∈E will be masked if they are not highly de-
+pendent in terms of their traffic regularities, measured by
+the high heterogeneity degree qm,n. The mask probability
+ρm,n is drawn from a Bernoulli distribution i.e., ρm,n ∼
+Bern(1−qm,n). ii) Given two non-adjacent regions, the low
+heterogeneity degree qm,n will result in adding an edge be-
+tween rm and rn based on the masking probability drawn
+from a Bernoulli distribution, Bern(qm,n) similarly.
+After two augmentation phases, we obtain the augmented
+TFG ˜G =
+
+V, ˜E, ˜
+A, ˜
+Xt−T :t
+
+, with the debiased traffic vol-
+ume input ˜
+Xt−T :t (traffic-level augmentation) and structure
+denoising ˜E, ˜
+A (graph topology-level augmentation).
+3.3
+SSL for Spatial Heterogeneity Modeling
+Given the heterogeneity-aware augmented TFG, we aim to
+enable the region embeddings to effectively preserve the
+spatial heterogeneity with auxiliary self-supervised signals.
+To achieve this goal, we design a soft clustering-based
+self-supervised learning (SSL) task over regions, to map
+them into multiple latent representation spaces correspond-
+ing to diverse urban region functionalities (e.g., residential
+zone, shopping mall, transportation hub). Specifically, we
+generate K cluster embeddings {c1, . . . , cK} (indexed by
+k) as latent factors for region clustering. Formally, the clus-
+tering process is performed with ˜zn,k = c⊤
+k ˜hn. Here, ˜hn ∈
+RD is the region embedding of region rn encoded from the
+augmented TFG ˜G. ˜zn,k represents the estimated relevance
+score between region rn’s embedding and the embedding ck
+of the k-th cluster. Afterwards, the cluster assignment of re-
+gion rn is generated with ˜zn = (˜zn,1, . . . , ˜zn,K)⊤.
+To
+provide
+self-supervised
+signals
+based
+on
+the
+heterogeneity-aware soft clustering paradigm for aug-
+mentation, the auxiliary learning task is designed to predict
+4358
+
+the cluster assignment using the region embedding hn
+encoded from the original TFG G as: ˆzn,k
+=
+c⊤
+k hn,
+where ˆzn,k is the predicted assignment score for ˜zn,k. The
+self-supervised augmented task is optimized as follows:
+ℓ(hn, ˜zn) = −
+X
+k
+˜zn,k log
+exp (ˆzn,k/γ)
+P
+j exp (ˆzn,j/γ),
+(5)
+where γ is the temperature parameter to control the smooth-
+ing degree of softmax output. The overall self-supervised
+objective over all regions is defined as follows:
+Ls =
+N
+X
+n=1
+ℓ(hn, ˜zn).
+(6)
+By incorporating the supervision on hn
+with the
+heterogeneity-aware region cluster assignment ˜zn, we make
+the region embedding hn to be reflective of spatial hetero-
+geneity within the global urban space.
+Distribution Regularization for Region Clustering. In our
+heterogeneity-aware region clustering paradigm, we gener-
+ate the cluster assignment matrix ˜Z = (˜z1, . . . , ˜zN)⊤∈
+RN×K as self-supervised signals for generative data aug-
+mentation. However, two issues need to be addressed to
+fit the true distribution of regional characteristics in urban
+space: i) Since ˜Z is produced by matrix production, there is
+no guarantee that each region’s cluster assignment sums up
+to 1, i.e., ˜Z1K = 1N, where 1N denotes an N-dimensional
+vector of all ones. ii) To avoid the trivial solution that every
+region has the same assignment, we employ the principle
+of maximum entropy, i.e., ˜Z⊤1N = N
+K 1K. This encourages
+all regions to be equally partitioned by the clusters. To tackle
+these two issues, we define a feasible solution set as:
+˜
+Z =
+
+˜Z ∈RN×K
++
+ ˜Z1K = 1N, ˜Z⊤1N = N
+K 1K
+
+.
+(7)
+For any assignment ˜Z ∈˜Z, we can use it to map the em-
+bedding matrix ˜
+H = (˜h1, . . . , ˜hN)⊤∈RN×D into the
+cluster matrix C = (c1, . . . , cK)⊤∈RK×D. Thus, we
+search for the optimal solution by maximizing the similar-
+ity between the embeddings and the clusters, i.e.,
+max
+˜
+Z∈Z tr
+
+˜ZC ˜
+H⊤
++ ϵH( ˜Z),
+(8)
+where tr(·) is the trace operator that sums elements on the
+main diagonal of a square matrix, H( ˜Z) is the entropy func-
+tion defined as −P
+n,k ˜zn,k log ˜zn,k, and ϵ is a parameter
+that controls the smoothness of the assignment. Finally, the
+original assignment in Eq. (6) is replaced with the optimal
+solution. Refer to the Appendix for the solution procedure.
+3.4
+SSL for Temporal Heterogeneity Modeling
+In this component, we further design a self-supervised learn-
+ing (SSL) task to inject the temporal heterogeneity into
+time-aware region embeddings, by enforcing the divergence
+among time step-specific traffic pattern representations.
+Specifically, we firstly fuse the encoded time-aware re-
+gion embeddings from both the original and augmented
+TFGs:
+vt,n = w1 ⊙ht,n + w2 ⊙˜ht,n,
+(9)
+where ⊙is the element-wise product. w1, w2 are learnable
+parameters. After that, we generate the city-level represen-
+tation st at the time step t through aggregating embeddings
+of all regions (σ is the sigmoid function):
+st = σ
+ 
+1
+N
+N
+X
+n=1
+vt,n
+!
+.
+(10)
+To enhance the representation discrimination ability
+among different time steps, we treat the region-level and
+city-level embeddings (vt,n, st) from the same time step
+as the positive pairs in our SSL task, and the embeddings
+from different time steps as negative pairs. With this design,
+the auxiliary supervision of positive pairs will encourage
+the consistency of time-specific citywide traffic trends (e.g.,
+rush hours, weather factors), while the negative pairs help in
+capturing the temporal heterogeneity across different time
+steps. Formally, the temporal heterogeneity-enhanced SSL
+task is optimized with the following loss with cross-entropy
+metric:
+Lt = −
+ N
+X
+n=1
+log g (vt,n, st) +
+N
+X
+n=1
+log (1 −g (vt′,n, st))
+!
+,
+(11)
+where t and t′ denote two different time steps. g is a cri-
+terion function defined as g (vt,n, st) = σ
+ v⊤
+t,nW3st
+
+.
+W3 ∈RN×N is the learnable transformation matrix.
+3.5
+Model Training
+In the learning process of our ST-SSL, we feed the embed-
+ding hn ∈H of each region rn into an MLP structure to
+enable the traffic flow prediction at the future time step t+1
+as:
+ˆxt+1,n = MLP(hn),
+(12)
+where ˆxt+1,n is the predicted result. The model is optimized
+by minimizing the loss function below:
+Lp =
+N
+X
+n=1
+λ
+x(0)
+t+1,n −ˆx(0)
+t+1,n
+ + (1 −λ)
+x(1)
+t+1,n −ˆx(1)
+t+1,n
+ ,
+(13)
+where x(0)
+t+1,n, x(1)
+t+1,n denote the ground truth of inflow and
+outflow respectively. λ is a parameter to balance the influ-
+ence of each type of traffic flow.
+Finally, we obtain the overall loss by incorporating the
+self-supervised spatial and temporal heterogeneity modeling
+losses in Eq. (6) and (11) into the joint learning objective:
+Ljoint = Lp + Ls + Lt.
+(14)
+Our model can be trained via the back-propagation algo-
+rithm. The entire training procedure can be summarized into
+four stages: i) given a TFG G, we generate a region em-
+bedding matrix H by the ST encoder. ii) Meanwhile, we
+perform adaptive augmentation to refine G as ˜G, which is
+fed into the shared ST encoder to output ˜
+H. iii) By us-
+ing H and ˜
+H, we calculate the losses Ls, Lt, and Lp that
+are used to produce the joint loss Ljoint. iv). We employ
+the back-propagation algorithm to train ST-SSL until Ljoint
+converges.
+4359
+
+4
+Experiments
+In this section, we evaluate the performance of ST-SSL on a
+series of experiments over several real-world datasets, which
+are summarized to answer the following research questions:
+• RQ1: How is the overall traffic prediction performance of
+ST-SSL as compared to various baselines?
+• RQ2: How do designed different sub-modules contribute
+to the model performance?
+• RQ3: How does ST-SSL perform with regard to heteroge-
+neous spatial regions and different time periods?
+• RQ4: How do the augmented graph and learned represen-
+tations benefit the model?
+4.1
+Experimental Settings
+Data Description.
+We evaluate our model on two types of
+public real-world traffic datasets summarized in Tab. 1.
+The first kind is about bike rental records in New York
+City. NYCBike1 (Zhang, Zheng, and Qi 2017) spans from
+04/01/2014 to 09/30/2014, and NYCBike2 (Yao et al. 2019)
+spans from 07/01/2016 to 08/29/2016. They are all mea-
+sured every 30 minutes. The second kind is about taxi
+GPS trajectories. NYCTaxi (Yao et al. 2019) spans from
+01/01/2015 to 03/01/2015. Its time interval is half an hour.
+BJTaxi (Zhang, Zheng, and Qi 2017), collected in Beijing,
+spans from 03/01/2015 to 06/30/2015 on an hourly basis.
+For all datasets, previous 2-hour flows as well as previous
+3-day flows around the predicted time are used to predict
+the flows for the next time step. We use a sliding window
+strategy to generate samples, and then split each dataset into
+the training, validation, and test sets with a ratio of 7:1:2.
+Evaluation Metrics & Baselines.
+In our experiments, two
+common metrics are used for evaluation: Mean Average Er-
+ror (MAE) and Mean Average Percentage Error (MAPE).
+We compare our proposed ST-SSL with 8 baselines that fall
+into three categories.
+Traditional Time Series Prediction Approaches:
+• ARIMA (Kumar and Vanajakshi 2015): it is a classical
+time series prediction model.
+• SVR (Castro-Neto et al. 2009): it is a regression model
+widely used for time series analysis.
+Spatial-Temporal Traffic Prediction Methods:
+• ST-ResNet (Zhang, Zheng, and Qi 2017): it is a
+convolution-based model that constructs multiple traffic
+time series to capture the temporal dependencies and utilizes
+residual convolution to model the spatial correlations.
+• STGCN (Yu, Yin, and Zhu 2018): it is a graph
+convolution-based model that combines 1D convolution to
+capture spatial and temporal correlations, respectively.
+• GMAN (Zheng et al. 2020): it is an attention-based pre-
+dictive model that adopts an encoder-decoder architecture.
+Spatial-Temporal Methods Considering Heterogeneity:
+• AGCRN (Bai et al. 2020): it enhances the traditional graph
+convolution by adaptive modules and combines them into re-
+current networks to capture spatial-temporal correlations.
+• STSGCN (Song et al. 2020): it captures the complex local-
+ized spatial-temporal correlations through a spatial-temporal
+synchronous modeling mechanism.
+Data type
+Bike rental
+Taxi GPS
+Dataset
+NYCBike1
+NYCBike2
+NYCTaxi
+BJTaxi
+Time interval
+1 hour
+30 min
+30 min
+30 min
+# regions
+16×8
+10×20
+10×20
+32×32
+# taxis/bikes
+6.8k+
+2.6m+
+22m+
+34k+
+Table 1: Statistics of Datasets.
+0
+2
+4
+6
+8
+10 12 14 16 18 20 22 24 26 28 30
+0
+2
+4
+6
+8
+10
+12
+14
+16
+18
+20
+22
+24
+26
+28
+30
+(a) ST-ResNet
+0
+2
+4
+6
+8
+10 12 14 16 18 20 22 24 26 28 30
+0
+2
+4
+6
+8
+10
+12
+14
+16
+18
+20
+22
+24
+26
+28
+30
+(b) AGCRN
+(c) ST-SSL
+Figure 3: Visualization of traffic prediction errors.
+• STFGNN (Li and Zhu 2021): it integrates with STFGN
+module and a novel gated CNN module, and captures hidden
+spatial dependencies by a data-driven graph and its further
+fusion with given spatial graphs.
+Methods in the last category model the traffic heterogene-
+ity by using multiple parameter spaces.
+Parameter Settings.
+The ST-SSL is implemented with
+PyTorch. The embedding dimension D is set as 64. Both
+the temporal and spatial convolution kernel sizes of ST en-
+coder are set to 3. The perturbation ratios for both traffic-
+level and topology-level augmentations are set as 0.1. The
+training phase is performed using the Adam optimizer and
+the batch size of 32. The experiments of baseline evalua-
+tion are conducted with their released codes on the LibC-
+ity (Wang et al. 2021) platform.
+4.2
+Performance Comparison (RQ1)
+Table 2 shows the comparison results of all methods. We run
+all deep learning models with 5 different seeds and report the
+average performance and their standard deviations.
+Performance Superiority of ST-SSL.
+According to Stu-
+dent’s t-test at level 0.01, our ST-SSL significantly outper-
+forms other competing baselines with regard to both met-
+rics over all datasets. This demonstrates the effectiveness of
+ST-SSL in jointly modeling the spatial and temporal hetero-
+geneity in a self-supervised manner. Fig. 3 visualizes the
+prediction error (|ˆxn −xn|/xn) of ST-SSL and two best
+performed baselines on BJTaxi dataset, where a brighter
+pixel means a larger error. The superiority of our model can
+still be observed, which is consistent with the quantitative
+results in Table 2. Interestingly, ST-SSL exhibits a signif-
+icant improvement in the suburban areas (green boxes in
+Fig. 3), which justifies the effectiveness of spatial hetero-
+geneity modeling that transfers information among global
+similar regions.
+Performance Comparison between Baselines.
+Spatio-
+temporal prediction methods outperform time series ap-
+proaches in most cases, which suggests the necessity to cap-
+ture spatial dependencies. The methods that take into ac-
+count the heterogeneity of traffic data usually perform bet-
+ter than those that use shared parameters across different re-
+4360
+
+Dataset
+Metric Type ARIMA SVR
+ST-ResNet
+STGCN
+GMAN
+AGCRN
+STSGCN
+STFGNN
+ST-SSL
+NYCBike1
+MAE
+In
+10.66
+7.27
+5.53±0.06
+5.33±0.02
+6.77±3.42
+5.17±0.03
+5.81±0.04
+6.53±0.10
+4.94±0.02
+Out
+11.33
+7.98
+5.74±0.07
+5.59±0.03
+7.17±3.61
+5.47±0.03
+6.10±0.04
+6.79±0.08
+5.26±0.02
+MAPE
+In
+33.05
+25.39 25.46±0.20 26.92±0.08 31.72±12.29 25.59±0.22 26.51±0.32 32.14±0.23 23.69±0.11
+Out
+35.03
+27.42 26.36±0.50 27.69±0.14 34.74±17.04 26.63±0.30 27.56±0.39 32.88±0.19 24.60±0.27
+NYCBike2
+MAE
+In
+8.91
+12.82
+5.63±0.14
+5.21±0.02
+5.24±0.13
+5.18±0.03
+5.25±0.03
+5.80±0.10
+5.04±0.03
+Out
+8.70
+11.48
+5.26±0.08
+4.92±0.02
+4.97±0.14
+4.79±0.04
+4.94±0.05
+5.51±0.11
+4.71±0.02
+MAPE
+In
+28.86
+46.52 32.17±0.85 27.73±0.16
+27.38±1.13
+27.14±0.14 29.26±0.13 30.73±0.49 22.54±0.10
+Out
+28.22
+41.91 30.48±0.86 26.83±0.21
+26.75±1.14
+26.17±0.22 28.02±0.23 29.98±0.46 21.17±0.13
+NYCTaxi
+MAE
+In
+20.86
+52.16 13.48±0.14 13.12±0.04
+15.09±0.61
+12.13±0.11 13.69±0.11 16.25±0.38 11.99±0.12
+Out
+16.80
+41.71 10.78±0.25 10.35±0.03
+12.06±0.39
+9.87±0.04
+10.75±0.17 12.47±0.25
+9.78±0.09
+MAPE
+In
+21.49
+65.10 24.83±0.55 21.01±0.18
+22.73±1.20
+18.78±0.04 22.91±0.44 24.01±0.30 16.38±0.10
+Out
+21.23
+64.06 24.42±0.52 20.78±0.16
+21.97±0.86
+18.41±0.21 22.37±0.16 23.28±0.47 16.86±0.23
+BJTaxi
+MAE
+In
+21.48
+52.77 12.12±0.11 12.34±0.09
+13.13±0.43
+12.30±0.06 12.72±0.03 13.83±0.04 11.31±0.03
+Out
+21.60
+52.74 12.16±0.12 12.41±0.08
+13.20±0.43
+12.38±0.06 12.79±0.03 13.89±0.04 11.40±0.02
+MAPE
+In
+23.12
+65.51 15.50±0.26 16.66±0.21
+18.67±0.99
+15.61±0.15 17.22±0.17 19.29±0.07 15.03±0.13
+Out
+20.67
+65.51 15.57±0.26 16.76±0.22
+18.84±1.04
+15.75±0.15 17.35±0.17 19.41±0.07 15.19±0.15
+Table 2: Model comparison on four datasets in terms of MAE and MAPE (%). In and Out represent the inflow and outflow.
+ST-SSL-sa
+ST-SSL-ta
+ST-SSL-sh
+ST-SSL-th
+ST-SSL
+MAE
+NYCBike1
+NYCBike2
+NYCTaxi
+BJTaxi
+MAPE (%)
+Figure 4: Ablation study of our proposed ST-SSL.
+gions and time periods, indicating the rationality of learning
+spatial and temporal heterogeneity in traffic prediction.
+4.3
+Ablation Study (RQ2)
+To analyze the effects of sub-modules in our ST-SSL frame-
+work, we perform ablation studies with four variants:
+• ST-SSL-sa: This variant replaces heterogeneity-guided
+structure augmentation on graph topology with random edge
+removal and addition augmentations.
+• ST-SSL-ta: This variant replaces heterogeneity-guided
+traffic-level augmentation with random traffic volume mask-
+ing augmentations.
+•
+ST-SSL-sh:
+This
+variant
+which
+disables
+spatial
+heterogeneity modeling in the joint framework.
+•
+ST-SSL-th:
+This
+variant
+which
+disables
+temporal
+heterogeneity modeling in the joint framework.
+The results are presented in Fig. 4. We can observe that
+ST-SSL beats the variants with random augmentation, in-
+dicating the effectiveness of our adaptive heterogeneity-
+0
+1
+2
+3
+4
+(a) Spatial clusters
+(b) Spatial performance
+Type Time period Category (id)
+7:00-10:00
+Morning (0)
+10:00-17:00
+Regular (1)
+17:00-20:00
+Evening (2)
+20:00-7:00
+Night (3)
+9:00-22:00
+Day (4)
+22:00-9:00
+Night (5)
+Workday
+Holiday
+(c) Temporal categories
+(d) Temporal performance
+Figure 5: Prediction performance with regard to heteroge-
+neous spatial regions and different time periods.
+guided data augmentation at both traffic-level and graph
+structure-level. Moreover, ST-SSL consistently outperforms
+ST-SSL-sh and ST-SSL-th, which justifies the necessity to
+jointly model the spatial and temporal heterogeneity. In sum-
+mary, each designed sub-module has a positive effect on per-
+formance improvement.
+4.4
+Robustness Analysis (RQ3)
+To explore the robustness of our ST-SSL, we perform traffic
+prediction for spatial regions with heterogeneous data distri-
+butions and time periods with different patterns on BJTaxi.
+Specifically, we cluster regions by using traffic data statis-
+tics, i.e., (mean, median, standard deviation) of their
+historical traffic flow. As shown in Fig. 5(a), regions with
+smaller cluster id (next to the color bar) are usually located
+4361
+
+Sanyuan Bridge
+Xizhimen Bridge
+Madian Bridge
+Jinsong R.Z.
+Majiapu R.Z.
+Zuojiazhuang R.Z.
+Sanyuan Bridge
+Jinsong R.Z.
+Malian Bridge
+Majiapu R.Z.
+Xizhimen Bridge
+Residential Zone Transportation Hub
+Zuojiazhuang R.Z.
+Figure 6: Case study on the adaptive graph augmentation.
+0
+1
+2
+3
+4
+0
+1
+2
+3
+4
+AGCRN
+ST-SSL
+Figure 7: t-SNE visualization of embeddings on BJTaxi.
+in suburbs that are less popular and thus have lower traffic.
+Fig. 5(b) exhibits the prediction performance for different
+clusters. Our ST-SSL surpasses other baselines by a signifi-
+cant margin, particularly for less popular regions (marked by
+black circles), which is consistent with results in Fig. 3. This
+also verifies the robustness of ST-SSL to accurately predicts
+traffic flows of different types of spatial regions.
+For temporal heterogeneity, according to urban traffic
+rhythms (Wang et al. 2019a), we partition a workday into
+four time periods and a holiday (weekend included) into
+two time periods, whose categories are given in Fig. 5(c).
+Fig. 5(d) presents the evaluation performance. Our ST-SSL
+beats the baselines in terms of every category. Furthermore,
+ST-SSL shows a significant improvement in categories 3 and
+5 that denote the nighttime of workdays and holidays. Dur-
+ing these times, traffic flow data are typically sparse, making
+it difficult for baselines to produce accurate predictions. ST-
+SSL can handle this situation because we inject the temporal
+heterogeneity into the time-aware region embeddings.
+4.5
+Qualitative Study (RQ4)
+In Fig. 6, we investigate the heterogeneity-guided graph
+topology-level augmentation on BJTaxi. Our augmenta-
+tion method adaptively removes connections between adja-
+cent regions with heterogeneous traffic patterns, i.e., Zuoji-
+azhuang Residential Zone and Sanyuan Bridge (a transporta-
+tion hub). Meanwhile, it builds connections between dis-
+tant regions with similar latent urban function, e.g., Xizhi-
+men Bridge and Sanyuan Bridge that are both transportation
+hubs. In this way, our ST-SSL can not only debias the re-
+gion connections with low inter-correlated traffic patterns,
+but also capture the long-range region dependencies with the
+global urban context.
+To further explore why the embeddings obtained by
+ST-SSL can deliver more accurate traffic prediction than
+AGCRN, we visualize them on BJTaxi by t-SNE (Van der
+Maaten and Hinton 2008). We plot the learned embeddings
+of all regions with ground truth classes the same as Fig. 5(a).
+As shown in Fig. 7, samples in the same class are more com-
+pact and those of different classes are significantly better
+separated for ST-SSL. This enables ST-SSL to be aware of
+spatial heterogeneity and transfer information between re-
+gions in the same class, which facilitates predictions.
+5
+Related Work
+Deep Learning for Traffic Prediction.
+Many efforts have
+been devoted to developing traffic prediction techniques
+based on various neural networks. RNN (Wang et al. 2019b;
+Ji et al. 2020) and 1D CNN (Wang et al. 2022, 2016) are
+applied to capture the temporal dependencies in traffic se-
+ries. CNN (Zhang, Zheng, and Qi 2017; Yao et al. 2019),
+GNN (Zhang et al. 2020; Ji et al. 2022a), and attention
+mechanism (Zheng et al. 2020) are introduced to incorpo-
+rate the spatial information. However, most of them ne-
+glect the spatio-temporal heterogeneity problem. Recently,
+some works model the heterogeneity by using multiple mod-
+els (Yuan, Zhou, and Yang 2018) or multiple sets of param-
+eters (Bai et al. 2020; Li and Zhu 2021), and some use meta
+learning to generate different weights based on static fea-
+tures of different regions (Pan et al. 2019a; Ye et al. 2022).
+However, these methods either introduce a number of pa-
+rameters that may cause an overfitting problem or require ex-
+ternal data that may be not available. To overcome these lim-
+itations, we incorporate self-supervised learning into traffic
+prediction to explore spatial and temporal heterogeneity.
+Self-Supervised Learning for Representation Learning.
+Self-supervised learning aims to extract useful informa-
+tion from input data to improve the representation qual-
+ity (Ji et al. 2022b; Wu et al. 2020). The general paradigm
+is to augment input data and then design pretext tasks as
+pseudo-labels for representation learning (Ren et al. 2021;
+Ren, Wang, and Zhao 2022). It has achieved great success
+with text (Devlin et al. 2019), image (Chen et al. 2020),
+and audio data (Oord, Li, and Vinyals 2018). Motivated
+by these works, we develop an adaptive data augmenta-
+tion method for spatio-temporal graph data and introduce
+two pretext tasks to learn representations that are robust to
+spatio-temporal heterogeneity, which has not been well ex-
+plored in existing traffic flow prediction methods.
+6
+Conclusion and Future Work
+This work investigated the traffic prediction problem by
+proposing a novel spatio-temporal self-supervised learning
+(ST-SSL) framework. Specifically, we integrated temporal
+and spatial convolutions to encode spatial-temporal traf-
+fic patterns. Then, we devised i) a spatial self-supervised
+learning paradigm that consists of an adaptive graph aug-
+mentation and a clustering-based generative task, and ii) a
+temporal self-supervised learning paradigm that relies on a
+time-aware contrastive task, to supplement the main traffic
+flow prediction task with spatial and temporal heterogeneity-
+aware self-supervised signals. Comprehensive experiments
+on four traffic flow datasets demonstrated the robustness
+of ST-SSL. The future work lies in extending our spatial-
+temporal SSL framework to a model-agnostic paradigm.
+4362
+
+Acknowledgments
+This work was supported by the National Key R&D Program
+of China (2019YFB2101804). Prof. Wang’s work was sup-
+ported by the National Natural Science Foundation of China
+(No. 72222022, 82161148011, 72171013), the Fundamen-
+tal Research Funds for the Central Universities (YWF-22-L-
+838) and the DiDi Gaia Collaborative Research Funds. Dr.
+Zhang’s work was supported by the National Natural Sci-
+ence Foundation of China (No. 62172034) and the Beijing
+Nova Program (Z201100006820053).
+References
+Bai, L.; Yao, L.; Li, C.; Wang, X.; and Wang, C. 2020.
+Adaptive Graph Convolutional Recurrent Network for Traf-
+fic Forecasting. In Larochelle, H.; Ranzato, M.; Hadsell, R.;
+Balcan, M.; and Lin, H., eds., Advances in Neural Informa-
+tion Processing Systems 33: Annual Conference on Neural
+Information Processing Systems 2020, NeurIPS 2020, De-
+cember 6-12, 2020, virtual.
+Castro-Neto, M.; Jeong, Y.-S.; Jeong, M.-K.; and Han, L. D.
+2009. Online-SVR for short-term traffic flow prediction un-
+der typical and atypical traffic conditions. Expert Systems
+with Applications, 36(3): 6164–6173.
+Chen, T.; Kornblith, S.; Norouzi, M.; and Hinton, G. E.
+2020. A Simple Framework for Contrastive Learning of Vi-
+sual Representations. In Proceedings of the 37th Interna-
+tional Conference on Machine Learning, ICML 2020, 13-18
+July 2020, Virtual Event, volume 119 of Proceedings of Ma-
+chine Learning Research, 1597–1607. PMLR.
+Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019.
+BERT: Pre-training of Deep Bidirectional Transformers for
+Language Understanding. In Proceedings of the 2019 Con-
+ference of the North American Chapter of the Association
+for Computational Linguistics: Human Language Technolo-
+gies, Volume 1 (Long and Short Papers), 4171–4186. Min-
+neapolis, Minnesota: Association for Computational Lin-
+guistics.
+Ji, J.; Wang, J.; Jiang, Z.; Jiang, J.; and Zhang, H. 2022a.
+STDEN: Towards Physics-Guided Neural Networks for
+Traffic Flow Prediction. Proceedings of the AAAI Confer-
+ence on Artificial Intelligence, 36(4): 4048–4056.
+Ji, J.; Wang, J.; Jiang, Z.; Ma, J.; and Zhang, H. 2020. Inter-
+pretable spatiotemporal deep learning model for traffic flow
+prediction based on potential energy fields. In 2020 IEEE
+International Conference on Data Mining (ICDM), 1076–
+1081.
+Ji, J.; Wang, J.; Wu, J.; Han, B.; Zhang, J.; and Zheng, Y.
+2022b. Precision CityShield Against Hazardous Chemicals
+Threats via Location Mining and Self-Supervised Learning.
+In Proceedings of the 28th ACM SIGKDD Conference on
+Knowledge Discovery and Data Mining, 3072–3080.
+Kumar, S. V.; and Vanajakshi, L. 2015. Short-term traffic
+flow prediction using seasonal ARIMA model with limited
+input data. European Transport Research Review, 7(3): 1–9.
+Li, M.; and Zhu, Z. 2021.
+Spatial-temporal fusion graph
+neural networks for traffic flow forecasting. Proceedings of
+the AAAI Conference on Artificial Intelligence, 35(5): 4189–
+4196.
+Oord, A.; Li, Y.; and Vinyals, O. 2018.
+Representa-
+tion learning with contrastive predictive coding.
+CoRR,
+abs/1807.03748.
+Pan, Z.; Liang, Y.; Wang, W.; Yu, Y.; Zheng, Y.; and Zhang,
+J. 2019a. Urban Traffic Prediction from Spatio-Temporal
+Data Using Deep Meta Learning. In Teredesai, A.; Kumar,
+V.; Li, Y.; Rosales, R.; Terzi, E.; and Karypis, G., eds., Pro-
+ceedings of the 25th ACM SIGKDD International Confer-
+ence on Knowledge Discovery & Data Mining, KDD 2019,
+Anchorage, AK, USA, August 4-8, 2019, 1720–1730. ACM.
+Pan, Z.; Wang, Z.; Wang, W.; Yu, Y.; Zhang, J.; and Zheng,
+Y. 2019b. Matrix Factorization for Spatio-Temporal Neu-
+ral Networks with Applications to Urban Flow Prediction.
+In Zhu, W.; Tao, D.; Cheng, X.; Cui, P.; Rundensteiner,
+E. A.; Carmel, D.; He, Q.; and Yu, J. X., eds., Proceedings
+of the 28th ACM International Conference on Information
+and Knowledge Management, CIKM 2019, Beijing, China,
+November 3-7, 2019, 2683–2691. ACM.
+Ren, H.; Wang, J.; and Zhao, W. X. 2022. Generative Adver-
+sarial Networks Enhanced Pre-training for Insufficient Elec-
+tronic Health Records Modeling. In Proceedings of the 28th
+ACM SIGKDD Conference on Knowledge Discovery and
+Data Mining, 3810–3818.
+Ren, H.; Wang, J.; Zhao, W. X.; and Wu, N. 2021. Rapt:
+Pre-training of time-aware transformer for learning robust
+healthcare representation. In Proceedings of the 27th ACM
+SIGKDD conference on knowledge discovery & data min-
+ing, 3503–3511.
+Song, C.; Lin, Y.; Guo, S.; and Wan, H. 2020.
+Spatial-
+Temporal Synchronous Graph Convolutional Networks: A
+New Framework for Spatial-Temporal Network Data Fore-
+casting. In The Thirty-Fourth AAAI Conference on Artificial
+Intelligence, AAAI 2020, The Thirty-Second Innovative Ap-
+plications of Artificial Intelligence Conference, IAAI 2020,
+The Tenth AAAI Symposium on Educational Advances in Ar-
+tificial Intelligence, EAAI 2020, New York, NY, USA, Febru-
+ary 7-12, 2020, 914–921. AAAI Press.
+Van der Maaten, L.; and Hinton, G. 2008. Visualizing data
+using t-SNE. Journal of machine learning research, 9(11).
+Wang, J.; Gu, Q.; Wu, J.; Liu, G.; and Xiong, Z. 2016. Traffic
+speed prediction and congestion source exploration: A deep
+learning method. In ICDM, 499–508.
+Wang, J.; Ji, J.; Jiang, Z.; and Sun, L. 2022. Traffic Flow
+Prediction Based on Spatiotemporal Potential Energy Fields.
+IEEE Transactions on Knowledge and Data Engineering, 1–
+14.
+Wang, J.; Jiang, J.; Jiang, W.; Li, C.; and Zhao, W. X. 2021.
+LibCity: An open library for traffic prediction. In Proceed-
+ings of the 29th International Conference on Advances in
+Geographic Information Systems, 145–148.
+Wang, J.; Wu, J.; Wang, Z.; Gao, F.; and Xiong, Z. 2019a.
+Understanding urban dynamics via context-aware tensor
+factorization with neighboring regularization. IEEE Trans-
+actions on Knowledge Data Engineering, 32(11): 2269–
+2283.
+4363
+
+Wang, J.; Wu, N.; Zhao, W. X.; Peng, F.; and Lin, X. 2019b.
+Empowering A* Search Algorithms with Neural Networks
+for Personalized Route Recommendation. In Teredesai, A.;
+Kumar, V.; Li, Y.; Rosales, R.; Terzi, E.; and Karypis, G.,
+eds., Proceedings of the 25th ACM SIGKDD International
+Conference on Knowledge Discovery & Data Mining, KDD
+2019, Anchorage, AK, USA, August 4-8, 2019, 539–547.
+ACM.
+Wu, N.; Zhao, W. X.; Wang, J.; and Pan, D. 2020. Learn-
+ing Effective Road Network Representation with Hierarchi-
+cal Graph Neural Networks. In Gupta, R.; Liu, Y.; Tang, J.;
+and Prakash, B. A., eds., KDD ’20: The 26th ACM SIGKDD
+Conference on Knowledge Discovery and Data Mining, Vir-
+tual Event, CA, USA, August 23-27, 2020, 6–14. ACM.
+Yao, H.; Tang, X.; Wei, H.; Zheng, G.; and Li, Z. 2019.
+Revisiting Spatial-Temporal Similarity: A Deep Learning
+Framework for Traffic Prediction.
+In The Thirty-Third
+AAAI Conference on Artificial Intelligence, AAAI 2019, The
+Thirty-First Innovative Applications of Artificial Intelligence
+Conference, IAAI 2019, The Ninth AAAI Symposium on Ed-
+ucational Advances in Artificial Intelligence, EAAI 2019,
+Honolulu, Hawaii, USA, January 27 - February 1, 2019,
+5668–5675. AAAI Press.
+Ye, X.; Fang, S.; Sun, F.; Zhang, C.; and Xiang, S. 2022.
+Meta graph transformer: A novel framework for spatial-
+temporal traffic prediction. Neurocomputing, 491: 544–563.
+Yu, B.; Yin, H.; and Zhu, Z. 2018. Spatio-Temporal Graph
+Convolutional Networks: A Deep Learning Framework for
+Traffic Forecasting.
+In Lang, J., ed., Proceedings of the
+Twenty-Seventh International Joint Conference on Artificial
+Intelligence, IJCAI 2018, July 13-19, 2018, Stockholm, Swe-
+den, 3634–3640. ijcai.org.
+Yuan, Z.; Zhou, X.; and Yang, T. 2018. Hetero-ConvLSTM:
+A Deep Learning Approach to Traffic Accident Prediction
+on Heterogeneous Spatio-Temporal Data. In Guo, Y.; and
+Farooq, F., eds., Proceedings of the 24th ACM SIGKDD In-
+ternational Conference on Knowledge Discovery & Data
+Mining, KDD 2018, London, UK, August 19-23, 2018, 984–
+992. ACM.
+Zhang, J.; Zheng, Y.; and Qi, D. 2017.
+Deep Spatio-
+Temporal Residual Networks for Citywide Crowd Flows
+Prediction. In Singh, S. P.; and Markovitch, S., eds., Pro-
+ceedings of the Thirty-First AAAI Conference on Artificial
+Intelligence, February 4-9, 2017, San Francisco, California,
+USA, 1655–1661. AAAI Press.
+Zhang, X.; Huang, C.; Xu, Y.; and Xia, L. 2020. Spatial-
+Temporal Convolutional Graph Attention Networks for
+Citywide Traffic Flow Forecasting. In d’Aquin, M.; Dietze,
+S.; Hauff, C.; Curry, E.; and Cudr´e-Mauroux, P., eds., CIKM
+’20: The 29th ACM International Conference on Informa-
+tion and Knowledge Management, Virtual Event, Ireland,
+October 19-23, 2020, 1853–1862. ACM.
+Zhang, X.; Huang, C.; Xu, Y.; Xia, L.; Dai, P.; Bo, L.; Zhang,
+J.; and Zheng, Y. 2021. Traffic flow forecasting with spatial-
+temporal graph diffusion network. Proceedings of the AAAI
+Conference on Artificial Intelligence, 35(17): 15008–15015.
+Zheng, C.; Fan, X.; Wang, C.; and Qi, J. 2020.
+GMAN:
+A Graph Multi-Attention Network for Traffic Prediction.
+In The Thirty-Fourth AAAI Conference on Artificial Intel-
+ligence, AAAI 2020, The Thirty-Second Innovative Applica-
+tions of Artificial Intelligence Conference, IAAI 2020, The
+Tenth AAAI Symposium on Educational Advances in Artifi-
+cial Intelligence, EAAI 2020, New York, NY, USA, February
+7-12, 2020, 1234–1241. AAAI Press.
+Zhu, Y.; Xu, Y.; Yu, F.; Liu, Q.; Wu, S.; and Wang, L. 2021.
+Graph contrastive learning with adaptive augmentation. In
+Proceedings of the Web Conference 2021, 2069–2080.
+4364

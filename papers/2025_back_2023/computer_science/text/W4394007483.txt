@@ -1,0 +1,3857 @@
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+1
+ChangeMamba: Remote Sensing Change Detection
+with Spatio-Temporal State Space Model
+Hongruixuan Chen†, Graduate Student Member, IEEE, Jian Song†, Chengxi Han, Graduate Student
+Member, IEEE, Junshi Xia, Senior Member, IEEE, Naoto Yokoya, Member, IEEE
+Abstract—Convolutional neural networks (CNN) and Trans-
+formers have made impressive progress in the field of remote
+sensing change detection (CD). However, both architectures
+have inherent shortcomings: CNN are constrained by a lim-
+ited receptive field that may hinder their ability to capture
+broader spatial contexts, while Transformers are computationally
+intensive, making them costly to train and deploy on large
+datasets. Recently, the Mamba architecture, based on state space
+models, has shown remarkable performance in a series of natural
+language processing tasks, which can effectively compensate for
+the shortcomings of the above two architectures. In this paper, we
+explore for the first time the potential of the Mamba architecture
+for remote sensing CD tasks. We tailor the corresponding frame-
+works, called MambaBCD, MambaSCD, and MambaBDA, for
+binary change detection (BCD), semantic change detection (SCD),
+and building damage assessment (BDA), respectively. All three
+frameworks adopt the cutting-edge Visual Mamba architecture
+as the encoder, which allows full learning of global spatial
+contextual information from the input images. For the change
+decoder, which is available in all three architectures, we propose
+three spatio-temporal relationship modeling mechanisms, which
+can be naturally combined with the Mamba architecture and
+fully utilize its attribute to achieve spatio-temporal interaction
+of multi-temporal features, thereby obtaining accurate change
+information. On five benchmark datasets, our proposed frame-
+works outperform current CNN- and Transformer-based ap-
+proaches without using any complex training strategies or tricks,
+fully demonstrating the potential of the Mamba architecture in
+CD tasks. Further experiments show that our architecture is
+quite robust to degraded data. The source code is available in
+https://github.com/ChenHongruixuan/MambaCD.
+Index Terms—State space model, Mamba, binary change de-
+tection, semantic change detection, building damage assessment,
+spatio-temporal relationship, optical high-resolution images
+I. INTRODUCTION
+C
+HANGE detection (CD) has been a popular field within
+the remote sensing community since the inception of
+Manuscript accepted in June 20, 2024. This work was supported in
+part by the Council for Science, Technology and Innovation (CSTI), the
+Cross-ministerial Strategic Innovation Promotion Program (SIP), Development
+of a Resilient Smart Network System against Natural Disasters (Funding
+agency: NIED), the JSPS, KAKENHI under Grant Number 22H03609, JST,
+FOREST under Grant Number JPMJFR206S, Microsoft Research Asia, and
+Next Generation AI Research Center, The University of Tokyo. (†: equal
+contribution; Corresponding author: Naoto Yokoya)
+Hongruixuan Chen, Jian Song, and Naoto Yokoya are with Graduate
+School of Frontier Sciences, The University of Tokyo, Chiba, Japan (e-mail:
+qschrx@gmail.com; song@ms.k.u-tokyo.ac.jp; yokoya@k.u-tokyo.ac.jp).
+Chengxi Han is with State Key Laboratory of Information Engineering in
+Surveying, Mapping, and Remote Sensing, Wuhan University, Wuhan, China
+(e-mail: chengxihan@whu.edu.cn).
+Junshi Xia is with RIKEN Center for Advanced Intelligence Project (AIP),
+RIKEN, Tokyo, 103-0027, Japan (e-mail: junshi.xia@riken.jp).
+remote sensing technology. It aims to detect changes in objects
+on the Earth’s surface from multi-temporal remote sensing
+images acquired at different times. Depending on the desired
+result from the change detector, CD tasks can be categorized
+into three types, namely binary CD (BCD), semantic CD
+(SCD), and building damage assessment (BDA). Now, CD
+techniques play an important role in many fields, including
+land cover change analysis, urban sprawl studies, disaster
+response, geographic information system (GIS) updating and
+ecological monitoring [1]–[7].
+Optical high-resolution remote sensing imagery has become
+one of the most applied and researched data sources in the
+field of CD, which can provide detailed textural and geometric
+structural information about surface features, allowing us to
+achieve more refined changes [3]. Due to the increased het-
+erogeneity within the same land-cover feature brought about
+by the increase in spatial resolution, traditional pixel-based CD
+methods [8]–[10] are difficult to achieve satisfactory detection
+results. To cope with this, researchers proposed object-based
+CD methods [11]–[13], which take the object consisting of
+homogeneous pixels as the basic unit for CD. However, these
+methods rely on hand-designed “shallow” features, which are
+not representative and robust enough to cope with complex
+ground conditions in multi-temporal high-resolution images
+[14], [15].
+The emergence of deep learning has brought new models
+and paradigms for CD, greatly improving the efficiency and
+accuracy of CD. After the early days of developing image
+patch-based approaches with tiny deep learning models [16]–
+[18], the release of a number of large-scale benchmark datasets
+[19]–[21] has allowed us to start designing and introduc-
+ing larger and deeper models. Convolutional neural network
+(CNN)-based methods have been dominant within the field
+of CD since the introduction of fully convolutional networks
+(FCNs) to the field by Daudt et al. [22]. By employing
+models within the computer vision field as well as a priori
+knowledge of the CD task, many representative methods have
+been proposed [3], [4], [23]–[27]. Despite the decent results
+achieved by these methods, the inherent shortcomings of the
+CNN model structure, i.e., the inability of the limited receptive
+field to capture long-range dependencies between pixels, make
+these methods still fall short when dealing with complex
+and diverse multi-temporal scenes in images with different
+spatial-temporal resolutions [28]. The emergence of the visual
+Transformer [29] provides an effective way to solve the above
+problems. By means of the stacked self-attention modules,
+the Transformer architecture can fully model the relationship
+arXiv:2404.03425v7  [eess.IV]  30 Dec 2024
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+2
+between all the pixels of the whole image. Currently, more
+and more CD architectures adopt Transformer architectures
+as the encoder to extract representative and robust features
+[30]–[33] and utilize it in the decoder to capture the spatio-
+temporal relationships between multi-temporal features [28],
+[34], exhibiting superior performance.
+Nonetheless, the self-attention operation demands quadratic
+complexity in terms of image sizes, resulting in expensive
+computational overhead, which is detrimental in dense pre-
+diction tasks, e.g., land-cover mapping, object detection, and
+CD, in large-scale remote sensing datasets. Some available so-
+lutions, such as limiting the size of the computational window
+or the step size to improve attention efficiency, come at the
+cost of imposing limits on the size of the reception field [35],
+[36]. As a viable alternative to the Transformer architecture,
+state space models (SSMs), especially structured state space
+sequence models (S4) [37], have shown cutting-edge perfor-
+mance in continuous long-sequence data analysis, with the
+promising attribute of linear scaling in sequence length. The
+Mamba architecture [38] further improves on the S4 model
+by employing a selection mechanism that allows the model to
+select relevant information in an input-dependent manner. By
+combining it with hardware-aware implementations, Mamba
+outperforms Transformers on a number of downstream tasks
+with high efficiency. Very recently, Mamba architecture has
+been extended to image data and shown promising results on
+some visual tasks [39], [40]. However, its potential for high-
+resolution optical images and different CD subtasks is still
+under-explored. How to design a suitable architecture based
+on a priori knowledge of CD tasks is undoubtedly valuable
+for subsequent research in the community.
+In this paper, we present the first attempt at introducing
+Mamba architecture for CD tasks and propose several spatio-
+temporal state space models (collectively called Change-
+Mamba) to realize effective and robust CD. ChangeMamba
+can effectively model the global spatial context and spatio-
+temporal relationships in multi-temporal images, thereby
+showing very promising results on the three subtasks of CD,
+namely BCD, SCD, and BDA. Specifically, ChangeMamba is
+based on the recently proposed VMamba architecture [39],
+which adopts a Cross-Scan Module (CSM) to unfold image
+patches in different spatial directions to achieve effective
+modeling of global contextual information from images. Since
+CD tasks require the detector to adequately learn spatio-
+temporal features from multi-temporal images, we design three
+spatio-tepmoral relationship modeling mechanisms and natu-
+rally combine them with Mamba architecture. The proposed
+three mechanisms can adequately model the spatio-temporal
+relationships between multi-temporal features by scanning
+them in different ways, and thus effectively detect the different
+categories of changes, including binary changes, semantic
+changes, and building damage levels.
+In summary, the main contributions of this paper are as
+follows:
+1) For the first time, we explore the application of the
+Mamba architecture in the field of remote sensing
+change detection, thereby achieving high accuracy, effi-
+cient, and robust CD.
+2) Based on the Mamba architecture and incorporating
+the unique characteristics of CD tasks, we design the
+corresponding network frameworks for each of the three
+CD tasks, i.e., BCD, SCD, and BDA.
+3) Three spatio-temporal relationship modeling mecha-
+nisms are proposed, tailored for CD tasks, with the aid
+of the Mamba architecture to fully learn spatio-temporal
+features.
+4) The proposed three frameworks show very competitive
+and even SOTA performance on five benchmark datasets,
+demonstrating their superiority. The source code for this
+work is publicly available for contributions to subse-
+quent possible research.
+The remainder of this paper is organized as follows. Sec-
+tion II reviews related work. Section III details the three
+ChangeMamba architectures proposed for BCD, SCD, and
+BDA, respectively. The experimental results and discussion
+are provided in Sections IV. Section V draws the conclusion.
+II. RELATED WORKS
+In this section, we focus on reviewing deep learning-based
+CD methods using optical high-resolution remote sensing
+images as data sources.
+A. CNN-Based Method
+The rapid evolution of CNN and its prowess in auto-
+matically extracting hierarchical features have led to wide
+applications in CD tasks. After the early stage of the patch-
+based framework [16], [18], Daudt et al. [22] presented the
+first attempt to introduce FCNs into the BCD field and three
+basic FCNs architectures were developed. After that, many
+representative network architectures were proposed. Zhang et
+al. [23] sought to tailor networks for semantic segmentation
+tasks more suitable for the BCD task by integrating feature
+change maps as a deep supervised signal, thus refining the
+final prediction. To make the framework suitable for handling
+multi-source images, Chen et al. [17] proposed a framework
+by combining long- and short-term memory (LSTM) net-
+works with CNNs. Furthermore, Fang et al. [41] designed
+a Siamese architecture with denser connections to facilitate
+more effective shallow information exchange for BCD. To
+combat the challenge of uneven foreground-background dis-
+tributions within BCD, Han et al. [42] employed a novel
+sampling approach and an attention mechanism to integrate
+global information more effectively. After that, they introduced
+an innovative self-attention module that not only enhances
+long-distance dependency, but also specifically targets the
+refinement of BCD predictions [43]. Zhao et al. [44] explored
+the effect of different fusion strategies on BCD performance
+and designed a dual encoder-decoder architecture to improve
+detection performance. To solve the problem of insufficient
+samples, the transfer learning technique was also introduced.
+Guo et al. [4] developed an attention-based network for semi-
+supervised building updating. Cao et al. [25] designed a
+full-level fused cross-task transfer learning architecture for
+building change detection. Recently, Chen et al. [45] has
+developed a sample generation method by simply exchanging
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+3
+image patches, which can train change detectors on single-
+temporal images in an unsupervised manner.
+Compared to BCD, which only aims to identify “where”
+changes have occurred, SCD further seeks to determine “what”
+the changes are. Although this poses a greater challenge,
+it is more important for practical application analysis [24],
+[46]. Early explorations based on CNNs for SCD is the
+study [46], which adopts a multitask learning framework to
+simultaneously predict binary change maps and land cover
+maps, using the latter to assist in generating the final semantic
+change prediction. Mou et al. [47] proposed to combine
+recurrent neural network (RNN) and CNN for SCD. Yang et
+al. [20] introduced a benchmark dataset for SCD along with
+a new evaluation metric. Ding et al. [48] proposed a more
+powerful architecture to address the insufficient exchange
+of information between the semantic and change decoders.
+A new loss function was introduced to force the network
+to correlate two decoders. Zheng et al. [24] continued to
+strengthen the interactions between multi-temporal features,
+designing a temporal-symmetric transformer (TST) module
+to model the spatio-temporal relationships. In [49], channel
+attention was used to embed change information into temporal
+features. In [50], temporal salient features were fused to extract
+and improve the representation of changes. In [51] and [14],
+unsupervised SCD methods were also studied, using pre-
+trained CNNs or unsupervised learning techniques to extract
+hierarchical features, then comparing these features to deter-
+mine changes.
+Due to the lack of suitable benchmark datasets caused by
+the scarcity of disaster events and difficulty in annotation,
+the methodology progression of BDA has been relatively
+slow. The establishment of the xBD benchmark dataset in
+the xView2 Challenge [52], in turn, provides a large-scale
+benchmark for the field. The procedural approach to BDA
+typically encompasses two primary components: identifying
+the location of the building and assessing the level of damage
+incurred. In the xBD dataset, there are four damage levels,
+i.e., “no damage”, “minor damage”, “major damage”, and
+“destroyed”. This bifurcation essentially positions BDA as a
+nuanced subset of SCD, with a focus on quantifying damage
+levels. Among established approaches, the xView2 challenge
+[52] introduced a baseline method that employs a residual
+UNet for building localization and damage classification,
+trained with pre and post-disaster imagery. The Siamese-UNet,
+the winning approach of the xView2 challenge [52], utilized
+a UNet framework for both pixel-level building localization
+and damage-level classification. It initialized the UNet for the
+damage classification task with the parameters from the UNet
+for the building localization task. A further advancement [53]
+utilized Mask-RCNN architecture [54] to address BDA, in-
+corporating Siamese encoders, multitask heads, and instance-
+level predictions. Zheng et al. [3] introduced a deep object-
+based architecture that encompasses shared and task-specific
+encoders, alongside an FCN-based multitask decoder. This
+development enhances task integration with an object-based
+post-processing strategy, resulting in more refined outcomes.
+The development of CNN-based CD methods has matured
+significantly over time. However, despite their excellent ability
+to extract local features, CNN architectures inherently struggle
+to capture long-distance dependencies [29]. This limitation
+becomes particularly critical in CD tasks, where changed
+regions, compared to background areas, are often sparse and
+scattered. The network’s ability to model relationships beyond
+local areas is essential for accurately identifying these changed
+regions [28], [30].
+B. Transformer-Based Method
+Recently, the promising results have been obtained by
+Transformers in the computer vision field [29], [36]. Their
+superior long-distance modeling capabilities have made them
+effectively overcome the challenges faced by the CNNs.
+As a result, many studies have begun to address CD tasks
+using Transformer architectures. In the field of BCD, Chen
+et al. [28] emerged as a pioneering approach, transforming
+multi-temporal images into semantic tokens to model spatial-
+temporal relationships within a token-based framework, en-
+hancing the CD process. Bandara et al. [30] proposed a pure
+Transformer-based Siamese network, which has a Siamese
+Transformer encoder coupled with a multilayer perceptron
+(MLP) decoder. This architecture eliminates the need for a
+CNN-based feature extractor. Similarly, Zhang et al. [32] pro-
+posed a pure Transformer-driven model, adopting a Siamese
+U-shaped structure to fully recover detailed change informa-
+tion. Li et al. [34] introduced a hybrid model that blends the
+global contextual modeling capability of Transformers with
+the CNN block and UNet architecture. It eliminates UNet’s
+redundant information and enhances feature quality through
+a difference enhancement module, leading to more precise
+detection results.
+For Transformer-based SCD, Niu et al. [55] combined pre-
+activated residual and Transformer blocks to extract semantic
+features from multi-temporal image pairs, which is crucial
+for detecting subtle changes. The model’s efficacy is further
+amplified by multitask prediction branches and a custom loss
+function. In addition, Ding et al. [56] introduced the semantic
+change Transformer, a CSWin Transformer adaptation, to
+explicitly learn semantic transitions. The model has a triple
+encoder-decoder architecture to enhance spatial features and
+incorporates spatio-temporal dynamic and task-specific prior
+information, leading to a decrease in learning disparities. This
+approach significantly boosts accuracy on benchmarks, adeptly
+managing scenarios with sparse labels.
+Transformer-based BDA methods are currently understud-
+ied. Chen et al. [31] proposed the first pure Transformer-
+based BDA architecture called DamFormer. It has a Siamese
+Mix Transformer (MiT) [36] encoder and a lightweight all-
+MLP decoder to efficiently process multi-temporal image
+pairs. DamFormer employs a multi-temporal fusion module
+for improved information integration, and a dual-task decoder
+for precise building localization and damage classification.
+By adopting strategies like weight sharing and innovative
+fusion mechanisms, it efficiently handles high-resolution im-
+agery with lower computational costs, making it effective and
+streamlined for BDA.
+Although Transformer-based methods have significantly en-
+hanced CD accuracy through their powerful nonlocal mod-
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+4
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Weight-sharing
+Pre-event image
+Post-event image
+Building 
+localization map
+Damage 
+classification map
+Encoder
+Decoder
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Weight-sharing
+Pre-event image
+Post-event image
+Encoder
+Decoder
+Binary 
+change map
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Weight-sharing
+Pre-event image
+Post-event image
+Encoder
+Decoder
+Stage I
+Stage II
+Stage III
+Stage IV
+Stage I
+Stage II
+Stage III
+Stage IV
+Binary 
+change map
+Land cover 
+map T1
+Land cover 
+map T2
+(a) MambaBCD
+(b) MambaSCD
+(c) MambaBDA
+Fig. 1: The network framework of the proposed (a) MambaBCD for binary change detection, (b) MambaSCD for semantic change detection,
+and (c) MamabaBDA for building damage assessment. The specific structure of the encoder and decoder is shown in Figs. 2, 4 and 6.
+eling capabilities, they come with substantial computational
+resource demands. Specifically, as the number of tokens in-
+creases, the consumption of computational resources escalates
+quadratically, posing challenges for processing large-scale
+input, such as optical high-resolution imagery. Recently, the
+emerging Mamba architecture [38] not only rivals Trans-
+formers in non-local modeling capabilities but also maintains
+computational overhead at a linear growth rate, which opens
+up the possibility of efficient and accurate CD.
+C. State Space Model
+The SSM concept first popped up with the S4 model [37],
+offering a new way to handle contextual information globally,
+which caught attention due to its attractive property of scaling
+linearly in sequence length. Based on the S4 model, Smith
+et al. [57] proposed a new S5 model by introducing MIMO
+SSM and efficient parallel scan into the S4 model. After that,
+the H3 model [58] further advanced these concepts, achieving
+a performance on par with that of Transformers in language
+modeling tasks. Recently, Gu et al. [38] proposed a data-
+dependent SSM layer and built a generic language model
+backbone called Mamba, which outperforms Transformers at
+different scales on large-scale real data and scales linearly in
+sequence length. Very recently, Visual Mamba [39] and Vision
+Mamba [40] have extended the Mamba architecture to 2D
+image data, showing superior performance on many computer
+vision tasks. Inspired by this progress, some pioneering work
+has introduced the Mamba architecture to the field of remote
+sensing image processing [59], [60]. Their studies show that
+the Mamba architecture can yield performance comparable to
+the advanced CNN and Transformer architectures on scene
+classification [60] and pansharpening [59] tasks. However,
+these works still focus on low-level tasks or classification
+tasks, and all of these tasks are single-temporal tasks [45].
+The potential of the Mamba architecture for multi-temporal
+remote sensing image-related scenarios and dense prediction
+tasks remains to be explored.
+III. METHODOLOGY
+A. Preliminaries
+The SSM-based models and Mamba are inspired by linear
+time-invariant systems, which map a 1-D function or sequence
+x (t) ∈R to the response y (t) ∈R through a hidden state
+h (t) ∈RN. These systems are usually formulated as linear
+ordinary differential equations (ODEs) as
+(
+h′ (t) = Ah(t) + Bx(t)
+y(t) = Ch(t)
+(1)
+where A ∈RN×N is the evolution parameter and B ∈
+RN×1, C ∈R1×N are the projection parameters.
+The S4 model [37] is a discrete counterpart of the continu-
+ous system, as continuous systems face significant challenges
+when integrated into deep learning algorithms. It contains a
+time scale parameter ∆that is used to convert the continuous
+parameters A and B into their discrete counterparts A and
+B. A prevalent way to achieve this transformation is to use a
+zero-order hold (ZOH) approach:
+(
+A = exp(∆A)
+B = (∆A)−1 (exp (∆A) −I) ∆B
+(2)
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+5
+After that, the discretization of Eq. (1) can be formulated
+as
+(
+h′
+t = Aht−1+
+Bxt
+yt = Cht
+(3)
+The output of x with sequence length Lx can be calculated
+directly by the following global convolution operation
+
+
+
+K =
+
+CB, CAB, . . . , CA
+Lx−1B
+
+y = x ∗K
+(4)
+where K ∈RLx is a structured convolutional kernel and ∗
+denotes a convolutional operation.
+Mamba architecture [38] builds on the S4 model by propos-
+ing a selection mechanism that allows the model to filter
+out irrelevant information and recall relevant information1. In
+addition, a hardware-aware algorithm has been developed for
+recursive computation of the model but will not be imple-
+mented in the extended state, optimizing the GPU memory
+layout. These characteristics allow the Mamba architecture
+not only to obtain promising results on languages and other
+data with long sequences, but also to achieve fast training and
+inference with memory and computational overhead linearly
+proportional to the sequence length.
+B. Problem Statement
+In this paper, we focus on three sub-tasks within the CD
+field. They are binary change detection (BCD), semantic
+change detection (SCD), and building damage assessment
+(BDA). The definitions of the three tasks are as follows.
+1) Binary Change Detection: BCD is the basic and the
+most intensively studied task in the CD field. It focuses on
+“where” change occurs. According to the category of interest,
+BCD can also be divided into category-agnostic CD focusing
+on general land-cover change information, and single-category
+CD, e.g., building CD and forest CD. Given a training set
+represented as Dbcd
+train =
+n
+XT1
+i , XT2
+i , Ybcd
+i
+oN bcd
+train
+i=1
+, where
+XT1
+i , XT2
+i
+∈RH×W×C is the i-th multi-temporal image pair
+acquired in T1 and T2, respectively, and Ybcd
+i
+∈{0, 1}H×W
+is the corresponding label, the goal of BCD is to train a
+change detector Fbcd
+θ
+on Dbcd
+train that can predict change maps
+reflecting accurate “change / non-change” binary information
+on new sets.
+2) Semantic Change Detection: Compared to BCD, SCD
+focuses not only on “where” the change occurs, but also on
+the “what” of the change, i.e. “from-to” semantic change in-
+formation [48]. The training set in the SCD task can be repre-
+sented as Dscd
+train =
+n
+XT1
+i , XT2
+i , YT1
+i , YT2
+i , Ybcd
+i
+oNtrain
+i=1
+.
+Compared to BCD, the corresponding land-cover labels
+YT1
+i , YT2
+i
+∈
+
+0, 1, · · · , Clcm	H×W with Clcm categories of
+XT1
+i
+and XT2
+i
+are additionally required. The goal of SCD
+is to train a semantic change detector Fscd
+θ
+on Dscd
+train that
+can predict land-cover maps of multi-temporal images and
+1Mamba architectures sometimes are abbreviated as the S6 model since
+they are S4 models with a selection mechanism and computed with a scan
+[38].
+binary change maps between them on new sets as accurately
+as possible. By combining the information in predicted land-
+cover maps and binary change maps, the from-to” semantic
+change information can be derived.
+3) Building Damage Assessment: BDA is a special “one-
+to-many” SCD task [3]. BDA requires recognizing not
+only the “where” of the change (damage) occurs but also
+post-event states of the object of interest (building) given
+the pre-event state of the object of interest. The train-
+ing set in the BDA task can be denoted as Dbda
+train
+=
+n
+XT1
+i , XT2
+i , Yloc
+i
+, Yclf
+i
+oNtrain
+i=1
+, where Yloc
+i
+∈{0, 1}H×W
+is the label of the object-of-interest (building) at T1, and
+Yclf
+i
+∈
+
+0, 1, · · · , Cdam	H×W is the post-event state (dam-
+age level) of the object of interest at T2.
+C. Network Architecture
+According to the commonalities and properties of the three
+CD subtasks, we design the corresponding network frame-
+works based on the Mamba architecture, called MambaBCD,
+MambaSCD, and MamabBDA, respectively. Fig. 1 shows
+the network framework of these three architectures. Among
+them, the encoders of the three networks are weight-sharing
+siamese networks based on the Visual State Space Model
+(VMamba) architecture [39]. VMamba can adequately extract
+the robust and representative features of the input images that
+benefit from the Mamba architecture and an efficient 2D cross-
+scan mechanism (as shown in Fig. 3) for downstream tasks.
+All three architectures have a change detector of the same
+structure for learning spatio-temporal relationships from the
+features extracted by the encoder. In addition, MambaSCD and
+MambaBDA additionally possess semantic decoders for other
+tasks, i.e., land-cover classification and building localization.
+The specific structure of the encoders and decoders in our
+architectures will be elaborated in Sections III-D and III-E.
+In this subsection, we focus on the input, output, and internal
+information flow of these three network architectures.
+1) MambaBCD: MambaBCD is the architecture designed
+for the BCD task. First, the siamese encoder network de-
+noted as Fenc
+θ
+extracts multi-level features from the input
+multi-temporal images as
+n
+FT1
+i,j
+o4
+j=1 = Fenc
+θ
+
+XT1
+i
+
+and
+n
+FT2
+i,j
+o4
+j=1
+=
+Fenc
+θ
+
+XT2
+i
+
+. Next, these multi-level fea-
+tures are fed into a tailored change decoder Fcdec
+θ
+. Based
+on the Mamba architecture, the change decoder can fully
+learn the spatio-temporal relationship from multi-level fea-
+tures through three different mechanisms, and gradually
+obtains an accurate BCD result, formulated as Pbcd
+i
+=
+Fcdec
+θ
+n
+FT1
+i,j
+o4
+j=1 ,
+n
+FT2
+i,j
+o4
+j=1
+
+. The binary change map can
+be obtained as ˆYbcd
+i
+= argmaxcPbcd
+i
+.
+2) MambaSCD: MambaSCD is the architecture designed
+for the SCD task. As shown in Fig. 1-(b), MambaSCD adds
+two additional semantic decoders for land cover mapping
+tasks based on MambaBCD, denoted as FT1
+θ
+and FT2
+θ . In
+addition to being treated as input as Fcdec to learn spatio-
+temporal relationships to predict BCD results, the multi-level
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+6
+VSS 
+block
+Down sampling
+Stage II
+×L2
+VSS 
+block
+Down sampling
+Stage III
+×L3
+VSS 
+block
+Down sampling
+Stage IV
+×L4
+VSS 
+block
+Stem
+Stage I
+×L1
+Input image
+H×W×C0
+LN
+Linear
+DWConv
+SS2D
+LN
+Linear
+Linear
+VSS block
+Multi-level features for downstream decoders
+Fig. 2: The specific structure of the encoder network is based on the visual state space model used in our three architectures.
+Self-attention mechanism: O(N2) complexity
+(a)
+Spatial cross-scan mechanism: O(N) complexity
+(b)
+Fig. 3: Illustration of the (a) self-attention mechanism [29], [61]
+and (b) cross-scan mechanism [39] to capture global contextual
+information.
+features extracted by the encoder are also fed into FT1
+θ
+and
+FT2
+θ
+to predict the land-cover map of the corresponding
+temporal image, formulated as PT1
+i
+= FT1
+θ
+n
+FT1
+i,j
+o4
+j=1
+
+and
+PT2
+i
+= FT2
+θ
+n
+FT2
+i,j
+o4
+j=1
+
+. After obtaining the land-cover
+maps ˆYT1
+i
+= argmaxcPT1
+i
+and ˆYT2
+i
+= argmaxcPT2
+i
+and the
+binary change map ˆYbcd
+i
+, the semantic change information of
+T1 →T2 can be obtained by performing the mask operation
+on ˆYT1
+i
+and ˆYT2
+i
+using ˆYbcd
+i
+[6], [24], [46].
+3) MambaBDA: MambaBDA is the architecture presented
+for the BDA task. Unlike the typical SCD task, the BDA
+task only needs to predict land-cover maps (building loca-
+tion maps) for pre-event images. Therefore, in the Mam-
+baBDA architecture shown in Fig. 1-(c), there is only one
+semantic decoder Floc
+θ
+to predict the building localization
+map as Ploc
+i
+=
+Floc
+θ
+n
+FT1
+i,j
+o4
+j=1
+
+. Like MambaBCD
+and MambaSCD, a change decoder denoted as Fclf
+θ
+then
+learns spatio-temporal relationships from multi-temporal fea-
+tures to classify the damage level of buildings as Pclf
+i
+=
+Fclf
+θ
+n
+FT1
+i,j
+o4
+j=1 ,
+n
+FT2
+i,j
+o4
+j=1
+
+. The obtained building lo-
+cation map ˆYloc
+i
+= argmaxcPloc
+i
+can be used for further
+post-processing on the obtained damage classification map
+ˆYclf
+i
+= argmaxcPclf
+i
+to improve the accuracy, e.g., object-
+based post-processing methods [3].
+D. Encoder Based on Visual State Space Model
+Mamba architecture causally processes the input data and
+thus can only capture information within the scanned part of
+the data. This attribute naturally aligns with natural language
+data, which poses significant challenges when adapting to non-
+causal data such as image [39]. Directly expanding image
+data along a certain dimension of space and inputting it into
+the S6 model will result in a lack of adequately modeled
+spatial contextual information. Recently, VMamba solved this
+problem well by proposing a 2D cross-scan mechanism. As
+shown in Fig. 3, before inputting the tokens into the S6 model,
+the cross-scan mechanism rearranges the tokens in spatial
+dimensions, i.e., top-left to bottom-right, bottom-right to top-
+left, top-right to bottom-left, and bottom-left to top-right.
+Finally, the resulting features are then merged. In this way,
+any pixel can get spatial context information from different
+directions. Moreover, the computational complexity of the
+VMamba model under the cross-scan mechanism is still O (N)
+compared to the self-attention operation in Transformer.
+Based on the VMamba architecture, the specific structure
+of the encoder network in our three proposed architectures is
+shown in Fig. 2. There are four stages, each of which first
+downsamples the input data, then fully models the spatial
+contextual information using a number of visual state space
+(VSS) blocks, and then outputs the features for that stage,
+i.e., FT1
+i,j and FT2
+i,j . The structure of the VSS block is also
+depicted in Fig. 2. The input first passes through a linear
+embedding layer and the output is split into two information
+flows. One flow passes through a 3 ×3 depth-wise convolution
+(DWConv) layer, followed by a Silu activation function [62]
+before entering the core SS2D module (i.e., the integration of
+the S6 model with the cross-scan mechanism). The output of
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+7
+STSS 
+block
+Stage I
+2× Upsampling
+Fusion 
+block
+Stage II
+STSS 
+block
+H/32×W/32×C4
+2× Upsampling
+H/32×W/32×C4
+Fusion 
+block
+Stage III
+STSS 
+block
+2× Upsampling
+Fusion 
+block
+Stage IV
+STSS 
+block
+4× Upsampling
+H/16×W/16×C3
+H/8×W/8×C2
+H/4×W/4×C1
+VSS 
+block
+VSS 
+block
+VSS 
+block
+Spatio-temporal token 
+generator
+C
+Conv
+STSS
+block
+1×1 Conv
+BN
+3×3 Conv
+3×3 Conv
+BN
+Fusion block
+Fig. 4: The specific structure of the change decoder used in MambaBCD, MambaSCD, and MambaBDA architectures based on the proposed
+spatio-temporal relationship modeling mechanisms in Fig. 5.
+(a) Spatio-temporal sequential modelling
+Post-event image
+Pre-event image
+(b) Spatio-temporal cross modelling
+(c) Spatio-temporal parallel modelling
+Fig. 5: Illustration of three mechanisms for learning spatio-temporal
+relationships.
+the SS2D module passes through a layer normalization (LN)
+layer and is then summed up with the outputs of the other
+streams that have been activated by Silu. This combination
+produces the final output of the VSS block. Finally, the
+features extracted for pre-event and post-event images from
+the four stages
+n
+FT1
+i,j
+o4
+j=1 and
+n
+FT2
+i,j
+o4
+j=1 are then used in
+the subsequent decoders responsible for specific tasks.
+E. Task-Specific Decoders
+1) Spatio-Temporal Relationship Modeling Mechanism:
+Although the employed encoder can extract robust and rep-
+resentative features, learning spatio-temporal relationships of
+multi-temporal images is also significant for CD tasks [24],
+[47]. To this end, we propose three mechanisms for modeling
+spatio-temporal relationships that can be aligned with the
+attribute of the S6 model capable of adequately modeling
+the global contextual information of long sequential data.
+Fig. 5 illustrates the three modeling mechanisms. They are
+spatio-temporal sequential modeling, spatio-temporal cross
+modeling, and spatial-temporal parallel modeling. Sequential
+modeling is unfolding the tokens of two temporal phases of
+data and then arranging them in temporal order as Fseq
+i,j
+=
+h
+FT1
+i,j (1) , · · · , FT1
+i,j
+  HW
+21+j
+
+, FT2
+i,j (1) , · · · , FT2
+i,j
+  HW
+21+j
+i
+.
+The
+cross-modeling mechanism, on the other hand, is modeling
+by cross-ordering the tokens of the two temporal phases
+as Fcrs
+i,j
+=
+h
+FT1
+i,j (1) , FT2
+i,j (1) , · · · FT1
+i,j
+  HW
+21+j
+
+, FT2
+i,j
+  HW
+21+j
+i
+.
+Finally, parallel modeling is done by concatenating the to-
+kens of the two temporal phases in the channel dimen-
+sion and then performing joint modeling, that is, Fpra
+i,j
+=
+concatc
+
+FT1
+i,j , FT2
+i,j
+
+. Through these three mechanisms and
+Mamba architecture, the spatio-temporal relationships intrinsic
+in the multi-temporal features will be fully explored, helping
+the change decoder to obtain accurate change detection results.
+2) Change Decoder: Based on the proposed three spatio-
+temporal learning mechanisms, the specific structure of the
+change decoder is then shown in Fig. 4. It fully learns
+the spatio-temporal relationships from the extracted multi-
+temporal features
+n
+FT1
+i,j
+o4
+j=1 and
+n
+FT2
+i,j
+o4
+j=1 in four stages
+and obtains accurate binary change maps. At the beginning of
+each stage, the spatio-temporal relationship of multi-temporal
+features is first modeled using a spatio-temporal state space
+(STSS) block. In the STSS block, a spatio-temporal tokens
+generator module will rearrange the input multi-temporal
+features, which are then fed into three VSS blocks. Each
+block is responsible for learning one of the spatio-temporal
+relationships in Fig. 5. The output of the STSS block of the
+current stage is then integrated with the information from the
+feature map of the previous stage through a fusion module. In
+the fusion module, the number of channels of the low-level
+feature map is mapped to be consistent with the high-level
+feature map by a 1×1 convolutional layer. Then, the high-level
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+8
+VSS 
+block
+Stage I
+2× Upsampling
+Fusion 
+block
+VSS 
+block
+Stage II
+2× Upsampling
+Fusion 
+block
+VSS 
+block
+Stage III
+2× Upsampling
+Fusion 
+block
+VSS 
+block
+Stage IV
+4× Upsampling
+Feature 
+from encoder
+H/32×W/32×C4
+Fig. 6: The specific structure of the semantic decoder in MambaSCD and MambaBDA architectures.
+and low-level feature maps are summed. Finally, the resulting
+feature map is smoothed by a residual layer. After passing
+through an upsampling layer, the feature map is fed to the
+next stage.
+3) Semantic Decoder: The specific structure of the se-
+mantic decoder is shown in Fig. 6. It is mainly responsible
+for gradually recovering the land-cover maps from the corre-
+sponding multi-level features extracted by the encoder. It also
+has four stages. At the beginning of each stage, the global
+spatial context information of the input data is first modeled
+using a VSS block. Then the feature map is up-sampled and
+integrated with information about the lower-level feature map
+with higher resolution through a fusion module. In the last
+stage, the features output by the VSS block are upsampled
+four times and used to predict the corresponding land cover
+map.
+F. Loss Function
+Since this paper focuses on exploring the potential of the
+Mamba architecture for CD tasks, we have optimized networks
+using commonly used loss functions in the field. Some tricks
+for improving accuracy such as focal loss [63], deep supervi-
+sion [23], multi-scale training/testing [6], etc. are not adopted.
+Even so, we can find that the proposed architecture achieves
+very competitive and even SOTA performance on all three
+subtasks in the experimental section.
+1) BCD: Since BCD can be regarded as a special semantic
+segmentation task [45], we directly optimize the network using
+the cross-entropy loss as
+Lbcd
+ce = −
+1
+N bcd
+train
+Nbcd
+train
+X
+i=1
+1
+X
+c=0
+˜Ybcd
+i
+(c) log(Pbcd
+i
+(c)),
+(5)
+where
+˜Ybcd
+i
+is
+the
+one-hot
+form
+of
+Ybcd
+i
+,
+Pbcd
+i
+=
+Fbcd
+θ
+
+XT1
+i , XT2
+i
+
+is the output of the binary change detector
+through the softmax activation.
+In addition, the Lovasz-softmax loss [64] is introduced to
+alleviate the problem of imbalance in the number of samples
+between changed and unchanged pixels. The final loss function
+for the BCD task is formulated as
+Lbcd
+final = Lbcd
+ce + Lbcd
+lov.
+(6)
+2) SCD: For the SCD task, in addition to optimizing the
+BCD task, it is also necessary to optimize the land cover
+mapping task for both pre-event and post-event images, which
+can be optimized with cross-entropy loss as
+
+
+
+
+
+
+
+
+
+
+
+
+
+LT1
+ce = −
+1
+N scd
+train
+Nscd
+train
+X
+i=1
+Clcm
+X
+c=0
+˜YT1
+i
+(c) log(PT1
+i
+(c))
+LT2
+ce = −
+1
+N scd
+train
+Nscd
+train
+X
+i=1
+Clcm
+X
+c=0
+˜YT2
+i
+(c) log(PT2
+i
+(c))
+,
+(7)
+where PT1
+i
+and PT2
+i
+are the probabilistic map of land-
+cover classification for the pre-event image and post-event
+image output by the semantic decoder of the MambaSCD
+architecture; LT1
+ce and LT2
+ce are the corresponding cross-entropy
+loss.
+Similarly, the Lovasz-softmax loss function is used to solve
+the sample imbalance problem. Thus, the final loss function
+for the SCD task takes the form
+Lscd
+final = Lbcd
+ce +Lbcd
+lov + 1
+2
+
+LT1
+ce + LT2
+ce + LT1
+lov + LT2
+lov
+
+. (8)
+3) BDA: BDA contains a building location task and a
+damage classification task. The cross-entropy loss for each
+task can be expressed as follows
+
+
+
+
+
+
+
+
+
+
+
+
+
+Lloc
+ce = −
+1
+N bda
+train
+Nbda
+train
+X
+i=1
+1
+X
+c=0
+˜Yloc
+i
+(c) log(Ploc
+i
+(c))
+Lclf
+ce = −
+1
+N bda
+train
+Nbda
+train
+X
+i=1
+Cdam
+X
+c=0
+˜Yclf
+i
+(c) log(Pclf
+i
+(c))
+,
+(9)
+where Ploc
+i
+and Pclf
+i
+are the output of localization branch
+and classification branch of the MambaBDA architecture, re-
+spectively; Lloc
+ce and Lclf
+ce are the corresponding cross-entropy
+loss of building localization and damage classification tasks,
+respectively.
+By utilizing the Lovasz-softmax loss function to solve the
+sample imbalance problem, the final loss function of BDA is
+formulated as
+Lbda
+final = Lloc
+ce + Lloc
+lov + Lclf
+ce + Lclf
+lov.
+(10)
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+9
+TABLE I: Information of the five benchmark datasets used for experiments.
+Dataset
+Study site
+Number of image pairs
+Size
+Resolution
+Evaluation task
+SYSU
+Hong Kong
+20,000
+256 × 256
+0.5m
+BCD (category-agnostic)
+LEVIR-CD+
+Texas of the U.S.
+985
+1,024 × 1,024
+0.5m
+BCD (single-category)
+WHU-CD
+Christchurch, New Zealand
+1
+32,508 × 15,354
+0.3m
+BCD (single-category)
+SECOND
+Hangzhou, Chengdu, and Shanghai
+4,662
+512 × 512
+0.5-3m
+SCD
+xBD
+15 countries
+11,034
+1,024 × 1,024
+<0.8m
+BDA
+IV. EXPERIMENTS AND DISCUSSIONS
+A. Datasets
+1) SYSU-CD [19]:
+This dataset is a category-agnostic
+CD dataset, which introduces a comprehensive collection
+of 20,000 pairs of 0.5 meter/pixel resolution aerial images
+from Hong Kong, spanning 2007 to 2014. This dataset is
+distinguished by its focus on urban and coastal changes,
+featuring high-rise buildings and infrastructure developments.
+For effective deep learning application, the dataset is structured
+into training, validation, and test sets following a 6:2:2 ratio,
+with 20,000 patches of 256 × 256. This dataset encompasses a
+range of various change scenarios such as urban construction,
+suburban expansion, groundwork, vegetation changes, road
+expansion, and sea construction.
+2) LEVIR-CD+ [65]: This advanced version of the LEVIR-
+CD dataset is a building CD dataset. It comprises 985 pairs
+of very high-resolution images at 0.5 meters/pixel, each with
+dimensions of 1024 × 1024 pixels. Spanning a time interval
+of 5 to 14 years, these multi-temporal images document
+significant building construction changes. It also encompasses
+a wide array of building types, including villa residences, tall
+apartments, small garages, and large warehouses, with a focus
+on both the emergence of new buildings and the decline of
+existing structures.
+3) WHU-CD [66]: The WHU-CD dataset, a subset of the
+larger WHU Building dataset, is tailored for the building CD
+task. It comprises two aerial datasets from Christchurch, New
+Zealand, captured in April 2012 and 2016, with a spatial
+resolution of 0.3 meters/pixel. This dataset is particularly
+focused on detecting changes in large and sparse building
+structures. The aerial images captured in 2012 cover an area
+of 20.5 km2, featuring 12,796 buildings, while the image
+captured in 2016 shows an increase to 16,077 buildings within
+the same area, reflecting significant urban development over
+the four-year period. We follow the official protocol [66] to
+split the dataset into training and testing areas for experiments.
+4) SECOND [20]: The SECOND dataset introduces a
+collection of 4,662 pairs of 512 × 512 aerial images at 0.5-
+3 meter/pixel resolution, annotated for SCD in cities such
+as Hangzhou, Chengdu, and Shanghai. It focuses on six
+primary land cover classes: non-vegetated ground surfaces,
+trees, low vegetation, water, buildings, and playgrounds to
+capture a wide range of geographical changes. The dataset
+uses land-cover map pairs and non-change masks to accurately
+represent change, facilitating the differentiation of changes
+from unchanged pixels within the same class.
+5) xBD [52]: The xBD dataset, pivotal for advancing BDA
+in disaster response, integrates pre- and post-disaster satellite
+TABLE II: Number of layers and feature channels for encoders in
+ChangeMamba series.
+Stage
+Tiny
+Small
+Base
+I
+L1 = 2
+L1 = 2
+L1 = 2
+C1 = 96
+C1 = 96
+C1 = 128
+II
+L2 = 2
+L2 = 2
+L2 = 2
+C2 = 192
+C2 = 192
+C2 = 256
+III
+L3 = 4
+L3 = 15
+L2 = 15
+C3 = 384
+C3 = 384
+C3 = 512
+IV
+L4 = 2
+L4 = 2
+L4 = 2
+C4 = 768
+C4 = 768
+C4 = 1024
+imagery with over 850,000 building annotations across 45,362
+km2. The dataset adheres to stringent criteria, featuring high-
+resolution imagery (better than 0.8 meter/pixel), encapsulating
+multiple levels of damage (“no damage”, “minor damage”,
+“major damage”, and “destroyed”), and covering a diverse
+range of disaster types (earthquake, tsunami, storm, wildfire,
+volcano, and flood).
+The information of these five datasets is summarized in
+Table I.
+B. Experimental Setup
+1) Implementation Details: All three of our proposed archi-
+tectures are implemented in Pytorch. Depending on the size
+and depth of the encoder network, our proposed MambaBCD,
+MambaSCD, and MambaBDA architectures are available in
+Tiny, Small, and Base versions [39]. As shown in Table II,
+the difference between them is the number of VSS blocks
+inside each stage and the number of channels in the feature
+map. For datasets other than the SYSU dataset, the multi-
+temporal image pairs and associated labels are cropped to
+256×256 pixels for input to the network, and then the data
+with the original size are inferred using the trained networks
+on the test set. During training, we optimize the network
+using the AdamW optimizer [67] with a learning rate of
+1e−4 and a weight decay of 5e−3. The batch size is set
+to 16. Except for the SYSU dataset, for which we set the
+number of training iterations to 20000, we set the number of
+training iterations to 50000 on the remaining four datasets.
+Random rotation, left-right, and top-bottom flip are used as
+training data augmentation methods. Our source code is open-
+sourced for community reproduction and subsequent research
+in https://github.com/ChenHongruixuan/MambaCD.
+2) Evaluation Metrics: For evaluating model performance
+across different CD subtasks, we employ a set of metrics
+tailored to the specific requirements of BCD, SCD and BDA.
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+10
+TABLE III: Accuracy assessment for different BCD models on the SYSU dataset. In this and other tables, C indicates CNN-based models,
+T indicates Transformer-based models, and M indicates Mamba-based models. In this and other tables, we highlight the highest values in
+red, and the second-highest results in blue
+Type
+Method
+Rec
+Pre
+OA
+F1
+IoU
+KC
+C
+FC-EF [22]
+75.17
+76.47
+88.69
+75.81
+61.04
+68.43
+FC-Siam-Diff [22]
+75.30
+76.28
+88.65
+75.79
+61.01
+68.38
+FC-Siam-Conc [22]
+76.75
+73.67
+88.05
+75.18
+60.23
+67.32
+SiamCRNN-18 [17]
+76.83
+84.80
+91.29
+80.62
+67.54
+75.02
+SiamCRNN-34 [17]
+76.85
+85.13
+91.37
+80.78
+67.75
+75.23
+SiamCRNN-50 [17]
+78.40
+83.41
+91.23
+80.83
+67.82
+75.15
+SiamCRNN-101 [17]
+80.48
+80.40
+90.77
+80.44
+67.28
+74.40
+SNUNet [41]
+72.21
+74.09
+87.49
+73.14
+57.66
+64.99
+DSIFN [23]
+82.02
+75.83
+89.59
+78.80
+65.02
+71.92
+HANet [42]
+76.14
+78.71
+89.52
+77.41
+63.14
+70.59
+CGNet [43]
+74.37
+86.37
+91.19
+79.92
+66.55
+74.31
+SEIFNet [68]
+78.29
+78.61
+89.86
+78.45
+64.54
+71.82
+T
+ChangeFormerV1 [30]
+75.82
+79.65
+89.73
+77.69
+63.52
+71.02
+ChangeFormerV2 [30]
+75.62
+78.14
+89.26
+76.86
+62.42
+69.87
+ChangeFormerV3 [30]
+75.24
+79.46
+89.57
+77.29
+62.99
+70.53
+ChangeFormerV4 [30]
+77.90
+79.74
+90.12
+78.81
+65.03
+72.37
+ChangeFormerV5 [30]
+74.00
+77.26
+88.73
+75.60
+60.77
+68.28
+ChangeFormerV6 [30]
+72.38
+81.70
+89.67
+76.76
+62.29
+70.15
+BIT-18 [28]
+76.42
+84.85
+91.22
+80.41
+67.24
+74.78
+BIT-34 [28]
+74.63
+82.40
+90.26
+78.32
+64.37
+72.06
+BIT-50 [28]
+77.90
+81.42
+90.60
+79.62
+66.14
+73.51
+BIT-101 [28]
+75.58
+83.64
+90.76
+79.41
+65.84
+73.47
+TransUNetCD [34]
+77.73
+82.59
+90.88
+80.09
+66.79
+74.18
+SwinSUNet [32]
+79.75
+83.50
+91.51
+81.58
+68.89
+76.06
+CTDFormer [33]
+75.53
+80.80
+90.00
+78.08
+64.04
+71.61
+M
+MambaBCD-Tiny
+79.59
+83.06
+91.36
+81.29
+68.48
+75.68
+MambaBCD-Small
+78.25
+87.99
+92.35
+82.83
+70.70
+77.94
+MambaBCD-Base
+80.31
+86.11
+92.30
+83.11
+71.10
+78.13
+In evaluating the BCD performance of the model, we use
+the six commonly used metrics. They are recall rate (Rec),
+precision rate (Pre), overall accuracy (OA), F1 score (F1),
+intersection over union (IoU) and Kappa coefficient (KC). The
+higher the better for all six indicators. The specific formula of
+these metrics can be referred to [14], [25], [45].
+For SCD, we follow the existing setup in the literature [56]
+to use the four following metrics. They are OA, F1, mean IoU
+(mIoU), and separated Kappa coefficient (SeK). The higher the
+better for all four indicators. Their definitions can be referred
+to [48], [56].
+For BDA, we follow the protocol of the xView2 Challenge
+[52] to split BDA into two subtasks, i.e., building localization
+and damage classification tasks. F1 is used to evaluate these
+two subtasks. Firstly, F1 representing the model’s accuracy
+in the building localization task is denoted as F loc
+1 . Then, the
+model’s performance across various damage levels are denoted
+as F leveli
+1
+. The harmonic mean of all the F leveli
+1
+is calculated
+to represent as the performance of the model on the damage
+classification task, formulated as
+F clf
+1
+=
+1
+1
+Cdam
+PCdam
+i=1
+1
+F
+leveli
+1
+,
+(11)
+where the value of Cdam in the xBD dataset is 4, from 1 to
+4 being “no damage”, “minor damage”, “major damage”, and
+“destroyed”, respectively. Finally, the overall performance of
+the model in building localization and damage classification
+tasks is calculated as F overall
+1
+= 0.3F loc
+1
++ 0.7F clf
+1
+.
+C. Comparison Methods
+We select a number of representative methods based on
+CNN and Transformer architectures to compare across BCD,
+SCD, and BDA tasks.
+For BCD, our comparison methods include a suite of CNN-
+based methods: FC-EF [22], FC-Siam-Diff [22], FC-Siam-
+Conc [22], SiamCRNN [17] (utilizing ResNet architectures
+ranging from ResNet-18 to ResNet-101 [69]), SNUNet [41],
+DSIFN [23], HANet [42], CGNet [43], and SEIFNet [68]. For
+the Transformer-based methods, we compare against Change-
+Former (versions 1 to 6) [30], BIT (with ResNet-18 to ResNet-
+101 as the backbone for feature extraction) [28], TransUNetCD
+[34], SwinSUNet [32], and CTDFormer [33].
+For the SCD arena, CNN-based competitors encompass
+HRSCD (variants S1 to S4) [46], ChangeMask [24], SSCD-1
+[48], Bi-SRNet [48], and TED [56]. For Transformer-based
+methods, we evaluate against SMNet [55] and ScanNet [56].
+Lastly, for the BDA task, we selected Siamese-UNet [52],
+MTF [53], and ChangeOS [3] (employing ResNet-18 to
+ResNet-101) as CNN-based benchmarks. DamFormer [31]
+stands as the solitary Transformer-based comparison method.
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+11
+TABLE IV: Accuracy assessment for different binary CD models on the LEVIR-CD+ dataset.
+Type
+Method
+Rec
+Pre
+OA
+F1
+IoU
+KC
+C
+FC-EF [22]
+71.77
+69.12
+97.54
+70.42
+54.34
+69.14
+FC-Siam-Diff [22]
+74.02
+81.49
+98.26
+77.57
+63.36
+76.67
+FC-Siam-Conc [22]
+78.49
+78.39
+98.24
+78.44
+64.53
+77.52
+SiamCRNN-18 [17]
+84.25
+81.22
+98.56
+82.71
+70.52
+81.96
+SiamCRNN-34 [17]
+83.88
+82.28
+98.61
+83.08
+71.05
+82.35
+SiamCRNN-50 [17]
+81.61
+85.39
+98.68
+83.46
+71.61
+82.77
+SiamCRNN-101 [17]
+80.96
+85.56
+98.67
+83.20
+71.23
+82.50
+DSIFN [23]
+84.36
+83.78
+98.70
+84.07
+72.52
+83.39
+SNUNet [41]
+78.73
+71.07
+97.83
+74.70
+59.62
+73.57
+HANet [42]
+75.53
+79.70
+98.22
+77.56
+63.34
+76.63
+CGNet [43]
+86.02
+81.46
+98.63
+83.68
+71.94
+82.97
+SEIFNet [68]
+81.86
+84.83
+98.66
+83.32
+71.41
+82.63
+T
+ChangeFormerV1 [30]
+77.00
+82.18
+98.38
+79.51
+65.98
+78.66
+ChangeFormerV2 [30]
+81.32
+79.10
+98.36
+80.20
+66.94
+79.35
+ChangeFormerV3 [30]
+79.97
+81.34
+98.44
+80.65
+67.58
+79.84
+ChangeFormerV4 [30]
+76.68
+75.07
+98.01
+75.87
+61.12
+74.83
+ChangeFormerV5 [30]
+77.96
+78.50
+98.23
+78.23
+64.24
+77.31
+ChangeFormerV6 [30]
+78.57
+67.66
+97.60
+72.71
+57.12
+71.46
+BIT-18 [28]
+80.86
+83.76
+98.58
+82.28
+69.90
+81.54
+BIT-34 [28]
+80.96
+85.87
+98.68
+83.34
+71.44
+82.66
+BIT-50 [28]
+81.84
+85.02
+98.67
+83.40
+71.53
+82.71
+BIT-101 [28]
+81.20
+83.91
+98.60
+82.53
+70.26
+81.80
+TransUNetCD [34]
+84.18
+83.08
+98.66
+83.63
+71.86
+82.93
+SwinSUNet [32]
+85.85
+85.34
+98.92
+85.60
+74.82
+84.98
+CTDFormer [33]
+80.03
+80.58
+98.40
+80.30
+67.09
+79.47
+M
+MambaBCD-Tiny
+87.26
+88.82
+99.03
+88.04
+78.63
+87.53
+MambaBCD-Small
+86.49
+89.17
+99.02
+87.81
+78.27
+87.30
+MambaBCD-Base
+87.57
+89.24
+99.06
+88.39
+79.20
+87.91
+For the above methods, if the method does not have the open
+source code available, we directly use the accuracy reported
+in the original paper. Otherwise, we train and test the method
+on the corresponding dataset based on the hyperparameters
+recommended in the original paper, using the loss function
+and data augmentation methods consistent with our method.
+In addition, in the experimental tables, we will use C to denote
+CNN-based models, T to denote Transformer-based models,
+and M to denote Mamba-based models.
+D. Detection Results and Benchmark Comparison in Three
+Tasks
+1) BCD: Tables III to V list the performance in BCD
+of the proposed MambaBCD architecture and comparison
+methods on the three benchmark datasets. It can be seen
+that our approaches significantly outperform both the CNN-
+based approaches and the Transformer-based architectures.
+The proposed MambaBCD-Base and MambaBCD-Small ar-
+chitectures achieve the highest and second-highest OA, F1,
+IoU, and KC for both category-agnostic CD (SYSU dataset)
+and single-category CD tasks (LEVIR-CD+ and WHU-CD
+datasets), fully demonstrating the potential of the Mamba
+architecture for the BCD task. Fig. 7 then shows some binary
+change maps predicted by our three architectures on the test
+sets of the three datasets. It can be seen that the proposed
+methods accurately detect changes with varying types, scales,
+and numbers contained in these image pairs, very close to the
+change reference maps.
+Table VI lists the network parameters and GFLOPs2 of
+these BCD architectures. Benefiting from the S6 model, the
+MambaBCD architecture can have only linear computational
+complexity while modeling global context information. It can
+be seen that even the largest model MambaBCD-Base has
+GFLOPs of 179.32, which is lower than many CNN and
+Transformer architectures, like DSIFN, CFNet, and Change-
+FormerV4, comparable to some CNN SOTA methods such as
+SNUNet and SiamCRNN-50. However, the accuracy advan-
+tage is obvious. In particular, the MambaBCD-Tiny architec-
+ture has a clear accuracy advantage over other architectures
+with a similar number of parameters and computational con-
+sumption. For example, compared to BIT-18, MambaBCD-
+Tiny has 56.9% lower GFLOPs but 0.88%, 1.33% and 3.00%
+higher F1 scores on the three datasets.
+2) SCD: Table VII compares the SCD performance of
+the proposed MamabaSCD architectures and representative
+SCD approaches. Compared to the BCD task, the SCD task
+requires the change detector capable of effectively modeling
+not only the spatio-temporal relationships of multi-temporal
+images, but also learning representative and discriminative
+representations for accurate land-cover mapping. From Table
+VII, we can see that the MambaSCD architecture can satisfy
+2https://github.com/Lyken17/pytorch-OpCounter
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+12
+TABLE V: Accuracy assessment for different binary CD models on the WHU-CD dataset.
+Type
+Method
+Rec
+Pre
+OA
+F1
+IoU
+KC
+C
+FC-EF [22]
+86.33
+83.50
+98.87
+84.89
+73.74
+84.30
+FC-Siam-Diff [22]
+84.69
+90.86
+99.13
+87.67
+78.04
+87.22
+FC-Siam-Conc [22]
+87.72
+84.02
+98.94
+85.83
+75.18
+85.28
+SiamCRNN-18 [17]
+90.48
+91.56
+99.34
+91.02
+83.51
+90.68
+SiamCRNN-34 [17]
+89.10
+93.88
+99.39
+91.42
+84.20
+91.11
+SiamCRNN-50 [17]
+91.45
+86.70
+99.30
+90.57
+82.76
+90.20
+SiamCRNN-101 [17]
+90.45
+87.79
+99.19
+89.10
+80.34
+88.68
+DSIFN [23]
+83.45
+97.46
+99.31
+89.91
+81.67
+89.56
+SNUNet [41]
+87.36
+88.04
+99.10
+87.70
+78.09
+87.23
+HANet [42]
+88.30
+88.01
+99.16
+88.16
+78.82
+87.72
+CGNet [43]
+90.79
+94.47
+99.48
+92.59
+86.21
+92.33
+SEIFNet [68]
+90.66
+91.93
+99.36
+91.29
+83.98
+90.96
+T
+ChangeFormerV1 [30]
+84.30
+90.80
+99.11
+87.43
+77.67
+86.97
+ChangeFormerV2 [30]
+83.41
+88.77
+99.00
+86.00
+75.45
+85.49
+ChangeFormerV3 [30]
+85.55
+88.25
+99.05
+86.88
+76.80
+86.39
+ChangeFormerV4 [30]
+84.85
+90.09
+99.10
+87.39
+77.61
+86.93
+ChangeFormerV5 [30]
+84.87
+90.20
+99.11
+87.45
+77.70
+86.99
+ChangeFormerV6 [30]
+81.90
+85.49
+98.83
+83.66
+71.91
+83.05
+BIT-18 [28]
+90.36
+90.30
+99.29
+90.33
+82.37
+89.96
+BIT-34 [28]
+90.10
+89.14
+99.23
+89.62
+81.19
+89.22
+BIT-50 [28]
+90.33
+89.70
+99.26
+90.01
+81.84
+89.63
+BIT-101 [28]
+90.24
+89.83
+99.27
+90.04
+81.88
+89.66
+TransUNetCD [34]
+90.50
+85.48
+99.09
+87.79
+78.44
+87.44
+SwinSUNet [32]
+92.03
+94.08
+99.50
+93.04
+87.00
+92.78
+CTDFormer [33]
+85.37
+92.23
+99.20
+88.67
+79.65
+88.26
+M
+MambaBCD-Tiny
+91.94
+94.76
+99.52
+93.33
+87.49
+93.08
+MambaBCD-Small
+92.29
+95.90
+99.57
+94.06
+88.79
+93.84
+MambaBCD-Base
+92.23
+96.18
+99.58
+94.19
+89.02
+93.98
+both requirements well. The MambaSCD-Small architecture
+surpasses the Transformer-based SOTA approach, ScanNet, on
+all four metrics of the SCD task. Note that our methods have
+achieved the current accuracy without employing advanced
+loss functions specifically proposed for the SCD like the ones
+in ScanNet [56].
+Based on the SCD results, the detailed “from-to” semantic
+change information can be obtained, which is presented in
+Fig. 8. Firstly, we can find that the “from-to” transition
+matrices obtained by our methods are very close to the
+ground truth, demonstrating the effectiveness of our Mam-
+baSCD architecture again. Then, based on the contents of the
+matrices, we can find that the three semantic changes with the
+highest percentage between the two temporal phases are “non-
+vegetated ground surface →building”, “low vegetation →
+building”, “low vegetation →non-vegetated ground surface”.
+These results indicate that the areas covered by the SECOND
+dataset was in the process of urbanization during this period.
+Table X further lists the number of parameters and GFLOPs
+of these methods. Compared to the Transformer-based Scan-
+Net method, the GFLOPs of our three architectures are lower.
+Compared to SMNet, another Transformer-based method, the
+proposed MamabaSCD-Tiny can achieve higher SeK values
+with a lower number of parameters and GFLOPs. These results
+demonstrate the effectiveness of the proposed methods and the
+potential of the Mamba architecture on the SCD task.
+Fig. 9 shows some semantic change maps on the test set of
+the SECOND dataset. Due to land-cover category combina-
+tions, SCD often involves a considerable number of categories.
+For ease of visualization, we follow the visualization way in
+[20], [24], [70], that is, only plotting the land-cover categories
+of the changed regions in both pre- and post-event images.
+In this way, the “from-to” semantic change information can
+be effectively reflected. From Fig. 9, we can observe that the
+MambaSCD architecture is not only capable of distinguishing
+changed features at different scales but also accurately identi-
+fying the specific semantic categories of these changes.
+3) BDA: Table IX reports the accuracy of the MambaBDA
+architecture and some Transformer and CNN-based architec-
+tures on the xBD dataset. The performance of the Mam-
+baBDA architecture significantly outperforms these represen-
+tative BDA approaches. Compared to the current Transformer-
+based SOTA method, DamFormer [31], our three MambaBDA
+architectures have a 2.64%, 4.12%, and 4.39% higher F overall
+1
+,
+respectively. Moreover, it can be noticed that the accuracy
+improvement compared to DamFormer mainly comes from the
+more difficult damage classification task rather than the build-
+ing localization task, which demonstrates that the proposed
+MambaBDA architecture can adequately learn the spatio-
+temporal relationships between the multi-temporal images so
+as to effectively distinguish different building damage levels.
+In order to further show the misclassification between the
+different damage levels in more detail, we show their confu-
+sion matrices in Fig. 10. As can be seen from the confusion
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+13
+TABLE VI: Comparison of different binary CD models in
+computational cost.
+Type
+Method
+Params (M)
+GFLOPs
+C
+FC-EF [22]
+1.35
+14.13
+FC-Siam-Diff [22]
+1.35
+18.66
+FC-Siam-Conc [22]
+1.54
+21.07
+SiamCRNN-18 [17]
+18.85
+86.64
+SiamCRNN-34 [17]
+28.96
+113.28
+SiamCRNN-50 [17]
+44.45
+185.30
+SiamCRNN-101 [17]
+63.44
+224.30
+DSIFN [23]
+35.73
+329.03
+SNUNet [41]
+10.21
+176.36
+HANet [42]
+2.61
+70.68
+CGNet [43]
+33.68
+329.58
+SEIFNet [68]
+39.08
+167.75
+T
+ChangeFormerV1 [30]
+29.84
+46.62
+ChangeFormerV2 [30]
+24.30
+44.54
+ChangeFormerV3 [30]
+24.30
+33.68
+ChangeFormerV4 [30]
+33.61
+852.53
+ChangeFormerV5 [30]
+55.27
+841.08
+ChangeFormerV6 [30]
+41.03
+811.15
+BIT-18 [28]
+11.50
+106.14
+BIT-34 [28]
+21.61
+190.83
+BIT-50 [28]
+24.28
+224.61
+BIT-101 [28]
+43.27
+380.62
+TransUNetCD [34]
+28.37
+244.54
+SwinSUNet [32]
+39.28
+43.50
+CTDFormer [33]
+3.85
+303.77
+M
+MambaBCD-Tiny
+17.13
+45.74
+MambaBCD-Small
+49.94
+114.82
+MambaBCD-Base
+84.70
+179.32
+TABLE VII: Accuracy assessment for different SCD models on the
+SECOND dataset. Note that unlike [24], [48], [56] and others that
+divide the training set for testing, we train on the training set and
+then test on the test set.
+Type
+Method
+OA
+F1
+mIoU
+SeK37
+C
+HRSCD-S1 [46]
+62.56
+33.04
+47.57
+6.62
+HRSCD-S2 [46]
+82.93
+39.79
+63.80
+8.46
+HRSCD-S3 [46]
+81.17
+41.78
+64.96
+10.86
+HRSCD-S4 [46]
+83.88
+47.68
+70.58
+16.81
+ChangeMask [24]
+85.53
+50.54
+71.39
+18.36
+SSCD-1 [48]
+85.62
+52.80
+72.14
+20.15
+BiSRNet [48]
+85.80
+53.59
+72.69
+21.18
+TED [56]
+85.50
+52.61
+72.19
+20.29
+T
+SMNet [55]
+84.29
+50.48
+71.62
+18.98
+ScanNet [56]
+86.13
+55.21
+72.48
+21.57
+M
+MamabaSCD-Tiny
+90.44
+54.51
+73.33
+22.08
+MamabaSCD-Small
+86.48
+55.72
+73.41
+22.83
+MamabaSCD-Base
+90.36
+55.32
+73.68
+22.92
+matrices, the categories “no damage” and “destroyed” are clas-
+sified with high accuracy and are not easily misclassified into
+the remaining two categories. On the contrary, the categories of
+“minor damage” and “major damage” are easily misclassified
+as other categories, especially the “minor damage” category. A
+large portion of the “minor damage” category is misclassified
+as “no damage” and “major damage”. There are mainly the
+following reasons. First, the optical images in the xBD dataset
+Pre-event images Post-event images
+Reference maps
+MambaBCD-Tiny MambaBCD-Small MambaBCD-Base
+WHU-CD
+LEVIR-CD+
+SYSU
+Fig. 7: Some binary change maps obtained by our methods on the
+test set of the three BCD dataset.
+TABLE VIII: Comparison of different SCD models in
+computational cost.
+Type
+Method
+Params
+GFLOPs
+C
+HRSCD-S1 [46]
+3.36
+8.02
+HRSCD-S2 [46]
+6.39
+14.29
+HRSCD-S3 [46]
+12.77
+42.67
+HRSCD-S4 [46]
+13.71
+43.69
+ChangeMask [24]
+2.97
+37.16
+SSCD-1 [48]
+23.31
+189.57
+Bi-SRNet [48]
+23.39
+189.91
+TED [56]
+24.19
+204.29
+T
+SMNet [55]
+42.16
+75.79
+ScanNet [56]
+27.90
+264.95
+M
+MamabaSCD-Tiny
+21.51
+73.42
+MamabaSCD-Small
+54.28
+146.70
+MamabaSCD-Base
+89.99
+211.55
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+14
+TABLE IX: Accuracy assessment for different building damage assessment models on the xBD dataset. The suffix PPS means
+post-processing.
+Type
+Method
+F loc
+1
+F clf
+1
+F overall
+1
+Damage F1 per class
+No damage
+Minor damage
+Major damage
+Destroyed
+C
+Siamese-UNet [52]
+85.92
+65.58
+71.68
+86.74
+50.02
+64.43
+71.68
+MTF [53]
+83.60
+70.02
+74.10
+90.60
+49.30
+72.20
+83.70
+ChangeOS-18 [3]
+84.62
+69.87
+74.30
+88.61
+52.10
+70.36
+79.65
+ChangeOS-34 [3]
+85.16
+70.28
+74.74
+88.63
+52.38
+71.16
+80.08
+ChangeOS-50 [3]
+85.41
+70.88
+75.24
+88.98
+53.33
+71.24
+80.60
+ChangeOS-101 [3]
+85.69
+71.14
+75.50
+89.11
+53.11
+72.44
+80.79
+ChangeOS-18-PPS [3]
+84.62
+73.89
+77.11
+92.38
+57.41
+72.54
+82.62
+ChangeOS-34-PPS [3]
+85.16
+74.25
+77.52
+92.19
+58.07
+72.84
+82.79
+ChangeOS-50-PPS [3]
+85.41
+75.64
+78.57
+92.66
+60.14
+74.18
+83.45
+ChangeOS-101-PPS [3]
+85.69
+75.44
+78.52
+92.81
+59.38
+74.65
+83.29
+T
+DamFormer [31]
+86.86
+72.81
+77.02
+89.86
+56.78
+72.56
+80.51
+M
+MambaBDA-Tiny
+87.20
+78.30
+80.97
+95.84
+60.96
+77.43
+88.23
+MambaBDA-Small
+86.61
+78.80
+81.14
+95.99
+62.82
+76.26
+88.37
+MambaBDA-Base
+87.38
+78.84
+81.41
+95.94
+62.74
+76.46
+88.58
+low veg
+nvg_surf
+tree
+water
+building
+playground
+To
+low veg
+nvg_surf
+tree
+water
+building
+playground
+From
+0.00%
+14.60%
+2.38%
+0.44%
+11.59%
+0.19%
+12.33%
+0.00%
+3.46%
+0.58%
+32.01%
+0.67%
+1.25%
+2.90%
+0.00%
+0.03%
+1.24%
+0.01%
+0.41%
+0.62%
+0.07%
+0.00%
+0.27%
+0.00%
+2.22%
+7.44%
+0.54%
+0.07%
+4.31%
+0.05%
+0.04%
+0.22%
+0.02%
+0.00%
+0.05%
+0.00%
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+(a)
+low veg
+nvg_surf
+tree
+water
+building
+playground
+To
+low veg
+nvg_surf
+tree
+water
+building
+playground
+From
+0.92%
+11.61%
+1.47%
+0.30%
+15.64%
+0.10%
+8.06%
+1.07%
+3.40%
+0.67%
+34.44%
+0.84%
+0.55%
+2.33%
+0.06%
+0.03%
+1.71%
+0.01%
+0.25%
+0.43%
+0.08%
+0.03%
+0.38%
+0.00%
+2.77%
+7.12%
+0.59%
+0.12%
+4.57%
+0.05%
+0.05%
+0.22%
+0.01%
+0.00%
+0.12%
+0.00%
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+(b)
+low veg
+nvg_surf
+tree
+water
+building
+playground
+To
+low veg
+nvg_surf
+tree
+water
+building
+playground
+From
+0.55%
+11.92%
+1.70%
+0.28%
+15.76%
+0.10%
+8.99%
+1.06%
+3.44%
+0.59%
+33.24%
+0.80%
+0.74%
+2.61%
+0.05%
+0.03%
+1.48%
+0.01%
+0.28%
+0.47%
+0.08%
+0.01%
+0.35%
+0.00%
+2.76%
+7.40%
+0.57%
+0.09%
+4.16%
+0.05%
+0.07%
+0.24%
+0.00%
+0.00%
+0.10%
+0.00%
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+(c)
+low veg
+nvg_surf
+tree
+water
+building
+playground
+To
+low veg
+nvg_surf
+tree
+water
+building
+playground
+From
+1.05%
+11.22%
+2.07%
+0.28%
+13.15%
+0.11%
+9.46%
+1.15%
+4.62%
+0.72%
+34.04%
+0.89%
+0.70%
+2.95%
+0.08%
+0.04%
+1.63%
+0.01%
+0.26%
+0.49%
+0.09%
+0.03%
+0.33%
+0.00%
+2.61%
+6.84%
+0.72%
+0.10%
+3.75%
+0.08%
+0.08%
+0.31%
+0.02%
+0.00%
+0.12%
+0.00%
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+(d)
+Fig. 8: Semantic change matrices providing “from-to” transition infor-
+mation derived from the SCD results. (a) Reference. (b) MambaSCD-
+Tiny. (c) MambaSCD-Small. (d) MambaSCD-Base.
+were acquired with a relatively small viewing angle of the
+sensor. In many cases, “minor damage” is nuance damages
+to the structure of the building. Little relevant information
+can be obtained from the nearly orthorectified optical image
+for such cases. Furthermore, there is a semantic ambiguity in
+the definition of the categories of minor damage and major
+damage. We argue that it is difficult to address this problem
+by starting from the model architecture perspective. It can be
+considered to introduce auxiliary information, such as height
+information or multi-view imagery [21], [71], etc. to help the
+model make a more accurate classification.
+Table X lists the number of parameters and GFLOPs of
+these BDA approaches. For MambaBDA-Small, our architec-
+Images
+Reference maps
+MambaSCD-Tiny MambaSCD-Small MambaSCD-Base
+Pre-event
+Post-event
+Pre-event
+Post-event
+Pre-event
+Post-event
+Water
+Non-change
+Ground
+Tree
+Low vegetation
+Building
+Playground
+Fig. 9: Some semantic change maps obtained by the proposed
+MamabaSCD architectures on the test set of the SECOND dataset.
+ture yields more accurate results on building damage assess-
+ment compared to Siamese-UNet, ChangeOS-101, and MTF,
+with an improvement in F overall
+1
+from 5.64 % to 9.46 % for
+a similar number of parameters and lower GFLOPs.
+Fig. 11 shows the visualization results of the building
+damage caused by different disaster events obtained by Mam-
+baBDA on the xBD dataset. MambaBDA can accurately
+localize and then differentiate the damage levels of buildings
+despite the varying type of building and the disaster event,
+implying the potential of the MambaBDA architecture for
+practical disaster response applications.
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+15
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.950
+0.037
+0.011
+0.002
+0.200
+0.655
+0.135
+0.010
+0.058
+0.124
+0.793
+0.024
+0.025
+0.013
+0.097
+0.864
+0.2
+0.4
+0.6
+0.8
+(a)
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.964
+0.023
+0.011
+0.002
+0.258
+0.629
+0.105
+0.009
+0.070
+0.140
+0.769
+0.021
+0.027
+0.016
+0.103
+0.853
+0.2
+0.4
+0.6
+0.8
+(b)
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.954
+0.034
+0.010
+0.001
+0.207
+0.691
+0.097
+0.005
+0.064
+0.154
+0.758
+0.023
+0.025
+0.019
+0.104
+0.853
+0.2
+0.4
+0.6
+0.8
+(c)
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.969
+0.295
+0.080
+0.035
+0.022
+0.571
+0.111
+0.017
+0.008
+0.126
+0.758
+0.046
+0.002
+0.007
+0.052
+0.903
+0.2
+0.4
+0.6
+0.8
+(d)
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.961
+0.212
+0.089
+0.026
+0.028
+0.618
+0.089
+0.015
+0.009
+0.160
+0.765
+0.040
+0.002
+0.010
+0.057
+0.918
+0.2
+0.4
+0.6
+0.8
+(e)
+No damage
+Minor damage Major damage
+Destroyed
+Prediction
+No damage
+Minor damage
+Major damage
+Destroyed
+Reference
+0.967
+0.264
+0.084
+0.023
+0.023
+0.576
+0.085
+0.008
+0.008
+0.150
+0.773
+0.046
+0.002
+0.010
+0.059
+0.923
+0.2
+0.4
+0.6
+0.8
+(f)
+Fig. 10: Confusion matrices of MambaBDA-Tiny, MambaBDA-Small, and MambaBDA-Base. (a)-(c) are matrices normalized by rows. (d)-(f)
+are matrices normalized by columns.
+TABLE X: Comparison of different BDA models in computational
+cost.
+Type
+Method
+Params
+GFLOPs
+C
+Siamese-UNet [52]
+51.46
+138.88
+MTF [53]
+44.40
+268.76
+ChangeOS-18 [3]
+25.25
+91.55
+ChangeOS-34 [3]
+35.36
+110.89
+ChangeOS-50 [3]
+39.05
+118.41
+ChangeOS-101 [3]
+58.05
+157.26
+T
+DamFormer [31]
+32.52
+169.34
+M
+MamabaBDA-Tiny
+19.74
+59.57
+MamabaBDA-Small
+52.11
+130.80
+MamabaBDA-Base
+87.76
+195.43
+E. Different Spatio-Temporal Modeling Methods
+Modeling spatio-temporal relationships is significant for CD
+tasks [17], [24], [47]. To demonstrate the effectiveness of
+our proposed modeling mechanisms, we compare them with
+several commonly used spatial-temporal modeling methods in
+CD. They are concatenation operations with feature pyramid
+network (FPN) [24] (baseline), temporal-symmetric transfor-
+mation based on 3D convolutional layers (TST) [24], RNN-
+based method [17], and Tranformer-based method [28]. Table
+XI lists the performance of these modeling methods on the
+three CD subtasks. On the simpler BCD tasks, Transformer
+does not yield significant advantages in performance compared
+to RNN. However, on the more difficult SCD and BDA tasks,
+Images
+Reference maps
+MambaBDA-Tiny MambaBDA-Small MambaBDA-Base
+Pre-event
+Post-event
+Pre-event
+Post-event
+Pre-event
+Post-event
+Building
+Background
+No damage
+Major damage
+Minor damage
+Destroyed
+Fig. 11: Some building damage assessment results obtained by our
+methods on the test set of the xBD dataset. From top to bottom, the
+disaster events are typhoons, tsunamis, and wildfires.
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+16
+TABLE XI: Comparison of different approaches for modeling spatio-temporal relationships on three tasks.
+Method
+SYSU
+SECOND
+xBD
+OA
+F1
+IoU
+KC
+OA
+F1
+mIoU
+SeK
+F loc
+1
+F clf
+1
+F overall
+1
+Baseline
+91.71
+81.11
+68.22
+75.84
+86.11
+54.20
+72.42
+21.15
+84.85
+74.74
+77.77
+STT [24]
+92.09
+82.22
+69.80
+77.16
+86.35
+54.70
+72.86
+21.83
+86.74
+75.92
+79.17
+RNN [17]
+92.97
+82.02
+69.52
+76.94
+86.46
+54.76
+72.89
+21.90
+85.74
+76.48
+79.26
+Transformer [28]
+92.14
+82.17
+69.74
+77.17
+86.66
+55.50
+73.01
+22.31
+86.09
+77.45
+80.04
+Ours
+92.35
+82.83
+70.70
+77.94
+86.48
+55.72
+73.41
+22.83
+86.61
+78.80
+81.14
+TABLE XII: Ablation study of the proposed spatio-temporal
+modelling mechanisms on the SYSU dataset.
+Modelling Mechanism
+OA
+F1
+IoU
+KC
+Sequential
+Cross
+Parallel
+91.71
+81.11
+68.22
+75.84
+✓
+92.16
+82.20
+69.78
+77.20
+✓
+92.20
+82.24
+69.84
+77.28
+✓
+92.12
+82.17
+69.73
+77.14
+✓
+✓
+✓
+92.35
+82.83
+70.70
+77.94
+the advantages of the Transformer architecture are illustrated.
+Compared with these current representative spatio-temporal
+relationship modeling approaches, our proposed modeling
+approach based on the Mamba architecture, which inherits
+the advantages of RNN and Transformer, shows superior
+performance on the three CD tasks of BCD, SCD, and BDA.
+Compared to the Transformer-based spatio-temporal modeling
+approach, our method improves the F1 value by 0.77% on
+BCD, SeK by 0.52% on the SCD task and F overall
+1
+by 1.10%
+on the BDA task.
+In Table XII, we list the detection performance obtained
+using one of the three modeling mechanisms alone. Firstly,
+using any of the modeling mechanisms can significantly
+improve detection performance compared to the baseline.
+Then, it can be seen that the performance gap between the
+three modeling mechanisms is not significant, with spatio-
+temporal cross modeling being slightly better than the other
+two. Finally, the detection performance of the network can
+be further improved by using the three modeling mechanisms
+simultaneously.
+We also visualize the features extracted by the MambaBCD
+architecture in Fig. 12. In the features extracted by the encoder,
+the features in the region of high response values are not neces-
+sarily regions of interest, i.e., changed regions. Whereas in the
+decoder, after the spatio-temporal relationships are modeled by
+the proposed spatio-temporal modeling mechanisms, changed
+regions gradually exhibit high response values.
+F. Comparison to Other Backbone Networks
+we also simply compare the Mamba with some representa-
+tive backbone networks in CD tasks on the SYSU dataset in
+Table XIII. It can be seen that Mamba outperforms the two
+Transformer backbone networks, Swin-Transformer and Mix-
+Former. This is because, in order to reduce the computational
+overhead of self-attention operation, these two Transformer
+backbone networks either adopt a local attention mechanism
+Features from decoder
+Images
+Features from encoder
+Fig. 12: The visualization of features from different layers of Mam-
+baBCD.
+(Swin-Transformer) [35] or a strided convolutional layer (Mix-
+Former) [36] to reduce the size of the feature maps, which will
+negatively affect the learning of global contextual information.
+The adopted VMamba architecture, on the other hand, can
+reduce its computational consumption to a linear relationship
+with the number of tokens, thus eliminating the need for these
+methods, which cause information loss, and allowing for the
+fully learning of global context information. As for the remote
+sensing change detection task, due to the multi-scale phe-
+nomenon of land-cover features and the differences in spatial
+resolution of different sensors, the sizes of changed objects
+often vary greatly. Therefore, the features extracted by Mamba
+through fully learning the global contextual information are
+particularly important for the subsequent detection of these
+changed objects with different sizes.
+G. GPU Memory Footprint
+In Section IV-D, we list the number of parameters and
+GFLOPs of different models. In this subsection, we further
+compare the GPU memory footprint of some models. Fig. 13
+compares the GPU memory footprint of some CNN-based and
+Transformer-based methods with our MambaBCD architecture
+for varying input sizes. We can see that the trend of GPU
+memory footprint with input size for MambaBCD-Small is
+similar to some of the advanced CNN architectures (DSIFN
+and SNUNet). However, our MambaBCD is able to learn
+global spatial contextual information as well as adequately
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+17
+TABLE XIII: Comparison of different commonly used backbones in BCD on the SYSU dataset.
+Encoder
+OA
+F1
+IoU
+KC
+Param (M)
+GFLOPs
+ResNet-101 [69]
+91.10
+81.10
+68.22
+75.28
+46.90
+131.36
+EfficientNet-B5 [72]
+91.60
+82.26
+69.86
+76.84
+31.63
+76.88
+MixFormer-v3 [36]
+87.70
+75.00
+60.00
+66.87
+47.03
+82.98
+Swin-Small [35]
+92.09
+82.22
+69.80
+77.16
+37.75
+97.99
+VMamba-Small [39]
+92.35
+82.83
+70.70
+77.94
+49.94
+114.82
+64
+128
+256
+384
+512
+640
+768
+1024
+1280
+1536
+2048
+Input size
+0
+2000
+4000
+6000
+8000
+10000
+12000
+14000
+GPU memory (MB)
+SNUNet
+DSIFN
+BIT-101
+ChangeFormerV2
+ChangeFormerV5
+MambaBCD-Small
+Fig. 13: GPU memory footprint of different models with varying
+input sizes.
+model spatio-temporal relationships, thereby exhibiting bet-
+ter detection performance. The GPU memory footprint of
+MambaBCD-Small is significantly lower compared to Change-
+FormerV5, which employs the Transformer architecture as its
+backbone. Note that ChangeFormerV5 itself has employed
+strided convolutional layers to reduce the computational over-
+head of self-attention operations. Also, we can find that the
+lightweight architecture ChangeFormerV2 has surpassed the
+Mamba architecture and the two CNN architectures, DSIFN
+and SNUNet, in terms of the increasing trend of GPU memory
+footprint when the input size is increased from 1536 to 2048.
+These results imply that Transformer to be applicable to large-
+scale scenarios of remote sensing images often comes at the
+cost of information loss. In comparison, Mamba architecture
+can avoid this problem.
+H. Robustness Against Degraded Input Data
+Finally, we test the robustness of our method to degraded
+input data. In the inference phase, the data input to the
+model is subjected to different levels of Gaussian blurring,
+Gaussian noise, and scaling of the data by different pro-
+portions, respectively. Fig. 14 shows the degradation of the
+F1 score of different methods with degraded data on the
+LEVIR-CD+ dataset. First, we can see that the CNN-based
+methods are very poorly robust to Gaussian blurred data. F1
+scores of SiamCRNN-101 and DSIFN drop by nearly 60%
+when increasing the standard deviation of the Gaussian blur
+from 0 to 2. Whereas the two methods using Transformer
+as the backbone, SwinTransUNet and ChangeFormerV5 are
+relatively robust to Gaussian blurred data, with F1 scores
+decreasing by 14.83 % and 18.43 %, respectively. In contrast,
+the F1 score for our MambaBCD architecture drops by only
+8.73%.
+Fig. 14-(b) shows the effect of adding different levels
+of Gaussian noise to the input data. With the exception of
+ChangeFormerV5 and our MambaBCD, the remaining meth-
+ods have significant F1 decreases ranging from 40.83% to
+15.07%. Our MambaBCD architecture, on the other hand,
+shows robustness to Gaussian noise, with only an 8.26% drop
+in the F1 score for Gaussian noise with a standard deviation
+of 20.
+Fig. 14-(c) compares the robustness of models trained at a
+single scale to test data at different scales. The F1 value of
+MambaBCD decreases by only 2.88% when the scale increases
+from 1 to 1.5. When the scaling ratio decreases from 1 to 0.75,
+the F1 value of MambaBCD decreases only by 1.18%. When
+the scaling factor is reduced to 0.5, all methods, including
+MambaBCD, show a larger decrease in the F1 score. However,
+compared to the decline of 14.99 % of SwinTransUNet and
+the decline of 16.41 % of ChangeFormerV5, the decline of
+the MambaBCD decline is smaller, at 12.03 %. All the above
+results again demonstrate the superiority of our proposed
+Mamba-based CD architecture.
+V. CONCLUSION
+In this paper, we explore the potential of the emerging
+Mamba architecture for remote sensing image change de-
+tection tasks. Three architectures, MambaBCD, MambaSCD,
+and MambaBDA are developed for binary change detection,
+semantic change detection, and building damage assessment
+tasks, respectively. The encoders of all three architectures
+are cutting-edge VMamba architecture, which can adequately
+learn the global contextual information of the input image
+with linear complexity. Then, for the change decoder, in
+order to adequately learn spatio-temporal features, we propose
+three ways of modeling spatio-temporal relationships that can
+adequately exploiting the attributes and advantages of Mamba
+architecture. Experiments on five benchmark datasets have
+fully revealed the potential of Mamba for multi-temporal
+remote sensing image data processing tasks. Compared to the
+CNN-based and Transformer-based approaches, the proposed
+three architectures can achieve quite competitive performance
+on their respective tasks. Compared to some commonly used
+backbone networks, the Mamba architecture can extract fea-
+tures that are more suitable for downstream CD tasks. The
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+18
+0
+0.5
+1
+1.5
+2
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+F1 score
+SiamCRNN-101
+DSIFN
+BIT-101
+SwinTransUnet
+ChangeFormerV5
+MambaBCD-Small
+(a)
+0
+5
+10
+15
+20
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+F1 score
+SiamCRNN-101
+DSIFN
+BIT-101
+SwinTransUnet
+ChangeFormerV5
+MambaBCD-Small
+(b)
+0.5
+0.75
+1
+1.25
+1.5
+Scaling ratio
+0.5
+0.6
+0.7
+0.8
+0.9
+F1 score
+SiamCRNN-101
+DSIFN
+BIT-101
+SwinTransUnet
+ChangeFormerV5
+MambaBCD-Small
+(c)
+Fig. 14: Robustness of different models against degraded data on the LEVIR-CD+ dataset. (a) Gaussian blur. (b) Gaussian noise. (c) Scaling.
+combination of our proposed three spatio-temporal relation-
+ship modeling mechanisms and the Mamba architecture pro-
+vides a new perspective on modeling spatio-temporal rela-
+tionships, showing much better detection results on all three
+subtasks.
+Our future work includes, but is not limited to, developing
+Mamba architectures more suited to the characteristics of
+remote sensing data, applying them to multimodal and time-
+series remote sensing tasks, and exploring the potential of
+Mamba for remote sensing foundation models.
+REFERENCES
+[1] D. Lu, P. Mausel, E. Brond´ızio, and E. Moran, “Change detection
+techniques,” Int. J. Remote Sens., vol. 25, no. 12, pp. 2365–2407, 2004.
+[2] P. Coppin, I. Jonckheere, K. Nackaerts, B. Muys, and E. Lambin,
+“Digital change detection methods in ecosystem monitoring: A review,”
+Int. J. Remote Sens., vol. 25, no. 9, pp. 1565–1596, 2004.
+[3] Z. Zheng, Y. Zhong, J. Wang, A. Ma, and L. Zhang, “Building
+damage assessment for rapid disaster response with a deep object-based
+semantic change detection framework: From natural disasters to man-
+made disasters,” Remote Sens. Environ., vol. 265, p. 112636, 2021.
+[4] H. Guo, Q. Shi, A. Marinoni, B. Du, and L. Zhang, “Deep building
+footprint update network: A semi-supervised method for updating exist-
+ing building footprint from bi-temporal remote sensing images,” Remote
+Sens. Environ., vol. 264, p. 112589, 2021.
+[5] H. Chen, N. Yokoya, C. Wu, and B. Du, “Unsupervised Multimodal
+Change Detection Based on Structural Relationship Graph Representa-
+tion Learning,” IEEE Trans. Geosci. Remote Sens., pp. 1–18, 2022.
+[6] H. Chen, C. Lan, J. Song, C. Broni-Bediako, J. Xia, and N. Yokoya,
+“Land-cover change detection using paired openstreetmap data and
+optical high-resolution imagery via object-guided transformer,” arXiv
+preprint arXiv:2310.02674, 2023.
+[7] Y. Xiao, Q. Yuan, K. Jiang, J. He, C.-W. Lin, and L. Zhang, “Ttst:
+A top-k token selective transformer for remote sensing image super-
+resolution,” IEEE Trans. Image Process., vol. 33, pp. 738–752, 2024.
+[8] C. Wu, B. Du, and L. Zhang, “Slow feature analysis for change detection
+in multispectral imagery,” IEEE Trans. Geosci. Remote Sens., vol. 52,
+no. 5, pp. 2858–2874, 2014.
+[9] A. A. Nielsen, “The regularized iteratively reweighted MAD method for
+change detection in multi- and hyperspectral data,” IEEE Trans. Image
+Process., vol. 16, no. 2, pp. 463–478, 2007.
+[10] L. Bruzzone and Diego Fern`andez Prieto, “Automatic Analysis of the
+Difference Image for Unsupervised Change Detection,” IEEE Trans.
+Geosci. Remote Sens., vol. 38, no. 3, pp. 1171–1182, 2000.
+[11] M. Hussain, D. Chen, A. Cheng, H. Wei, and D. Stanley, “Change
+detection from remotely sensed images: From pixel-based to object-
+based approaches,” ISPRS J. Photogramm. Remote Sens., vol. 80, pp.
+91–106, 2013.
+[12] Y. Sun, L. Lei, D. Guan, and G. Kuang, “Iterative Robust Graph
+for Unsupervised Change Detection of Heterogeneous Remote Sensing
+Images,” IEEE Trans. Image Process., vol. 30, pp. 6277–6291, 2021.
+[13] H. Chen, N. Yokoya, and M. Chini, “Fourier domain structural relation-
+ship analysis for unsupervised multimodal change detection,” ISPRS J.
+Photogramm. Remote Sens., vol. 198, pp. 99–114, 2023.
+[14] C. Wu, H. Chen, B. Du, and L. Zhang, “Unsupervised change detection
+in multitemporal vhr images based on deep kernel pca convolutional
+mapping network,” IEEE Trans. Cybern, vol. 52, no. 11, pp. 12 084–
+12 098, 2022.
+[15] Y. Xiao, Q. Yuan, K. Jiang, J. He, X. Jin, and L. Zhang, “Ediffsr: An
+efficient diffusion probabilistic model for remote sensing image super-
+resolution,” IEEE Trans. Geosci. Remote Sens., vol. 62, pp. 1–14, 2024.
+[16] M. Gong, T. Zhan, P. Zhang, and Q. Miao, “Superpixel-based difference
+representation learning for change detection in multispectral remote
+sensing images,” IEEE Trans. Geosci. Remote Sens., vol. 55, no. 5, pp.
+2658–2673, 2017.
+[17] H. Chen, C. Wu, B. Du, L. Zhang, and L. Wang, “Change Detection
+in Multisource VHR Images via Deep Siamese Convolutional Multiple-
+Layers Recurrent Neural Network,” IEEE Trans. Geosci. Remote Sens.,
+vol. 58, no. 4, pp. 2848–2864, 2020.
+[18] H. Chen, C. Wu, B. Du, and L. Zhang, “Deep Siamese Multi-scale
+Convolutional Network for Change Detection in Multi-Temporal VHR
+Images,” in 2019 10th International Workshop on the Analysis of
+Multitemporal Remote Sensing Images (MultiTemp), 2019, pp. 1–4.
+[19] Q. Shi, M. Liu, S. Li, X. Liu, F. Wang, and L. Zhang, “A deeply
+supervised attention metric-based network and an open aerial image
+dataset for remote sensing change detection,” IEEE Trans. Geosci.
+Remote Sens., vol. 60, pp. 1–16, 2022.
+[20] K. Yang, G.-S. Xia, Z. Liu, B. Du, W. Yang, M. Pelillo, and L. Zhang,
+“Asymmetric siamese networks for semantic change detection in aerial
+images,” IEEE Trans. Geosci. Remote Sens., vol. 60, pp. 1–18, 2022.
+[21] J. Song, H. Chen, and N. Yokoya, “Syntheworld: A large-scale synthetic
+dataset for land cover mapping and building change detection,” in
+Proceedings of the IEEE/CVF Winter Conference on Applications of
+Computer Vision (WACV), January 2024, pp. 8287–8296.
+[22] R. Caye Daudt, B. Le Saux, and A. Boulch, “Fully convolutional siamese
+networks for change detection,” in Proceedings of the International
+Conference on Image Processing (ICIP), 2018, pp. 4063–4067.
+[23] C. Zhang, P. Yue, D. Tapete, L. Jiang, B. Shangguan, L. Huang,
+and G. Liu, “A deeply supervised image fusion network for change
+detection in high resolution bi-temporal remote sensing images,” ISPRS
+J. Photogramm. Remote Sens., vol. 166, no. June, pp. 183–200, 2020.
+[24] Z. Zheng, Y. Zhong, S. Tian, A. Ma, and L. Zhang, “ChangeMask: Deep
+multi-task encoder-transformer-decoder architecture for semantic change
+detection,” ISPRS J. Photogramm. Remote Sens., vol. 183, no. March
+2021, pp. 228–239, 2022.
+[25] Y. Cao and X. Huang, “A full-level fused cross-task transfer learning
+method for building change detection using noise-robust pretrained
+networks on crowdsourced labels,” Remote Sens. Environ., vol. 284, p.
+113371, 2023.
+[26] Z. Lv, J. Liu, W. Sun, T. Lei, J. A. Benediktsson, and X. Jia, “Hi-
+erarchical attention feature fusion-based network for land cover change
+detection with homogeneous and heterogeneous remote sensing images,”
+IEEE Trans. Geosci. Remote Sens., vol. 61, pp. 1–15, 2023.
+[27] T. Liu, M. Gong, D. Lu, Q. Zhang, H. Zheng, F. Jiang, and M. Zhang,
+“Building change detection for vhr remote sensing images via lo-
+
+IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING, 2024
+19
+cal–global pyramid network and cross-task transfer learning strategy,”
+IEEE Trans. Geosci. Remote Sens., vol. 60, pp. 1–17, 2022.
+[28] H. Chen, Z. Qi, and Z. Shi, “Remote sensing image change detection
+with transformers,” IEEE Trans. Geosci. Remote Sens., vol. 60, pp. 1–14,
+2022.
+[29] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai,
+T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly et al.,
+“An image is worth 16x16 words: Transformers for image recognition
+at scale,” arXiv preprint arXiv:2010.11929, 2020.
+[30] W. G. C. Bandara and V. M. Patel, “A transformer-based siamese
+network for change detection,” in IEEE International Geoscience and
+Remote Sensing Symposium (IGARSS), 2022, pp. 207–210.
+[31] H. Chen, E. Nemni, S. Vallecorsa, X. Li, C. Wu, and L. Bromley, “Dual-
+tasks siamese transformer framework for building damage assessment,”
+in International Geoscience and Remote Sensing Symposium (IGARSS),
+2022, pp. 1600–1603.
+[32] C. Zhang, L. Wang, S. Cheng, and Y. Li, “Swinsunet: Pure transformer
+network for remote sensing image change detection,” IEEE Trans.
+Geosci. Remote Sens., vol. 60, pp. 1–13, 2022.
+[33] K. Zhang, X. Zhao, F. Zhang, L. Ding, J. Sun, and L. Bruzzone,
+“Relation changes matter: Cross-temporal difference transformer for
+change detection in remote sensing images,” IEEE Trans. Geosci.
+Remote Sens., vol. 61, pp. 1–15, 2023.
+[34] Q. Li, R. Zhong, X. Du, and Y. Du, “Transunetcd: A hybrid transformer
+network for change detection in optical remote-sensing images,” IEEE
+Trans. Geosci. Remote Sens., vol. 60, pp. 1–19, 2022.
+[35] Z. Liu, Y. Lin, Y. Cao, H. Hu, Y. Wei, Z. Zhang, S. Lin, and
+B. Guo, “Swin transformer: Hierarchical vision transformer using shifted
+windows,” in Proceedings of the IEEE/CVF International Conference on
+Computer Vision (ICCV), October 2021, pp. 10 012–10 022.
+[36] E. Xie, W. Wang, Z. Yu, A. Anandkumar, J. M. Alvarez, and P. Luo,
+“Segformer: Simple and efficient design for semantic segmentation with
+transformers,” in Advances in Neural Information Processing Systems
+(NIPS), vol. 34, 2021, pp. 12 077–12 090.
+[37] A. Gu, K. Goel, and C. R´e, “Efficiently modeling long sequences with
+structured state spaces,” arXiv preprint arXiv:2111.00396, 2021.
+[38] A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with
+selective state spaces,” arXiv preprint arXiv:2312.00752, 2023.
+[39] Y. Liu, Y. Tian, Y. Zhao, H. Yu, L. Xie, Y. Wang, Q. Ye, and Y. Liu,
+“Vmamba: Visual state space model,” arXiv preprint arXiv:2401.10166,
+2024.
+[40] L. Zhu, B. Liao, Q. Zhang, X. Wang, W. Liu, and X. Wang, “Vision
+mamba: Efficient visual representation learning with bidirectional state
+space model,” arXiv preprint arXiv:2401.09417, 2024.
+[41] S. Fang, K. Li, J. Shao, and Z. Li, “Snunet-cd: A densely connected
+siamese network for change detection of vhr images,” IEEE Geosci.
+Remote Sens. Lett., vol. 19, pp. 1–5, 2022.
+[42] C. Han, C. Wu, H. Guo, M. Hu, and H. Chen, “Hanet: A hierarchical
+attention network for change detection with bitemporal very-high-
+resolution remote sensing images,” IEEE J. Sel. Topics Appl. Earth
+Observ. Remote Sens., vol. 16, pp. 3867–3878, 2023.
+[43] C. Han, C. Wu, H. Guo, M. Hu, J. Li, and H. Chen, “Change guiding
+network: Incorporating change prior to guide change detection in remote
+sensing imagery,” IEEE J. Sel. Topics Appl. Earth Observ. Remote Sens.,
+vol. 16, pp. 8395–8407, 2023.
+[44] S.
+Zhao,
+X.
+Zhang,
+P.
+Xiao,
+and
+G.
+He,
+“Exchanging
+dual-
+encoder–decoder: A new strategy for change detection with semantic
+guidance and spatial localization,” IEEE Trans. Geosci. Remote Sens.,
+vol. 61, pp. 1–16, 2023.
+[45] H. Chen, J. Song, C. Wu, B. Du, and N. Yokoya, “Exchange means
+change: An unsupervised single-temporal change detection framework
+based on intra- and inter-image patch exchange,” ISPRS J. Photogramm.
+Remote Sens., vol. 206, pp. 87–105, 2023.
+[46] R. Caye Daudt, B. Le Saux, A. Boulch, and Y. Gousseau, “Multitask
+learning for large-scale semantic change detection,” Comput. Vis. Image
+Underst., vol. 187, p. 102783, 2019.
+[47] L. Mou, L. Bruzzone, and X. X. Zhu, “Learning spectral-spatialoral fea-
+tures via a recurrent convolutional neural network for change detection
+in multispectral imagery,” IEEE Trans. Geosci. Remote Sens., vol. 57,
+no. 2, pp. 924–935, 2019.
+[48] L. Ding, H. Guo, S. Liu, L. Mou, J. Zhang, and L. Bruzzone, “Bi-
+temporal semantic reasoning for the semantic change detection in hr
+remote sensing images,” IEEE Trans. Geosci. Remote Sens., vol. 60, pp.
+1–14, 2022.
+[49] D. Peng, L. Bruzzone, Y. Zhang, H. Guan, and P. He, “Scdnet: A novel
+convolutional network for semantic change detection in high resolution
+optical remote sensing imagery,” Int. J. Appl. Earth Obs. Geoinf., vol.
+103, p. 102465, 2021.
+[50] S. Tian, X. Tan, A. Ma, Z. Zheng, L. Zhang, and Y. Zhong, “Temporal-
+agnostic change region proposal for semantic change detection,” ISPRS
+J. Photogramm. Remote Sens., vol. 204, pp. 306–320, 2023.
+[51] S. Saha, F. Bovolo, and L. Bruzzone, “Unsupervised deep change vector
+analysis for multiple-change detection in VHR Images,” IEEE Trans.
+Geosci. Remote Sens., vol. 57, no. 6, pp. 3677–3693, 2019.
+[52] R. Gupta, B. Goodman, N. Patel, R. Hosfelt, S. Sajeev, E. Heim,
+J. Doshi, K. Lucas, H. Choset, and M. Gaston, “Creating xbd: A dataset
+for assessing building damage from satellite imagery,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+(CVPR) Workshops, June 2019.
+[53] E. Weber and H. Kan´e, “Building disaster damage assessment in satellite
+imagery with multi-temporal fusion,” arXiv preprint arXiv:2004.05525,
+2020.
+[54] K. He, G. Gkioxari, P. Doll´ar, and R. Girshick, “Mask r-cnn,” in IEEE
+International Conference on Computer Vision (ICCV), 2017, pp. 2980–
+2988.
+[55] Y. Niu, H. Guo, J. Lu, L. Ding, and D. Yu, “Smnet: Symmetric multi-
+task network for semantic change detection in remote sensing images
+based on cnn and transformer,” Remote Sens., vol. 15, no. 4, 2023.
+[56] L. Ding, J. Zhang, H. Guo, K. Zhang, B. Liu, and L. Bruzzone,
+“Joint spatio-temporal modeling for semantic change detection in remote
+sensing images,” IEEE Trans. Geosci. Remote Sens., vol. 62, pp. 1–14,
+2024.
+[57] J. T. Smith, A. Warrington, and S. W. Linderman, “Simplified state space
+layers for sequence modeling,” arXiv preprint arXiv:2208.04933, 2022.
+[58] D. Y. Fu, T. Dao, K. K. Saab, A. W. Thomas, A. Rudra, and C. R´e,
+“Hungry hungry hippos: Towards language modeling with state space
+models,” arXiv preprint arXiv:2212.14052, 2022.
+[59] X. He, K. Cao, K. Yan, R. Li, C. Xie, J. Zhang, and M. Zhou,
+“Pan-mamba: Effective pan-sharpening with state space model,” arXiv
+preprint arXiv:2402.12192, 2024.
+[60] K. Chen, B. Chen, C. Liu, W. Li, Z. Zou, and Z. Shi, “Rsmamba: Remote
+sensing image classification with state space model,” arXiv preprint
+arXiv:2403.19654, 2024.
+[61] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+L. u. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances
+in Neural Information Processing Systems (NIPS), vol. 30, 2017.
+[62] S. Elfwing, E. Uchibe, and K. Doya, “Sigmoid-weighted linear units
+for neural network function approximation in reinforcement learning,”
+Neural Netw., vol. 107, pp. 3–11, 2018.
+[63] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Doll´ar, “Focal loss
+for dense object detection,” in Proceedings of the IEEE international
+Conference on Computer Vision (ICCV), 2017, pp. 2980–2988.
+[64] M. Berman, A. R. Triki, and M. B. Blaschko, “The lov´asz-softmax loss:
+A tractable surrogate for the optimization of the intersection-over-union
+measure in neural networks,” in Proceedings of the IEEE Conference
+on Computer Vision and Pattern Recognition (CVPR), June 2018.
+[65] H. Chen and Z. Shi, “A spatial-temporal attention-based method and a
+new dataset for remote sensing image change detection,” Remote Sens.,
+vol. 12, no. 10, 2020.
+[66] S. Ji, S. Wei, and M. Lu, “Fully convolutional networks for multisource
+building extraction from an open aerial and satellite imagery data set,”
+IEEE Trans. Geosci. Remote Sens., vol. 57, no. 1, pp. 574–586, 2018.
+[67] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,”
+arXiv preprint arXiv:1711.05101, 2017.
+[68] Y. Huang, X. Li, Z. Du, and H. Shen, “Spatiotemporal enhancement and
+interlevel fusion network for remote sensing images change detection,”
+IEEE Trans. Geosci. Remote Sens., vol. 62, pp. 1–14, 2024.
+[69] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image
+recognition,” Proceedings of the IEEE Computer Society Conference on
+Computer Vision and Pattern Recognition (CVPR), pp. 770–778, 2016.
+[70] S. Tian, Y. Zhong, Z. Zheng, A. Ma, X. Tan, and L. Zhang, “Large-
+scale deep learning based binary and semantic change detection in ultra
+high resolution remote sensing imagery: From benchmark datasets to
+urban application,” ISPRS J. Photogramm. Remote Sens., vol. 193, pp.
+164–186, 2022.
+[71] Y. Cao and X. Huang, “A deep learning method for building height
+estimation using high-resolution multi-view imagery over urban areas:
+A case study of 42 chinese cities,” Remote Sens. Environ., vol. 264, p.
+112590, 2021.
+[72] M. Tan and Q. Le, “Efficientnet: Rethinking model scaling for convolu-
+tional neural networks,” in Proceedings of the International Conference
+on Machine Learning (ICML), vol. 97, 2019, pp. 6105–6114.

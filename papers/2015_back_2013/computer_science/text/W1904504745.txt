@@ -1,0 +1,2436 @@
+arXiv:1412.8416v1  [cs.NI]  29 Dec 2014
+1
+Joint Optimization of Radio and Computational
+Resources for Multicell Mobile-Edge Computing
+Stefania Sardellitti, Gesualdo Scutari, and Sergio Barbarossa
+Abstract—Migrating computational intensive tasks from mo-
+bile devices to more resourceful cloud servers is a promising
+technique to increase the computational capacity of mobile
+devices while saving their battery energy. In this paper, we
+consider a MIMO multicell system where multiple mobile users
+(MUs) ask for computation ofﬂoading to a common cloud server.
+We formulate the ofﬂoading problem as the joint optimization
+of the radio resources−the transmit precoding matrices of the
+MUs−and the computational resources−the CPU cycles/second
+assigned by the cloud to each MU−in order to minimize the over-
+all users’ energy consumption, while meeting latency constraints.
+The resulting optimization problem is nonconvex (in the objective
+function and constraints). Nevertheless, in the single-user case, we
+are able to express the global optimal solution in closed form. In
+the more challenging multiuser scenario, we propose an iterative
+algorithm, based on a novel successive convex approximation
+technique, converging to a local optimal solution of the original
+nonconvex problem. Then, we reformulate the algorithm in a
+distributed and parallel implementation across the radio access
+points, requiring only a limited coordination/signaling with the
+cloud. Numerical results show that the proposed schemes out-
+perform disjoint optimization algorithms.
+Index Terms—Mobile cloud computing, computation ofﬂoad-
+ing, energy minimization, resources allocation, small cells.
+I. INTRODUCTION
+Mobile terminals, such as smartphones, tablets and net-
+books, are increasingly penetrating into our everyday lives as
+convenient tools for communication, entertainment, business,
+social networking, news, etc. Current predictions foresee a
+doubling of mobile data trafﬁc every year. However such
+a growth in mobile wireless trafﬁc is not matched with
+an equally fast improvement on mobile handsets’ batteries,
+as testiﬁed in [3]. The limited battery lifetime is then go-
+ing to represent the stumbling block to the deployment of
+computation-intensive applications for mobile devices. At the
+same time, in the Internet-of-Things (IoT) paradigm, a myriad
+of heterogeneous devices, with a wide range of computational
+capabilities, are going to be interconnected. For many of them,
+the local computation resources are insufﬁcient to run sophis-
+ticated applications. In all these cases, a possible strategy to
+overcome the above energy/computation bottleneck consists
+in enabling resource-constrained mobile devices to ofﬂoad
+their most energy-consuming tasks to nearby more resourceful
+servers. This strategy has a long history and is reported in
+the literature under different names, such as cyber foraging
+S.
+Sardellitti
+and
+S.
+Barbarossa
+are
+with
+the
+Dept.
+of
+Informa-
+tion
+Engineering,
+Electronics
+and
+Telecommunications,
+Sapienza
+Uni-
+versity of Rome, Rome, Italy. Emails: <stefania.sardellitti,
+sergio.barbarossa>@uniroma1.it.
+G. Scutari is with the Dept. of Electrical Engineering, State University of
+New York at Buffalo, Buffalo, USA. Email: gesualdo@buffalo.edu.
+The work of Barbarossa and Sardellitti was supported by the European
+Community 7th Framework Programme Project ICT-TROPIC, under grant nr.
+318784. The work of Scutari was supported by the USA NSF under Grants
+CMS 1218717 and CAREER Award No. 1254739. Part of this work was
+presented at IEEE SPAWC 2014 [1] and at IEEE CloudNet 2014 [2].
+[4], or computation ofﬂoading [5]. In recent years, cloud
+computing (CC) has provided a strong impulse to computation
+ofﬂoading through virtualization, which decouples the appli-
+cation environment from the underlying hardware resources
+and thus enables an efﬁcient usage of available computing
+resources. In particular, Mobile Cloud Computing (MCC) [6]
+makes possible for mobile users to access cloud resources,
+such as infrastructures, platforms, and software, on-demand.
+Several works addressed mobile computation ofﬂoading, such
+as [7]–[16]. Recent surveys are [6], [17], and [18]. Some
+works addressed the problem of program partitioning and
+ofﬂoading the most demanding program tasks, as e.g. in
+[7]–[10]. Speciﬁc examples of mobile computation ofﬂoading
+techniques are: MAUI [19], ThinkAir [20], and Phone2Cloud
+[21]. The trade-off between the energy spent for computation
+and communication was studied in [12]–[14], [22]. A dy-
+namic formulation of computation ofﬂoading was proposed in
+[15]. These works optimized ofﬂoading strategies, assuming a
+given radio access, and concentrated on single-user scenarios.
+In [23], it was proposed a joint optimization of radio and
+computational resources, for the single user case. The joint
+optimization was then extended to the multiuser case in [24];
+see also [25] for a recent survey on joint optimization for
+computation ofﬂoading in a 5G perspective. The optimal joint
+allocation of radio and computing resources in [24], [25] was
+assumed to be managed in a centralized way in the cloud. A
+decentralized solution, based on a game-theoretic formulation
+of the problem, was recently proposed in [26], [11]. In current
+cellular networks, the major obstacles limiting an effective
+deployment of MCC strategies: i) the energy spent by mobile
+terminals, especially cell edge users, for radio access; and ii)
+the latency experienced in reaching the (remote) cloud server
+through a wide area network (WAN). Indeed, in macro-cellular
+systems, the transmit power necessary for cell edge users to
+access a remote base station might null all potential beneﬁts
+coming from ofﬂoading. Moreover, in many real-time mobile
+applications (e.g., online games, speech recognition, Facetime)
+the user Quality of Experience (QoE) is strongly affected by
+the system response time. Since controlling latency over a
+WAN might be very difﬁcult, in many circumstances the QoE
+associated to MCC could be poor.
+A possible way to tackle these challenges is to bring both
+radio access and computational resources closer to MUs. This
+idea was suggested in [17], [27], with the introduction of
+cloudlets, providing proximity radio access to ﬁxed servers
+through Wi-Fi. However, the lack of available ﬁxed servers
+could limit the applicability of cloudlets. The European project
+TROPIC [28] suggested to endow small cell LTE base stations
+with, albeit limited, cloud functionalities. In this way, one
+can exploit the potential dense deployment of small cell base
+stations to facilitate proximity access to computing resources
+and have advantages over Wi-Fi access in terms of Quality-
+
+2
+of-Service guarantee and a single technology system (no need
+for the MUs to switch between cellular and Wi-Fi standards).
+Very recently, the European Telecommunications Standards
+Institute (ETSI) launched a new standardization group on
+the so called Mobile-Edge Computing (MEC), whose aim
+is to provide information technology and cloud-computing
+capabilities within the Radio Access Network (RAN) in close
+proximity to mobile subscribers in order to offer a service
+environment characterized by proximity, low latency, and high
+rate access [29].
+Merging MEC with the dense deployment of (small cell)
+Base Stations (BSs), as foreseen in the 5G standardization
+roadmap, makes possible a real proximity, ultra-low latency
+access to cloud functionalities [25]. However, in a dense
+deployment scenario, ofﬂoading becomes much more com-
+plicated because of intercell interference. The goal of this
+paper is to propose a joint optimization of radio and com-
+putational resources for computation ofﬂoading in a dense
+deployment scenario, in the presence of intercell interference.
+More speciﬁcally, the ofﬂoading problem is formulated as
+the minimization of the overall energy consumption, at the
+mobile terminals’ side, under transmit power and latency
+constraints. The optimization variables are the mobile radio
+resources−the precoding (equivalently, covariance) matrices
+of the mobile MIMO transmitters−and the computational
+resources−the CPU cycles/second assigned by the cloud to
+each MU. The latency constraint is what couples computation
+and communication optimization variables. This problem is
+much more challenging than the (special) cases studied in
+the literature because of the presence of intercell interference,
+which introduces a coupling among the precoding matrices of
+all MUs, while making the optimization problem nonconvex.
+In this context, the main contributions of the paper are the
+following: i) in the single-user case, we ﬁrst establish the
+equivalence between the original nonconvex problem and a
+convex one, and then derive the closed form of its (global
+optimal) solution; ii) in the multi-cell case, hinging on recent
+Successive Convex Approximation (SCA) techniques [30],
+[31], we devise an iterative algorithm that is proved to con-
+verge to local optimal solutions of the original nonconvex
+problem; and iii) we propose alternative decomposition algo-
+rithms to solve the original centralized problem in a distributed
+form, requiring limited signaling among BSs and cloud; the
+algorithms differ for convergence speed, computational effort,
+communication overhead, and a-priori knowledge of system
+parameters, but they are all convergent under a uniﬁed set
+of conditions. Numerical results show that all the proposed
+schemes converge quite fast to “good” solutions, yielding a
+signiﬁcant energy saving with respect to disjoint optimization
+procedures, for applications requiring intensive computations
+and limited exchange of data to enable ofﬂoading.
+The rest of the paper is organized as follows. In Section
+II we introduce the system model; Section III formulates
+the ofﬂoading optimization problem in the single user case,
+whereas Section IV focuses on the multi-cell scenario along
+with the proposed SCA algorithmic framework. The decen-
+tralized implementation is discussed in Section V.
+II. COMPUTATION OFFLOADING
+Let us consider a network composed of Nc cells; in each
+cell n = 1, . . . , Nc, there is one Small Cell enhanced Node
+B (SCeNB in LTE terminology) serving Kn MUs. We denote
+by in the i-th user in the cell n, and by I ≜{in : i =
+1, . . . , Kn, n = 1, . . . , Nc} the set of all the users. Each MU
+in and SCeNB n are equipped with nTin transmit and nRn
+receive antennas, respectively. The SCeNB’s are all connected
+to a common cloud provider, able to serve multiple users
+concurrently. We assume that MUs in the same cell transmit
+over orthogonal channels, whereas users of different cells may
+interfere against each other.
+In this scenario, each MU in is willing to run an application
+within a given maximum time Tin, while minimizing the
+energy consumption at the MU’s side. To ofﬂoad computations
+to the remote cloud, the MU has to send all the needed
+information to the server. Each module to be executed is
+characterized by: the number win of CPU cycles necessary to
+run the module itself; the number bin of input bits necessary
+to transfer the program execution from local to remote sides;
+and the number bo
+in of output bits encoding the result of the
+computation, to be sent back from remote to local sides.
+The
+MU can perform its computations locally or ofﬂoad them to
+the cloud, depending on which strategy requires less energy,
+while satisfying the latency constraint. In case of ofﬂoading,
+the latency incorporates the time to transmit the input bits to
+the server, the time necessary for the server to execute the
+instructions, and the time to send the result back to the MU.
+More speciﬁcally, the overall latency experienced by each MU
+in can be written as
+∆in = ∆t
+in + ∆exe
+in
++ ∆tx/rx
+in
+(1)
+where ∆t
+in is the time necessary for the MU in to transfer the
+input bits bin to its SCeNB; ∆exe
+in
+is the time for the server
+to execute win CPU cycles; and ∆tx/rx
+in
+is the time necessary
+for SCeNB n to send the bin bits to the cloud through the
+backhaul link plus the time necessary to send back the result
+(encoded in bo
+in bits) from the server to MU in. We derive
+next an explicit expression of ∆t
+in and ∆exe
+in
+as a function of
+the radio and computational resources.
+Radio resources: The optimization variables at radio level
+are the users’ transmit covariance matrices Q ≜(Qin)in∈I,
+subject to power budget constraints
+Qin ≜
+
+Qin ∈CnTin ×nTin : Qin ⪰0, tr (Qin) ≤Pin
+	
+,
+(2)
+where Pin is the average transmit power of user in. We will
+denote by Q the joint set Q ≜Q
+in∈I Qin.
+For any given proﬁle Q ≜(Qin)in∈I, the maximum
+achievable rate of MU in is:
+rin(Q) = log2 det
+ I + HH
+innRn(Q−n)−1HinnQin
+
+(3)
+where
+Rn(Q−n) ≜Rw +
+X
+jm∈I,m̸=n
+HjmnQjmHH
+jmn,
+(4)
+is the covariance matrix of the noise Rw ≜σ2
+wI (assumed to
+be diagonal w.l.o.g, otherwise one can always pre-whitening
+
+3
+the channel matrices) plus the inter-cell interference at the
+SCeNB n (treated as additive noise); Hinn is the channel
+matrix of the uplink i in the cell n, whereas Hjmn is the cross-
+channel matrix between the interferer MU j in the cell m and
+the SCeNB of cell n; and Q−n ≜((Qjm)Km
+j=1)Nc
+n̸=m=1 denotes
+the tuple of the covariance matrices of all users interfering
+with the SCeNB n.
+Given each rin(Q), the time ∆t
+in necessary for user i in
+cell n to transmit the input bits bin of duration Tbin to its
+SCeNB can be written as
+∆t
+in = ∆t
+in (Q) =
+cin
+rin(Q)
+(5)
+where cin = binTbin . The energy consumption due to ofﬂoad-
+ing is then
+Ein(Qin, Q−n) = tr(Qin) · ∆t
+in (Q),
+(6)
+which depends also on the covariance matrices Q−n of the
+users in the other cells, due to the intercell interference.
+Computational resources. The cloud provider is able to
+serve multiple users concurrently. The computational resources
+made available by the cloud and shared among the users are
+quantiﬁed in terms of number of CPU cycles/second, set to
+fT ; let fin ≥0 be the fraction of fT assigned to each user
+in. All the fin are thus nonnegative optimization variables to
+be determined, subject to the computational budget constraint
+P
+in∈I fin ≤fT . Given the resource assignment fin, the time
+∆exe
+in
+needed to run win CPU cycles of user in’s instructions
+remotely is then
+∆exe
+in
+= ∆exe
+in (fin) = win/fin.
+(7)
+The expression of the overall latency ∆in [cf. (1), (5),
+and (7)] clearly shows the interplay between radio access
+and computational aspects, which motivates a joint optimiza-
+tion of the radio resources, the transmit covariance matrices
+Q ≜(Qin)in∈I of the MUs, and the computational resources,
+the computational rate allocation f ≜(fin)in∈I.
+We are now ready to formulate the ofﬂoading problem
+rigorously. We focus ﬁrst on the single-user scenario (cf. Sec.
+III); this will allow us to shed light on the special structure of
+the optimal solution. Then, we will extend the formulation to
+the multiple-cells case (cf. Sec. IV).
+III. THE SINGLE-USER CASE
+In the single-user case, there is only one active MU having
+access to the cloud. In such interference-free scenario, the
+maximum achievable rate on the MU and energy consumption
+due to ofﬂoading reduce to [cf. (3) and (6)]
+r(Q) = log2 det
+ I + HQHHR−1
+w
+
+(8)
+and
+E(Q) = c · tr(Q)
+r(Q) ,
+(9)
+respectively, with c = b·Tb (for notational simplicity, we omit
+the user index; Q denotes now the covariance matrix of the
+MU).
+We formulate the ofﬂoading problem as the minimization
+of the energy spent by the MU to run its application remotely,
+subject to latency and transmit power constraints, as follows:
+min
+Q, f
+E(Q)
+s.t.
+a)
+c
+r(Q) + w
+f −˜T ≤0
+b)0 ≤f ≤fT
+c)tr(Q) ≤PT ,
+Q ⪰0
+
+
+
+
+
+
+
+
+
+≜Xs
+(Ps)
+where a) reﬂects the user latency constraint ∆≤T [cf. (1)],
+with ˜T capturing all the constant terms, i.e., ˜T ≜T −∆tx/rx;
+b) imposes a limit on the cloud computational resources made
+available to the users; and c) is the power budget constraint
+on the radio resources.
+Feasibility: Depending on the system parameters, problem
+Ps may be feasible or not. In the latter case, ofﬂoading is
+not possible and thus the MU will perform its computations
+locally. It is not difﬁcult to prove that the following condition
+is necessary and sufﬁcient for Xs to be nonempty and thus for
+ofﬂoading to be feasible:
+c
+rmax + w
+fT
+−˜T ≤0
+(10)
+where rmax is the capacity of the MIMO link of the MU, i.e.,
+rmax =
+argmax
+Q⪰0 : tr(Q)≤PT
+r(Q).
+(11)
+The unique (closed-form) solution of (11) is the well-known
+MIMO water-ﬁlling. Note that condition (10) has an interest-
+ing physical interpretation: ofﬂoading is feasible if and only if
+˜T > 0, i.e., the delay on the wired network ∆tx/rx is less than
+the maximum tolerable delay, and the overall latency constraint
+is met (at least) when the wireless and computational resources
+are fully utilized (i.e., r(Q) = rmax, and f = fT ). It is
+not difﬁcult to check that this worst-case scenario is in fact
+achieved when (10) is satisﬁed with equality; in such a case,
+the (globally optimal) solution (Q⋆, f ⋆) to Ps is trivially
+given by (Q⋆, f ⋆) = (Qwf, fT ), where Qwf is the waterﬁlling
+solution to (11). Therefore in the following we will focus
+w.l.o.g. on Ps under the tacit assumption of strict feasibility
+[i.e., the inequality in (10) is tight].
+Solution Analysis: Problem Ps is nonconvex due to the non-
+convexity of the energy function. A major contribution of this
+section is to i) cast Ps into a convex equivalent problem,
+and ii) compute its global optimal solution (and thus optimal
+also to Ps) in closed form. To do so, we introduce ﬁrst some
+preliminary deﬁnitions.
+Let Qs be the following auxiliary convex problem
+min
+Q,f
+tr(Q)
+s.t.
+a)
+c
+r(Q) + w
+f −˜T ≤0
+b)0 ≤f ≤fT
+c)tr(Q) ≤PT ,
+Q ⪰0
+
+
+
+
+
+
+
+
+
+= Xs
+(Qs)
+which corresponds to minimizing the transmit power of the
+MU under the same latency and power constraints as in Ps.
+Also, let HHR−1
+w H = UDUH be the (reduced) eigenvalue
+decomposition of HHR−1
+w H, with r ≜rank(HHR−1
+w H) =
+rank(H), where U ∈CnT ×r is the (semi-)unitary matrix
+
+4
+whose columns are the eigenvectors associated with the r
+positive eigenvalues of HHR−1
+w H, and Rr×r
+++
+∋
+D
+≜
+diag{(di)r
+i=1} is the diagonal matrix, whose diagonal entries
+are the eigenvalues arranged in decreasing order. We are now
+ready to establish the connection between Ps and Qs.
+Theorem 1. Given problems Ps and Qs under strict feasibil-
+ity, the following hold.
+(a) Ps and Qs are equivalent;
+(b) Qs (and Ps) has a unique solution (Q⋆, f ⋆), given by
+f ⋆= fT ,
+and
+Q⋆= U
+ αI −D−1+ UH,
+(12)
+where α > 0 must be chosen so that the latency constraint
+(a) in Xs is satisﬁed with equality at (Q⋆, f ⋆), and (x)+ ≜
+max(0, x) (intended component-wise).
+The water-level α > 0 can be efﬁciently computed using the
+hypothesis-testing-based algorithm described in Algorithm 1.
+Proof. See Appendix A.
+Algorithm 1 Efﬁcient computation of α in (12)
+Data: (di)r
+i=1 > 0 (arranged in decreasing order), r =
+rank(HHR−1
+w H), and L ≜˜T −w/fT > 0;
+(S.0): Set re = r;
+(S.1): Repeat
+(a): Set α = 2
+c
+reL −1
+re
+re
+X
+i=1
+log2(di)
+;
+(b): If pi ≜(α −1/di) ≥0, ∀i = 1, . . . , re,
+and Pre
+i=1 pi ≤PT ,
+then STOP;
+else re = re −1;
+until re ≥1.
+Theorem 1 is the formal proof that, in the single-user
+case, the latency constraint has to be met with equality and
+then the ofﬂoading strategy minimizing energy consumption
+coincides with the one minimizing the transmit power. Note
+also that Q⋆has a water-ﬁlling-like structure: the optimal
+transmit “directions” are aligned with the eigenvectors U
+of the equivalent channel HHR−1
+w H. However, differently
+from the classical waterﬁlling solution Qwf [cf. (11)], the
+waterlevel α is now computed to meet the latency constraints
+with equality. This means that a transmit strategy using the
+full power PT (like Qwf) is no longer optimal. The only case
+in which Q⋆≡Qwf is the case where the feasibility condition
+(10) is satisﬁed with equality. Note also that the water-level
+α depends now on both communication and computational
+parameters (the maximum tolerable delay, size of the program
+state, CPU cycle budget, etc.).
+IV. COMPUTATION OFFLOADING OVER MULTIPLE-CELLS
+In this section we consider the more general multi-cell
+scenario described in Sec.II. The overall energy spent by the
+MUs to remotely run their applications is now given by
+E(Q) ≜
+X
+in∈I
+Ein(Q),
+(13)
+with Ein(Q) deﬁned in (6). If some fairness has to be
+guaranteed among the MUs, other objective functions of the
+MUs’ energies Ein(Q) can be used, including the weighted
+sum, the (weighted) geometric mean, etc.. As a case-study, in
+the following, we will focus on the minimization of the sum-
+energy E(Q), but the proposed algorithmic framework can be
+readily applied to the alternative aforementioned functions.
+Each MU in is subject to the power budget constraint (2)
+and, in case of ofﬂoading, to an overall latency given by
+gin(Q, fin) ≜
+cin
+rin(Q) + win
+fin
+−˜Tin ≤0.
+(14)
+The ofﬂoading problem in the multi-cell scenario is then
+formulated as follows:
+min
+Q,f
+E(Q)
+s.t.
+a) gin(Q, fin) ≤0, ∀in ∈I,
+b)
+X
+in∈I
+fin ≤fT ,
+fin ≥0,
+∀in ∈I,
+c) Qin ∈Qin,
+∀in ∈I,
+
+
+
+
+
+
+
+
+
+
+
+≜X
+(P)
+where a) represent the users’ latency constraints ∆in ≤Tin
+with ˜Tin ≜Tin −∆tx/rx
+in
+; and the constraint in b) is due to the
+limited cloud computational resources to be allocated among
+the MUs.
+Feasibility: The following conditions are sufﬁcient for X to
+be nonempty and thus for ofﬂoading to be feasible: ˜Tin > 0
+for all in ∈I, and there exists a ¯Q ≜( ¯Qin)in∈I ∈Q such
+that
+˜Tin >
+cin
+rin( ¯Q), ∀in ∈I,
+and
+X
+in∈I
+win
+˜Tin −
+cin
+rin( ¯Q)
+≤fT .
+(15)
+Problem P is nonconvex, due to the nonconvexity of the
+objective function and the constraints a). In what follows we
+exploit the structure of P and, building on some recent Suc-
+cessive Convex Approximation (SCA) techniques proposed
+in [30], [31], we develop a fairly general class of efﬁcient
+approximation algorithms, all converging to a local optimal
+solution of P. The numerical results will show that the pro-
+posed algorithms converge in a few iterations to “good” locally
+optimal solutions of P (that turn out to be quite insensitive
+to the initialization). The main algorithmic framework, along
+with its convergence properties, is introduced in Sec. IV-A;
+alternative distributed implementations are studied in Sec. V.
+A. Algorithmic design
+To solve the non-convex problem P efﬁciently, we develop
+a SCA-based method where P is replaced by a sequence of
+strongly convex problems. At the basis of the proposed tech-
+nique, there is a suitable convex approximation of the noncon-
+vex objective function E(Q) and the constraints gin(Q, fin)
+around the iterates of the algorithm, which are preliminarily
+discussed next.
+1) Approximant of E(Q): Let Z ≜(Q, f) and Zν ≜
+(Qν, f ν), with f ≜(fin)in∈I and f ν ≜(f ν
+in)in∈I. Let E ⊇X
+be any closed convex set containing X such that E(Q) is well-
+deﬁned on it. Note that such a set exits. For instance, noting
+that at every (feasible) (Q, f) ∈X, it must be rin(Q) > 0,
+
+5
+fin > 0, for all i and n. Hence, condition gin(Q, fin) ≤0 in
+P can be equivalently rewritten as
+rin(Q) ≥αin(fin) ≜
+cin · fin
+fin · ˜Tin −win
+> 0,
+so
+that
+one
+can
+choose
+E
+≜
+{(Q, f)
+:
+b), c) hold, rin(Qin, Q−in = 0) ≥αin(fin), ∀in ∈I}.
+Following [30], [31], our goal is to build, at each iteration
+ν, an approximant, say ˜E(Z; Zν), of the nonconvex (nonsepa-
+rable) E(Q) around the current (feasible) iterate Zν ∈X that
+enjoys the following key properties:
+P1: ˜E(•; Zν) is uniformly strongly convex on E × R|I|
++ ;
+P2: ∇Q∗˜E(Zν; Zν) = ∇Q∗E(Qν), ∀Zν ∈X;
+P3: ∇Z∗˜E(•; •) is Lipschitz continuous on E × R|I|
++ × X;
+where ∇Z∗˜E(•; •) denotes the conjugate gradient of ˜E with
+respect to Z. Conditions P1-P2 just guarantee that the can-
+didate approximation ˜E(•; Zν) is strongly convex while pre-
+serving the same ﬁrst order behaviour of E(Q) at any iterate
+Qν; P3 is a standard continuity requirement.
+We build next a ˜E(Z; Zν) satisfying P1-P3. Observe that
+i) for any given Q−n = Qν
+−n, each term Ein(Qin, Qν
+−n) =
+tr(Qin)·∆t
+in(Qin, Qν
+−n) of the sum in E(Q) [cf. (13)] is the
+product of two convex functions in Qin [cf. (6)], namely:
+tr(Qin) and ∆t
+in(Qin, Qν
+−n); and ii) the other terms of
+the sum−P
+jm∈I,m̸=n Ejm(Qin, Qν
+−in,jm) with Qν
+−in,jm ≜
+(Qν
+jm, (Qν
+lq)∀l,q̸=m,lq̸=in)−are not convex in Qin. Exploit-
+ing such a structure, a convex approximation of E(Q) can
+be obtained for each MU in by convexifying the term
+tr(Qin) · ∆t
+in(Qin, Qν
+−n) and linearizing the nonconvex part
+P
+jm∈I,m̸=n Ejm(Qin; Qν
+−in,jm). More formally, denoting
+Zin ≜(Qin, fin), for each in, let us introduce the “approxi-
+mation” function ˜Ein(Zin; Qν):
+˜Ein(Zin; Zν) ≜
+cin · tr(Qin)
+rin(Qν
+in, Qν
+−n) +
+cin · tr(Qν
+in)
+rin(Qin, Qν
+−n)
++
+X
+jm∈I,m̸=n
+D
+∇Q∗
+in Ejm(Qν), Qin −Qν
+in
+E
++τin ∥Qin −Qν
+in∥2 + cfin
+2
+(fin −f ν
+in)2
+(16)
+where:
+the
+ﬁrst
+two
+terms
+on
+the
+right-hand
+side
+are
+the
+aforementioned
+convexiﬁcation
+of
+tr(Qin) · ∆t
+in(Qin, Qν
+−in);
+the
+third
+term
+comes
+from
+the linearization of P
+jm∈I,m̸=n Ejm(Qin; Qν
+−in,jm), with
+⟨A, B⟩≜Re{tr(AHB)} and ∇Q∗
+in Ejm(Qν) denoting the
+conjugate gradient of Ejm(Q) with respect to Qin evaluated
+at Qν, and given by
+∇Q∗
+in Ejm(Qν) = tr(Qν
+jm)∆t
+jm(Qν)
+log(2)rjm(Qν)
+·
+
+HH
+inm
+ Rm(Qν
+−m)−1
+−(Rm(Qν
+−m) + HjmmQν
+jmHH
+jmm)−1
+Hinm
+
+;
+(17)
+the fourth term in (16) is a quadratic regularization term added
+to make ˜Ein(•; Zν) uniformly strongly convex on E × R+.
+Based on each ˜Ein(Zin; Zν), we can now deﬁne the candidate
+sum-energy approximation ˜E(Z; Zν) as: given Zν ∈X,
+˜E(Z; Zν) ≜
+X
+in∈I
+˜Ein(Zin; Zν).
+(18)
+It is not difﬁcult to check that ˜E(Z; Zν) satisﬁes P1-P3;
+in particular it is strongly convex on E × R|I|
++ with constant
+c ˜
+E ≥minin∈I(min(τin, cfin ))>0. Note that ˜E(Z; Zν) is also
+separable in the users variables Zin, which is instrumental to
+obtain distributed algorithms across the SCeNBs, see Sec. V.
+2) Inner convexiﬁcation of the constraints gin(Q, fin):
+We aim at introducing an inner convex approximation, say
+˜gin(Q, fin; Zν), of the constraints gin(Q, fin) around Zν ∈
+X, satisfying the following key properties (the proof is omitted
+for lack of space and reported in Appendix B in the supporting
+material) [30], [31]:
+C1: ˜gin(•; Zν) is uniformly convex on E × R+;
+C2: ∇Z∗˜gin(Qν, f ν
+in; Zν) = ∇Z∗gin(Qν, f ν
+in), ∀Zν ∈X;
+C3: ∇Z∗˜gin(•; •) is continuous on E × R+ × X;
+C4: ˜gin(Q, fin; Zν) ≥gin(Q, fin), ∀(Q, fin) ∈E × R+ and
+∀Zν ∈X;
+C5: ˜gin(Qν, f ν
+in; Zν) = gin(Qν, f ν
+in), ∀Zν ∈X;
+C6: ˜gin(•; •) is Lipschitz continuous on E × R+ × X.
+Conditions C1-C3 are the counterparts of P1-P3 on ˜gin;
+the extra condition C4-C5 guarantee that ˜gin is an inner
+approximation of gin, implying that any (Q, fin) satisfying
+˜gin(Q, fin; Zν) ≤0 is feasible also for the original nonconvex
+problem P.
+To build a ˜gin satisfying C1-C6, let us exploit ﬁrst the
+concave-convex structure of the rate functions rin(Q) [cf. (3)]:
+rin(Q) = r +
+in(Q) + r -
+n(Q−n),
+(19)
+where
+r +
+in(Q) ≜log2 det
+ Rn(Q−n) + HinnQinHH
+inn
+
+r -
+n(Q−n) ≜−log2 det (Rn(Q−n))
+(20)
+with Rn(Q−n) deﬁned in (4). Note that r +
+in(•) and r -
+n(•) are
+concave on Q and convex on Q−n ≜Q
+m̸=n Qm, respectively.
+Using (19), and observing that at any (feasible) (Q, f) ∈X, it
+must be rin(Q) > 0 and fin > 0 for all i and n, the constraints
+gin(Q, fin) ≤0 in P can be equivalently rewritten as
+gin(Q, fin) = −r +
+in(Q) −r -
+n(Q−n) +
+cin · fin
+fin · ˜Tin −win
+≤0,
+(21)
+where with a slight abuse of notation we used the same symbol
+gin(Q, fin) to denote the constraint in the equivalent form.
+The desired inner convex approximation ˜gin(Q, fin; Zν) is
+obtained from gin(Q, fin) by retaining the convex part in (21)
+and linearizing the concave term −r -
+n(Q−n), resulting in:
+˜gin(Q, fin; Zν)≜−r +
+in(Q) +
+cin · fin
+fin · ˜Tin −win
+−r -
+n(Qν
+−n)−
+X
+jm∈I
+
+Π -
+jm,n(Qν),Qjm −Qν
+jm
+
+(22)
+
+6
+where each Π -
+jm,n(Qν) is deﬁned as
+Π -
+jm,n(Qν) ≜
+(
+∇Q∗
+jm r -
+n(Qν
+−n),
+if m ̸= n;
+0,
+otherwise;
+(23)
+and ∇Q∗
+jm r -
+n(Qν
+−n) = −HH
+jmnRn(Qν
+−n)−1Hjmn.
+3) Inner SCA algorithm: centralized implementation: We
+are now ready to introduce the proposed inner convex approx-
+imation of the nonconvex problem P, which consists in replac-
+ing the nonconvex objective function E(Q) and constraints
+gin(Q, fin) ≤0 in P with the approximations ˜E(Z; Zν) and
+˜gin(Q, fin; Zν) ≤0, respectively. More formally, given the
+feasible point Zν, we have
+bZ(Zν) ≜argmin
+Q,f
+˜E(Q; Qν)
+s.t.
+a) ˜gin(Q, fin; Zν) ≤0, ∀in ∈I,
+b)
+X
+in∈I
+fin ≤fT ,
+fin ≥0, ∀in ∈I,
+c) Qin ∈Qin,
+∀in ∈I,
+(Pν)
+where we denoted by bZ(Zν) ≜( bQ(Zν),bf(Zν)) the unique
+solution of the strongly convex optimization problem.
+The proposed solution consists in solving the sequence of
+problems Pν, starting from a feasible Z0 ≜(Q0, f 0). The
+formal description of the method is given in Algorithm 2,
+which is proved to converge to local optimal solutions of the
+original nonconvex problem P in Theorem 2. Note that in
+Step 3 of the algorithm we include a memory in the update
+of the iterate Zν ≜(Qν, f ν). A practical termination criterion
+in Step 1 is |E(Qν+1) −E(Qν)| ≤δ, where δ > 0 is the
+prescribed accuracy.
+Algorithm 2 : Inner SCA Algorithm for P
+Initial data: Z0 ≜(Q0, f 0) ∈X; {γν}ν ∈(0, 1];
+(S.1): If Zν satisﬁes a suitable termination criterion, STOP
+(S.2): Compute ˆZ(Zν) ≜( ˆQ(Zν),ˆf(Zν)) [cf. Pν];
+(S.3): Set Zν+1 = Zν + γν 
+ˆZ(Zν) −Zν
+;
+(S.4): ν ←ν + 1 and go to (S.1).
+Theorem 2. Given the nonconvex problem P, choose c ˜
+E > 0
+and {γν}ν such that
+(0, 1] ∋γν →0, ∀ν ≥0,
+and
+X
+ν
+γν = +∞.
+(24)
+Then every limit point of {Zν} (at least one of such points
+exists) is a stationary solution of P. Furthermore, none of
+such points is a local maximum of the energy function E.
+Proof. The proof is omitted for lack of space and reported in
+Appendix B of the supporting material.
+Theorem 2 offers some ﬂexibility in the choice of the free
+parameters c ˜
+E and {γν}ν while guaranteeing convergence of
+Algorithm 2. For instance, c ˜
+E is positive if all τin and cfin
+are positive (but arbitrary); in the case of full-column rank
+matrices Hinn, one can also set τin = 0 (still resulting in
+c ˜
+E > 0). Many choices are possible for the step-size γν; a
+practical rule satisfying (24) that we found effective in our
+experiments is [32]:
+γν+1 = γν(1 −αγν),
+γ0 ∈(0, 1],
+(25)
+with α ∈
+ 0, 1/γ0
+.
+On the implementation of Algorithm 2: Since the base stations
+are connected to the cloud throughout high speed wired links,
+a good candidate place to run Algorithm 2 is the cloud
+itself: The cloud collects ﬁrst all system parameters needed
+to run the algorithm from the SCeNBs (MUs’ channel state
+information, maximum tolerable latency, etc.); then, if the
+feasibility conditions (15) are satisﬁed, the cloud solves the
+strongly convex problems Pν (using any standard nonlinear
+programming solver), and sends the solutions Qn back to the
+corresponding SCeNBs; ﬁnally, each SCeNB communicates
+the optimal transmit parameters to the MUs it is serving.
+Related works: Algorithm 2 hinges on the idea of successive
+convex programming, which aims at computing stationary
+solutions of some classes of nonconvex problems by solv-
+ing a sequence of convexiﬁed subproblems. Some relevant
+instances of this method that have attracted signiﬁcant interest
+in recent years are: i) the basic DCA (Difference-of-Convex
+Algorithm) [33], [34]; ii) the M(ajorization)-M(inimization)
+algorithm [35], [36]; iii) alternating/successive minimization
+methods [37]–[39]; and iv) partial linearization methods [32],
+[40], [41]. The aforementioned methods identify classes of
+“favorable” nonconvex functions, for which a suitable convex
+approximation can be obtained and convergence of the asso-
+ciated sequential convex programming method can be proved.
+However, the sum-energy function E(Q) in (13) and the
+resulting nonconvex optimization problem P do not belong to
+any of the above classes. More speciﬁcally, what makes current
+algorithms not readily applicable to Problem P is the lack
+in the objective function E(Q) of a(n additively) separable
+convex and nonconvex part [each Ein(Q) in (13) is in fact
+the ratio of two functions, tr(Qin) and ∆t
+in(Qin, Qν
+−n), of the
+same set of variables]. Therefore, the proposed approximation
+function ˜E(Z; Zν), along with the resulting SCA-algorithm,
+i.e., Algorithm 2, are an innovative contribution of this work.
+V. DISTRIBUTED IMPLEMENTATION
+To alleviate the communication overhead of a centralized
+implementation (Algorithm 2), in this section we devise dis-
+tributed algorithms converging to local optimal solutions of P.
+Following [31], the main idea is to choose the approximation
+functions ˜E and ˜gin so that (on top of satisfying conditions
+P.1-P.3 and C.1-C.6, needed for convergence) the resulting
+convexiﬁed problems Pν can be decomposed into (smaller)
+subproblems solvable in parallel across the SCeNBs, with
+limited signaling between the SCeNBs and the cloud.
+Since the approximation function ˜E introduced in (18) is
+(sum) separable in the optimization variables of the MUs in
+each cell, any choice of ˜gin’s enjoying the same decompos-
+ability structure leads naturally to convexiﬁed problems Pν
+that can be readily decomposed across the SCeNBs by using
+standard primal or dual decomposition techniques.
+
+7
+Of course there is more than one choice of ˜gin meeting the
+above requirements; all of them lead to convergent algorithms
+that however differ for convergence speed, complexity, com-
+munication overhead, and a-priori knowledge of the system
+parameters. As case study, in the following, we consider two
+representative valid approximants. The ﬁrst candidate ˜gin is
+obtained exploiting the Lipschitz property of the gradient of
+the rate functions rin, whereas the second one is based on
+an equivalent reformulation of P introducing proper slack
+variables. The ﬁrst choice offers a lot of ﬂexibility in the
+design of distributed algorithms−both primal and dual-based
+schemes can be invoked−but it requires knowledge of all the
+Lipschitz constants. The second choice does not need this
+knowledge, but it involves a higher computational cost at the
+SCeNBs side, due to the presence of the slack variables.
+A. Per-cell distributed dual and primal decompositions
+The approximation function ˜gin in (22) has the desired
+property of preserving the structure of the original constraint
+function gin “as much as possible” by keeping the convex
+part r+
+in(Q) of rin(Q) unaltered. Numerical results show that
+this choice leads to fast convergence schemes, see Sec. VI.
+However the structure of ˜gin prevents Pν to be decomposed
+across the SCeNBs due to the nonadditive coupling among
+the variables Qn in r+
+in(Q). To cope with this issue, we lower
+bound r+
+in(Q) [and thus upper bound ˜gin in (22)], so that we
+obtain an alternative approximation of gin that is separable
+in all the Qn’s, while still satisfying C.1-C.6. Invoking the
+Lipschitz property of the (conjugate) gradients ∇Q∗
+jl r +
+in(•) on
+Q, with constant Ljl,in [given in (19) in Appendix B of the
+supporting material], we have
+r +
+in(Q) ≥˜r +
+in(Q; Qν) ≜r +
+in(Qν)
++
+X
+jl∈I
+ 
+Π +
+jl,in(Qν), Qjl −Qν
+jl
+
+−cjl,in ∥Qjl −Qν
+jl ∥2
+,
+for all Q, Qν ∈Q, where each Π +
+jl,in(Qν) and cjl,in are
+deﬁned respectively as
+Π +
+jl,in(Qν) ≜
+(
+∇Q∗
+jl r +
+in(Qν),
+if l ̸= n or jl = in,
+0,
+otherwise
+(26)
+with∇Q∗
+jl r +
+in(Qν)=HH
+jln(Rn(Qν
+−n)+HinnQν
+inHH
+inn)−1Hjln
+and
+cjl,in ≜
+(
+Ljl,in,
+if l ̸= n or jl = in,
+0,
+otherwise.
+(27)
+Note that ˜r +
+in(Q; Qν) is (sum) separable in the MUs’ covari-
+ance matrices Qin’s. The desired approximant of gin can be
+then obtained just replacing r+
+in(Q) in ˜gin with ˜r +
+in(Q; Qν)
+[cf. (22)], resulting in
+˜qin(Q, fin; Qν)≜−˜r +
+in(Q; Qν) +
+cin · fin
+fin · ˜Tin −win
+−r -
+n(Qν
+−n)−
+X
+jl∈I
+
+Π -
+jl,n(Qν), Qjl −Qν
+jl
+
+≜
+X
+jl∈I
+˜qjl,in(Qjl; Qν) + ¯qin(fin; Qν)
+(28)
+with ˜qjl,in(Qjl; Qν) and ¯qin(fin; Qν) given by
+˜qjl,in(Qjl; Qν) ≜cjl,in ∥Qjl −Qν
+jl ∥2
+−
+
+Π +
+jl,in(Qν) + Π -
+jl,n(Qν), Qjl −Qν
+jl
+
+,
+¯qin(fin; Qν) ≜
+cin · fin
+fin · ˜Tin −win
+−rin(Qν).
+It is not difﬁcult to check that ˜qin(Q, fin; Qν), on top of being
+separable in the MUs’ covariance matrices, also satisﬁes the
+required conditions C.1-C.6. Using ˜qin(Q, fin; Qν) instead of
+˜gin(Q, fin; Qν), the convexiﬁed subproblem replacing Pν is:
+given Zν ∈X,
+bZ(Zν) ≜argmin
+Q,f
+X
+in∈I
+˜Ein(Zin; Zν)
+s.t.
+a)
+X
+jl∈I
+˜qjl,in(Qjl; Qν) + ¯qin(fin; Qν) ≤0,
+∀in ∈I,
+b)
+X
+in∈I
+fin ≤fT ,
+fin ≥0, ∀in ∈I,
+c)Qin ∈Qin,
+∀in ∈I,
+(Pν
+d )
+where with a slight abuse of notation we still use bZ(Zν) ≜
+( bQ(Zν),bf(Zν)) to denote the unique solution of Pν
+d .
+Problem Pν
+d is now (sum) separable in the MUs’ covariance
+matrices; it can be solved in a distributed way using standard
+primal or dual decomposition techniques. We brieﬂy show next
+how to customize standard dual algorithms to Pν
+d .
+1) Per-cell optimization via dual decomposition: The sub-
+problems Pν
+d can be solved in a distributed way if the side
+constraints ˜qin(Q, fin; Qν) ≤0 are dualized (note that there
+is zero duality gap). The dual problem associated with Pν
+d is:
+given Zν ≜(Qν, f ν) ∈X,
+max
+λ≜((λin)in∈I,λf)≥0
+D
+
+ˆZ(λ; Zν), λ; Zν
+(29)
+where ˆZ(λ; Zν) ≜(ˆZn(λ; Zν))Nc
+n=1, with each ˆZn(λ; Zν) ≜
+( ˆQn(λ; Zν),ˆfn(λ; Zν)) = ( ˆQin(λ; Zν),ˆfin(λ; Zν))Kn
+i=1, is
+the unique minimizer of the Lagrangian function associated
+with Pν
+d , which after reorganizing terms can be written as
+ˆZ(λ; Zν)≜argmin
+Q∈Q,f∈R|I|
++
+Nc
+X
+n=1
+(LQn(Qn, λ; Qν)+ Lfn(fn, λ; f ν
+n)),
+(30)
+where Qn ≜(Qin)Kn
+i=1, fn ≜(fin)Kn
+i=1, and
+LQn(Qn, λ; Qν) =
+Kn
+X
+i=1
+
+
+
+˜Ein(Qin, f ν
+in; Zν) +
+X
+jl∈I
+λjl ˜qin,jl(Qin; Qν)
+
+
+,
+Lfn(fn, λ; f ν
+n)=
+Kn
+X
+i=1
+cf
+2 (fin −f ν
+in)2+ λin · cin · fin
+fin · ˜Tin −ωin
++λffin
+
+.
+(31)
+Note that, thanks to the separability structure of the
+Lagrangian function, the optimal solutions ˆZn(λ; Zν)
+=
+
+8
+Algorithm 3 : Distributed implementation of S.2 in Alg. 2.
+Initial data: λ0 ≥0, Zν = (Qν, f ν), {βk} > 0. Set k = 0,
+(S.1): If λk satisﬁes a suitable termination criterion:STOP;
+(S.2): For each SCeNB n, compute in parallel Qk+1
+n
+(λk; zν)
+and f k+1
+n
+(λk; zν) [cf. (32)];
+(S.3): Update at the master node λk+1 according to
+λk+1
+in
+≜
+
+λk
+in + βk
+
+X
+jl∈I
+˜qjl,in(Qjl; Qν) + ¯qin(fin; Qν)
+
+
+
+
++
+,
+∀in ∈I
+λk+1
+f
+≜
+"
+λk
+f + βk
+ X
+in∈I
+f k+1
+in
+−fT
+!#+
+(S.4): k ←k + 1 and go back to (S.1).
+( ˆQn(λ; Qν),ˆfn(λ; f ν)) of (30) can be computed in parallel
+across the SCeNBs, solving each SCeNBs n the following
+strongly convex problems: given λ ≥0,
+ˆQn(λ; Qν)
+≜
+argmin
+Qn∈ΠKn
+i=1Qin
+{LQn(Qn, λ; Qν)}
+ˆfn(λ; f ν)
+≜
+argmin
+fn∈RKn
++
+{Lfn(fn, λ; f ν
+n)} .
+(32)
+The solution of Pν
+d can be then computed solving the dual
+problem (29). It is not difﬁcult to prove that the dual function
+D is differentiable with Lipschitz gradient. One can then solve
+(29) using, e.g., the gradient-based algorithm with diminishing
+step-size described in Algorithm 3, whose convergence is
+stated in Theorem 3 (the proof follows standard arguments
+and thus is omitted, because of space limitations).
+Theorem 3. Given Pν
+d , choose {βk} so that βk > 0, βk →
+0, P
+k βk = +∞, and P
+k(βk)2 < ∞. Then, the sequence
+{λk} generated by Algorithm 3 converges to a solution of
+(29). Therefore, the sequence {ˆZk(λk; Zν)}k converges to the
+unique solution of Pν
+d .
+□
+B. Alternative decomposition via slack variables
+In this section we present an alternative decomposition strat-
+egy of problem P that does not require the knowledge of the
+Lipschitz constants Ljl,in. At the basis of our approach there
+is an equivalent reformulation of P based on the introduction
+of proper slack variables that are instrumental to decouple in
+each r+
+in(Q) [cf. (20)] the covariance matrix Qin of user in
+from those of the MUs in the other cells−the interference
+term Rn(Q−n) [cf. (4)]. More speciﬁcally, introducing the
+slack variables Yin, and
+Iin(Q) ≜
+X
+jm∈I,m̸=n
+HjmnQjmHH
+jmn+HinnQinHH
+inn, (33)
+we can write
+r+
+in(Q) = r +
+in(Y),
+(34)
+with
+r +
+in(Y) ≜log2 det (Rw + Yin) and Yin = Iin(Q).
+(35)
+Using (34), (35), and gin(Q, fin) written as in (21), the
+original ofﬂoading problem P can be rewritten in the following
+equivalent form: denoting Y ≜(Yin)in∈I,
+min
+Q,f,Y E(Q)
+s.t.
+a) −r +
+in(Yin) −r -
+n(Q−n) +
+cin·fin
+fin · ˜Tin−win ≤0, ∀in ∈I,
+b)
+X
+in∈I
+fin ≤fT ,
+fin ≥0,
+∀in ∈I,
+c) Qin ∈Qin,
+∀in ∈I,
+d) 0 ⪯Yin ⪯Iin(Q),
+∀in ∈I.
+( ˜P)
+We denote by
+˜
+X the feasible set of ˜P. The equivalence
+between P and ˜P is stated next.
+Lemma 4. Given the nonconvex problems P and ˜P, the
+following hold:
+(a): Every feasible point of ˜P (or P) is regular (i.e., satisﬁes
+the Mangasarian-Fromovits Constraint Qualiﬁcation [42]);
+(b): P and ˜P are equivalent in the following sense. If ( ¯Q,¯f)
+is a stationary solution of P, then there exists a ¯Y such that
+( ¯Q,¯f, ¯Y) is a stationary solution of ˜P; and viceversa.
+□
+Condition (a) in the lemma guarantees the existence of
+stationary points of ˜P, whereas (b) allows us to compute
+(stationary) solutions of P solving ˜P.
+We convexify next ˜P following the same guidelines as in
+Sec. IV [see P.1-P.3 and C.1-C.6]. Introducing
+˜gin(Q, fin, Yin; Qν) ≜−r +
+in(Yin) +
+cin · fin
+fin · ˜Tin −win
+−r -
+n(Qν
+−n) −
+X
+jm∈I
+
+Π -
+jm,n(Qν), Qjm −Qν
+jm
+
+,
+(36)
+and using the same approximant ˜E(Z; Zν) as deﬁned in (16),
+we have: given a feasible Wν ≜(Zν, Yν),
+ˆ
+W(Wν) ≜argmin
+Q,f,Y
+˜E(Z; Zν) + cY
+2 ∥Y −Yν∥2
+s.t.
+a) ˜gin(Q, , fin, Yin; Qν) ≤0, ∀in ∈I,
+b)
+X
+in∈I
+fin ≤fT ,
+fin ≥0,
+∀in ∈I,
+c) Qin ∈Qin,
+∀in ∈I,
+d) 0 ⪯Yin ⪯Iin(Q), ∀in ∈I
+( eP ν)
+where
+ˆ
+W(Wν) = ( ˆQ(Wν),ˆf(Wν), ˆY(Wν)) denotes the
+unique solution of eP ν, and cY is an arbitrary positive constant.
+The stationary solutions of ˜P (and thus P) can be computed
+solving the sequence of strongly convex problems eP ν. The
+formal description of the scheme is still given by Algorithm
+2 wherein in Step 2, ˆZ(Zν) is replaced by ˆ
+W(Wν); conver-
+gence is guaranteed under conditions in Theorem 2.
+The last thing left is showing how to solve each subproblem
+eP ν in a distributed way. Problem eP ν can be decoupled
+across the SCeNB’s in the dual domain (note that there is
+zero duality gap). Indeed, denoting by W ≜(Q, f, Y), and
+λ ≜((λin)in∈I, λf) and Ω≜(Ωin ⪰0)in∈I the multipliers
+associated with the constraints (a), (b), and (d), respectively,
+
+9
+the (partial) Lagrangian has the following additive structure:
+L(W, λ, Ω; Qν) ≜
+Nc
+X
+n=1
+{LQn(Qn, λ, Ω; Yν)+
+LYn(Yn, λ, Ω; Wν) + Lfn(fn, λ, f ν
+n)} ,
+where
+LQn(Qn, λ, Ω; Wν)=
+Kn
+X
+i=1
+n
+˜Ein(Qin, f ν
+in; Zν) −λinr -
+n(Qν
+−n)
+−
+X
+jm∈I
+λjm
+
+Π -
+in,jm(Qν), Qin −Qν
+in
+
+−
+X
+jm∈I,m̸=n
+
+Ωjm, HinmQinHH
+inm
+
+−
+
+Ωin, HinnQinHH
+inn
+	
+,
+LYn(Yn, λ, Ω; Wν) =
+Kn
+X
+i=1
+
+−λinr +
+in(Yin) + ⟨Ωin, Yin⟩
++cY
+2 ∥Yin −Yν
+in∥2o
+,
+and Lfn(fn, λ, f ν
+n) is given by (31). The minimization of
+L(W, λ, Ω; Wν) w.r.t. W = (Q, f, Y) ≜(Qn, fn, Yn)Nc
+n=1
+becomes then
+D(λ, Ω; Wν) ≜
+Nc
+X
+n=1
+
+min
+Qn∈QLQn(Qn, λ, Ω; Wν)
++
+min
+(Yin ⪰0)in∈ILYn(Yn, λ, Ω; Wν) + min
+f∈R|I|
++
+Lfn(fn, λ, f ν
+n)
+!
+(37)
+whose unique solutions
+ˆ
+W(λ, Ω; Wν) ≜( ˆQn(λ, Ω; Qν),
+ˆYn(λ, Ω; Yν),ˆfn(λ; f ν))Nc
+n=1 can be computed in parallel
+across the SCeNBs n:
+ˆQn(λ, Ω; Qν) ≜argmin
+Qn∈Qn
+{LQn(Qn, λ, Ω; Qν)}
+(38)
+ˆYn(λ, Ω; Yν) ≜
+argmin
+(Yin ⪰0)Kn
+i=1
+{LYn(Yn, λ, Ω; Yν)}
+(39)
+ˆfn(λ; f ν) ≜argmin
+fn∈RKn
++
+{Lfn(fn, λ; f ν
+n)} .
+(40)
+Interestingly, problem (39) admits a closed form solution.
+Lemma 5. Let UH
+inDinUin be the eigenvalue/eigenvector
+decomposition of cYYν
+in −Ωin, with Din = diag((din,j)nRn
+j=1 ).
+The optimal solution of problem (39) is
+Yin = UinDYin UH
+in
+(41)
+with DYin = diag((yin,j)nRn
+j=1 ) given by
+yin,j =
+"
+−
+
+σ2
+w
+2 −din,j
+2cY
+
++
+r
+σ2w
+2 + din,j
+2cY
+2
++ λin
+2cY
+#+
+.
+Proof. See Appendix C in the supporting material for the
+proof here omitted for lack of space.
+Given ˆ
+W(λ, Ω; Wν), the dual problem associated with eP ν
+is
+max
+λ≥0,(Ωin⪰0)in∈I
+D(λ, Ω; Wν),
+(42)
+with D(λ, Ω; Wν) deﬁned in (37). It can be show that the dual
+function is C2, with Hessian Lipschitz continuous with respect
+to Wν on X. Then, the dual problem (42) can be solved using
+either ﬁrst or second order methods. An instance of gradient-
+based schemes is given in Algorithm 4, whose convergence is
+guaranteed under the same conditions as in the Theorem 3. In
+S.3, the symbol [A]+ denotes the Euclidean projection of the
+square matrix A onto the convex set of positive semideﬁnite
+matrices (having the same size of A).
+A faster algorithm solving the dual problem can be readily
+obtained using second order information. It is sufﬁcient to
+replace the update of the multipliers in Step 3 of Algorithm 4
+with the following (convergence is still guaranteed by Theorem
+3):
+λk+1
+in
+= λk
+in + βk(ˆλk+1
+in
+−λk
+in),
+∀in ∈I
+Ωk+1
+in
+≜Ωk
+in + βk( ˆΩ
+k+1
+in
+−Ωk
+in), ∀in ∈I
+λk+1
+f
+= λk
+f + βk(ˆλk+1
+f
+−λk
+f)
+(43)
+where
+ˆλk+1
+in
+≜
+h
+ˆλk
+in + (∇2
+λin D( ˆ
+Wk+1, λ, Ω; Wν))−1
+· ∇λin D( ˆ
+Wk+1, λ, Ω; Wν)
+i+
+,
+(44)
+vec
+
+ˆΩ
+k+1
+in
+
+≜
+h
+vec
+
+ˆΩ
+k
+in
+
++
+
+∇2
+vec(Ω∗
+in)D( ˆ
+Wk+1, λ, Ω; Wν)
+−1
+·vec
+
+∇Ω∗
+in D( ˆ
+Wk+1, λ, Ω; Wν)
+i
++ ,
+(45)
+ˆλk+1
+f
+≜
+h
+ˆλk
+f + (∇2
+λf D( ˆ
+Wk+1, λ, Ω; Wν))−1·
+∇λf D( ˆ
+Wk+1, λ, Ω; Wν)
+i+
+.
+(46)
+Algorithm 4 : Distributed dual scheme solving eP ν
+Initial data: λ0 ≥0, Ω0 ⪰0, Wν = (Qν, Yν, f ν), {βk}k >
+0. Set k = 0,
+(S.1): If λk, Ωk satisfy a suitable termination criterion:STOP;
+(S.2):
+For
+each
+SCeNB
+n,
+compute
+in
+parallel
+Qk+1
+n
+(λk; Ωk; Wν), Yk+1
+n
+(λk; Ωk; Wν) and f k+1
+n
+(λk; Wν)
+solving (38)-(40);
+(S.3): Update at the master node λ and Ωaccording to
+λk+1
+in
+≜
+
+λk
+in + βk˜gin(Qk+1
+in , Qk+1
+−n , f k+1
+in
+; Qν, f ν
+in)
++ , ∀in,
+λk+1
+f
+≜
+"
+λk
+f + βk
+ X
+in∈I
+f k+1
+in
+−fT
+!#+
+Ωk+1
+in
+≜
+h
+Ωk
+in + βk
+ Yk+1
+in
+−Iin(Qk+1)
+i
++ , ∀in ∈I
+(S.4): k ←k + 1 and go back to (S.1).
+The explicit expression of the Hessian matrices and gradi-
+ents in (44)-(46) is given in Appendix D in the supporting
+document and here omitted for lack of space. Numerical
+results show that using second order information signiﬁcantly
+enhances practical convergence speed.
+
+10
+VI. NUMERICAL RESULTS
+In this section we present some numerical results to assess
+the effectiveness of the proposed joint optimization of the
+communication and computational resources.
+The simulated scenario is the following. We consider a
+network composed of Nc = 2 cells, where all transceivers
+are equipped with nT = nR = 2 antennas (unless stated
+otherwise). In each cell, there are Kn = 4 active users, ran-
+domly deployed. In all our experiments the system parameters
+are set as (unless stated otherwise): fT = 2 · 107, ˜T = 0.1,
+w = 105, Rw = N0Inr, snr = 10dB. This choice guarantees
+the nonemptiness of the feasible set X; the constant α in the
+diminishing step-size rule (24) is chosen as α = 1e−4, and
+the termination accuracy δ is set to 10−3.
+Example # 1: Joint vs. disjoint optimization. We start com-
+paring the energy consumption of the proposed ofﬂoading
+strategy with a method where communication and computa-
+tional resources are optimized separately. The benchmark used
+to assess the relative merits of our approach is an instance
+of Algorithm 2 wherein the computational rates fin are not
+optimized but set proportional to the computational load of
+each user, while meeting the computational rate constraint
+fT with equality, i.e., fin = winfT / P
+in∈I win CPU cy-
+cles/second. We termed such a method Disjoint Resource
+Allocation (DRA) algorithm. Note that this algorithm is still
+guaranteed to converge by Theorem 2. An important parameter
+useful to assess the usefulness of ofﬂoading algorithms is the
+ratio ηin := win/bin between the computational load win to
+be transferred and the number of bits bin enabling the transfer.
+Fig. 1 shows an example of overall energy consumption,
+assuming the same ratio ηin := η for all users, obtained using
+Algorithm 2 and DRA algorithm. In particular, η is varied
+keeping a ﬁxed work load w and changing the number bin
+of bits to be sent. The radio channels are Rayleigh fading
+and the results are averages over 100 independent channel
+realizations. Fig. 1 shows a few interesting features: i) the
+100
+150
+200
+250
+300
+350
+400
+0
+500
+1000
+1500
+E(Q⋆)
+η
+ 
+ 
+Algorithm 2
+DRA
+Fig. 1. Energy consumption vs. η = win/bin for Algorithm 2 and for DRA.
+joint optimization yields a considerable gain with respect
+to the disjoint optimization for applications having a low
+ratio η, i.e., applications with a high number of bits to be
+transferred, for a given computational load w; ii) the overall
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+10
+2
+10
+3
+E(Qν)
+Iteration index ν
+ 
+ 
+˜T = 220, MIMO 2 × 2
+˜T = 250, MIMO 2 × 2
+˜T = 220, MIMO 2 × 8
+˜T = 250, MIMO 2 × 8
+Fig. 2. Convergence speed: Optimal energy vs. the iteration index for different
+values of ˜T.
+energy consumption decreases for computationally intensive
+applications, i.e., applications characterized by a high η.
+Example # 2: On the convergence speed. To test the conver-
+gence speed of Algorithm 2, Fig. 2 shows the average energy
+consumption E(Qν) versus the iteration index ν, for different
+values of the maximum latency ˜Tin (assumed to be equal
+for all users) and different number of receive antennas. The
+curves are averaged over 100 independent channel realizations.
+The interesting result is that the proposed algorithm converges
+in very few iterations. Moreover, as expected, the energy
+consumption increases as the delay constraint becomes more
+stringent because more transmit energy has to be used to
+respect the latency limit. Finally, it is worth noticing the gain
+achievable by increasing the number of receive antennas.
+Since the overall optimization problem is non-convex, the
+proposed algorithm may fall into a local minimum. To evaluate
+this aspect, we ran our algorithm under 1, 000 independent ini-
+tializations of the initial parameter setting Z0 = (Q0, f 0) ∈X
+of Algorithm 2 and, quite interestingly, we always ended up
+with practically the same result, meaning that the differences
+where within the third decimal point.
+Example # 3: Distributed Algorithms. Finally, we tested the
+efﬁciency of the distributed algorithms proposed in Section V.
+We assume Pin = PT = 1000, α = 1e−5 and the termination
+accuracy δ is set to 10−2. Fig. 3 shows the energy evolu-
+tion versus the iteration index m, which counts the overall
+number of (inner and outer) iterations in Algorithm 2. More
+speciﬁcally, we compared three different algorithms used to
+run Step 2, namely: the dual-decomposition method described
+in Algorithm 3, the dual-scheme based on the reformulation
+of the nonconvex problem P using slack-variables as given
+in Algorithm 4, and its accelerated version based on the
+Newton implementation (43). All implementations are quite
+fast. As expected, using second order information enhances
+convergence speed.
+VII. CONCLUSIONS
+In this paper we formulated the computation ofﬂoading
+problem in a multi-cell mobile edge-computing scenario,
+where a dense deployment of radio access points facilitates
+proximity high bandwidth access to computational resources,
+but increases also intercell interference. We formulated the
+
+11
+0
+50
+100
+150
+200
+250
+300
+0
+500
+1000
+1500
+2000
+2500
+E(Qm)
+m
+ 
+ 
+Dual-decomposition
+Slack-based decomposition
+Slack-based decomposition, Newton
+Fig. 3. Evolution of the global energy for the distributed algorithms vs. the
+iteration index m.
+resource optimization problem as the joint optimization of
+radio and computational resources, aimed at minimizing MUs’
+energy consumption, under latency and power budget con-
+straints. In the single-user case, we computed the global
+optimal solution of the resulting nonconvex optimization prob-
+lem in closed form. In the more general multi-cell multi-
+user scenario, we developed centralized and distributed SCA-
+based algorithms with provable convergence to local optimal
+solutions of the nonconvex problem. Numerical results show
+that our algorithms outperform disjoint optimization schemes.
+Furthermore, the results show, as expected, that ofﬂoading is
+more convenient for applications with high computational load
+and small number of bits to be exchanged to enable program
+migration.
+APPENDIX
+A. Proof of Theorem 1
+(a) It is sufﬁcient to prove the following two facts.
+Fact 1: Any stationary point of the nonconvex problem Ps is
+a global optimal solution of the problem.
+Fact 2: Any stationary point of the convex problem Qs (and
+thus a globally optimal solution to Qs), is also a stationary
+point of Ps, and viceversa.
+Proof of Fact 1: Invoking [43, Theorem 3.39 ], it is sufﬁcient
+to show that the objective function E(Q) is a pseudo-convex
+function on the convex set Xs, i.e., [43, Def. 3.1.3]
+∀Q, Y ∈Xs : E(Q) < E(Y) ⇒⟨∇Q∗E(Y), Q−Y⟩< 0.
+(47)
+Fix Y ∈Xs, and introduce the convex C1 function φY :
+Xs →R deﬁned as
+φY(Q) ≜tr(Q) · r(Y) −tr(Y) · r(Q).
+(48)
+Then, for any Q ∈Xs such that E(Q) < E(Y), the following
+holds:
+⟨∇Q∗E(Y), Q −Y⟩
+(a)
+=
+⟨∇Q∗φY(Y), Q −Y⟩
+r(Y)2
+(b)
+≤
+φY(Q) −φY(Y)
+r(Y)2
+(c)
+< 0,
+(49)
+where (a) follows from the deﬁnition of φY in (48); (b) is due
+to the convexity of φY on Xs; and (c) comes from E(Q) <
+E(Y) ⇒φY(Q) < φY(Y). Since (49) holds for any given
+Y ∈Xs, (47) holds true.
+□
+Proof of Fact 2: Let us prove the two directions separately.
+Qs
+⇒
+Ps: Let (Q⋆, f ⋆) be the optimal solution of
+the convex problem Qs; denote ˜Q⋆≜UHQ⋆U. Then,
+there exist multipliers λ⋆
+p, µ⋆
+p, α⋆
+p, Φ⋆
+p such that the tuple
+( ˜Q⋆, f ⋆, λ⋆
+p, µ⋆
+p, α⋆
+p, β⋆
+p, Φ⋆
+p) satisﬁes the KKT conditions of
+Qs (note that Slater’s constraint qualiﬁcation is satisﬁed):
+denoting ˜r( ˜Q⋆) ≜log2 |I + D1/2 ˜Q⋆D1/2|, and after some
+simpliﬁcations, one gets
+(a):
+I −
+µ⋆
+p
+log(2) D1/2(I + D1/2 ˜Q⋆D1/2)−1D1/2
++λ⋆
+p I −Φ⋆
+p = 0
+(b):
+µ⋆
+p w c
+f ⋆2( ˜T −w/f ⋆)2 −α⋆
+p = 0
+(c):
+0 ≤λ⋆
+p ⊥
+
+PT −tr( ˜Q⋆)
+
+≥0
+(d):
+0 < µ⋆
+p,
+c
+˜T −w
+f ⋆
+−˜r( ˜Q⋆) = 0
+(e):
+0 ⪯˜Q⋆⊥Φ⋆
+p ⪰0
+(f):
+0 ≤α⋆
+p,
+f ⋆= fT ,
+(KKTQs)
+where A ⊥B stands for ⟨A, B⟩= 0, and in (d) and (f)
+we used the fact that µ⋆
+p must be positive and f ⋆= fT ,
+respectively (otherwise KKTQs cannot be satisﬁed). We prove
+next that there exist multipliers λ⋆
+e, µ⋆
+e, α⋆
+e, Φ⋆
+e that together
+with the optimal solution ( ˜Q⋆, f ⋆) of Qs satisfy the KKT
+conditions of Ps, i.e.,
+(a′):
+c · I
+˜r( ˜Q⋆)
+−c · tr( ˜Q⋆)D1/2(I + D1/2 ˜Q⋆D1/2)−1D1/2
+˜r( ˜Q⋆)2 log(2)
+−
+µ⋆
+e
+log(2)D1/2(I + ˜Q⋆D)−1D1/2 + λ⋆
+eI −Φ⋆
+e = 0
+(b′):
+µ⋆
+e w c
+f ⋆2( ˜T −w/f ⋆)2 −α⋆
+e = 0
+(c′):
+0 ≤λ⋆
+e ⊥
+
+PT −tr( ˜Q⋆)
+
+≥0
+(d′):
+0 ≤µ⋆
+e ⊥
+
+˜r( ˜Q⋆) −
+c
+˜T −w/f ⋆
+
+≥0
+(e′):
+0 ⪯˜Q ⊥Φ⋆
+e ⪰0
+(f′):
+0 ≤α⋆
+e ⊥(fT −f ⋆) ≥0.
+(KKTPs)
+Plugging (a) of (KKTQs) in (a′) of (KKTPs) and using the
+fact that µ⋆
+p > 0, we obtain:
+λ⋆
+e I = −
+c I
+˜r( ˜Q⋆)
++ (1 + λ⋆
+p)
+µ⋆p
+ 
+c tr( ˜Q⋆)
+˜r( ˜Q⋆)2 + µ⋆
+e
+!
+· I
++ Φ⋆
+e −1
+µ⋆p
+ 
+c tr( ˜Q⋆)
+˜r( ˜Q⋆)2 + µ⋆
+e
+!
+· Φ⋆
+p,
+(50)
+
+12
+which is satisﬁed if one set Φ⋆
+e, λ⋆
+e, and µ⋆
+e to
+Φ⋆
+e
+≜
+1
+µ⋆p
+ 
+c tr( ˜Q⋆)
+˜r( ˜Q⋆)2 + µ⋆
+e
+!
+· Φ⋆
+p
+µ⋆
+e
+≜
+c µ⋆
+p
+˜r( ˜Q⋆)(1 + λ⋆p)
+−c tr( ˜Q⋆)
+˜r( ˜Q⋆)2
+λ⋆
+e
+≜
+0.
+(51)
+By (b′) it must be
+α⋆
+e =
+µ⋆
+e w c
+f ⋆2( ˜T −w/f ⋆)2 .
+(52)
+Note that, to be a valid candidate solution of KKTPs, µ⋆
+e must
+be nonnegative [cf. (d′)], which by (51), is equivalent to
+1 + λ⋆
+p
+µ⋆p
+· tr( ˜Q⋆) ≤˜r( ˜Q⋆).
+(53)
+We show next that (53) holds true. By multiplying both
+sides of (a) by ˜Q⋆and using the complementarity condition
+⟨Φ⋆
+p, ˜Q⋆⟩= 0 [cf. (e)] we get
+1 + λ⋆
+p
+µ⋆p
+· tr( ˜Q⋆)=
+1
+log(2)⟨˜Q⋆, D1/2(I+ D1/2 ˜Q⋆D1/2)−1D1/2⟩
+= ⟨∇Q∗˜r( ˜Q⋆), ˜Q⋆⟩≤˜r( ˜Q⋆),
+(54)
+where in the last inequality we used the concavity of the rate
+function ˜r(•), i.e.,
+˜r(Y) ≤˜r(W) + ⟨∇Q∗˜r(W), Y −W⟩,
+∀Y, W ⪰0 (55)
+evaluated at Y = 0 and W = ˜Q⋆. The desired result, µ⋆
+e ≥0,
+follows readily combining (53) and (54).
+We show now that the obtained tuple ( ˜Q⋆, f ⋆, λ⋆
+e, µ⋆
+e, α⋆
+e,
+Φ⋆
+e) satisﬁes KKTPs. Indeed, (a′) follows from (51); given
+µ⋆
+e ≥0, (b′) is satisﬁed by α⋆
+e as in (52); (c′) follows from
+PT −tr( ˜Q⋆) ≥0 [cf. (c)] and λ⋆
+e = 0; (d′) follows from µ⋆
+e ≥0
+and the second equality in (d). Finally, it is not difﬁcult to see
+that Φ⋆
+e given by (51) satisﬁes (e′); and ﬁnally (f′) is trivially
+met by α⋆
+e ≥0 in (52). This completes the ﬁrst part of the
+proof.
+Ps ⇒Qs: the proof follows the same idea as for Qs ⇒Ps; we
+then only sketch the main steps. Let ( ˜Q⋆, f ⋆, λ⋆
+e, µ⋆
+e, α⋆
+e, Φ⋆
+e)
+be a tuple satisfying KKTPs (whose existence is guar-
+anteed by the Slater’s constraint qualiﬁcation). We prove
+next that there exist multipliers (λ⋆
+p, µ⋆
+p, α⋆
+p, Φ⋆
+p) such that
+( ˜Q⋆, f ⋆, λ⋆
+p, µ⋆
+p, α⋆
+p, Φ⋆
+p) satisﬁes KKTQs. Deﬁne
+κe = µ⋆
+e + c tr( ˜Q⋆)
+˜r( ˜Q⋆)2 > 0.
+Given (a′), it can be easily seen that (a) is satisﬁed if Φ⋆
+p, λ⋆
+p,
+and µ⋆
+p are chosen as
+Φ⋆
+p = µ⋆
+p
+κe
+Φ⋆
+e,
+µ⋆
+p =
+κe
+λ⋆e +
+c
+˜r( ˜Q⋆)
+,
+and
+λ⋆
+p = 0.
+(56)
+From (b) it must also be
+α⋆
+p =
+µ⋆
+p w c
+f ⋆2( ˜T −w/f ⋆)2 .
+(57)
+It is not difﬁcult to check that the obtained tuple ( ˜Q, f ⋆,
+λ⋆
+p, µ⋆
+p, α⋆
+p, Φ⋆
+p) satisﬁes (a), (b), (c), (e), and (f) of KKTQs;
+the only condition that needs a proof is the equality constraint
+in (d), as given next.
+Suppose by contradiction that ˜r( ˜Q⋆) −
+c
+˜T −w/f ⋆> 0.
+Then, it follows from (d′) that µ⋆
+e = 0, and (a′) reduces to
+c I
+˜r( ˜Q⋆)
+−c tr( ˜Q⋆)D1/2(I + D1/2 ˜Q⋆D1/2)−1D1/2
+log(2)˜r( ˜Q⋆)2
+=−λ⋆
+eI+Φ⋆
+e.
+Multiplying the above equation by ˜Q⋆and using the comple-
+mentary condition (e′), we get
+λ⋆
+e =
+c
+˜r( ˜Q∗)2
+
+⟨∇Q∗˜r( ˜Q⋆), ˜Q⋆⟩−r( ˜Q⋆)
+
+,
+(58)
+which, given λ⋆
+e ≥0 [cf. (c′)] and ⟨∇Q∗˜r( ˜Q⋆), ˜Q⋆⟩≤˜r( ˜Q⋆)
+[due to (55)], can be satisﬁed only if ⟨∇Q∗˜r( ˜Q⋆), ˜Q⋆⟩=
+r( ˜Q⋆), i.e.,
+log2 det(I + D1/2 ˜
+Q⋆D1/2)
+= tr
+
+˜Q⋆D1/2(I + D1/2 ˜Q⋆D1/2)−1 · D1/2
+·
+1
+log(2).
+Denoting by (σi = σi(D1/2 ˜Q⋆D1/2))r
+i=1 ≥0 the non-
+negative eigenvalues of D1/2 ˜Q⋆D1/2, the above equality can
+be rewritten as
+r
+X
+i=1
+log(1 + σi) =
+r
+X
+i=1
+σi
+1 + σi
+,
+which can be true only if σi = 0 for all i = 1, · · · , r, and thus
+˜Q⋆= 0 (note that D ̸= 0). This however is in contradiction
+with the fact that Q⋆is an optimal solution of Qs.
+(b): Invoking part (a) of the theorem, the solution (Q⋆, f ⋆) of
+Qs (and thus Ps) can be computed solving KKTQs. Denote
+˜Q⋆≜UHQ⋆U. Multiplying (a) of KKTQs by ˜Q⋆and using
+(e), we get
+I −αD1/2(I + D1/2 ˜Q⋆D1/2)−1D1/2 = 0
+(59)
+with α ≜µ⋆
+p/ log(2) (recall that one can set λ⋆
+p = 0). By
+solving (59) and using ˜Q⋆≜UHQ⋆U one obtains the desired
+expression of Q⋆as in (12). Moreover, it follows from (f) that
+f ⋆= fT . The only thing left to show is how to compute α
+(and thus µ⋆
+p) efﬁciently. Using the optimal structure of Q⋆
+and denoting re ≜rank(Q⋆), conditions (c) and (d) reduce
+respectively to
+α = 2
+c
+reL −1
+re
+re
+X
+i=1
+log2(di)
+and
+re
+X
+i=1
+
+α −1
+di
+
+≤PT ,
+(60)
+with L = ˜T −w
+fT . Note that Slater’s constraint qualiﬁcation
+guarantees that there exist α and re satisfying (60). Moreover,
+it is not difﬁcult to check that they can be efﬁciently computed
+using the procedure described in Algorithm 1.
+
+13
+REFERENCES
+[1] S. Sardellitti, G. Scutari, and S. Barbarossa, “Joint optimization of
+radio and computational resources for multicell mimo mobile cloud
+computing,” in Proc. of 2014 IEEE International Workshop on Sig-
+nal Processing Advances in Wireless Communications (SPAWC ’14),
+Toronto, Canada, Jun 22-25 2014.
+[2] ——, “Distributed joint optimization of radio and computational re-
+sources for mobile cloud computing,” in Proc. of IEEE Int. Conf. on
+Cloud Networking (Cloudnet 14), Luxembourg, 8–10 October 2014.
+[3] M. Palacin, “Recent advances in rechargeable battery materials: a
+chemists perspective,” Chem. Soc. Rev., vol. 38, no. 9, pp. 2565–2575,
+Sept. 2009.
+[4] M. Shariﬁ, S. Kafaie, and O. Kasheﬁ, “A Survey and Taxonomy of
+Cyber Foraging of Mobile Devices,” IEEE Communications Surveys and
+Tutorials, vol. 14, pp. 1232–1243, Fourth Quarter 2012.
+[5] K. Kumar, J. Liu, Y.-H. Lu, and B. Bhargava, “A survey of computation
+ofﬂoading for mobile systems,” Mobile Networks and Applications,
+vol. 18, no. 1, pp. 129–140, February 2013.
+[6] N. Fernando, S. Loke, and W. Rahayu, “Mobile cloud computing: A
+survey,” Future Generation Computer Systems, vol. 29, pp. 84–106,
+January 2013.
+[7] K. Yang, S. Ou, and H. Chen, “On effective ofﬂoading services for
+resource-constrained mobile devices running heavier mobile internet
+applications,” Communications Magazine, IEEE, vol. 46, no. 1, pp. 56–
+63, 2008.
+[8] R. Wolski, S. Gurun, C. Krintz, and D. Nurmi, “Using bandwidth data to
+make computation ofﬂoading decisions,” IEEE International Symposium
+on Parallel and Distributed Processing, IPDPS, pp. 1–8, 2008.
+[9] X. Zhang, A. Kunjithapatham, S. Jeong, and S. Gibbs, “Towards an
+elastic application model for augmenting the computing capabilities of
+mobile devices with cloud computing,” Journal Mobile Networks and
+Application, vol. 16, no. 3, pp. 270–284, June.
+[10] N. Kaushi and J. Kumar, “A computation ofﬂoading framework to
+optimize energy utilisation in mobile cloud computing environment,” Int.
+Journal of Computer Applications and Information Technology, vol. 5,
+no. 2, pp. 61–69, April-May.
+[11] V.
+Cardellini,
+V.
+D.
+N.
+Persone,
+V.
+D.
+Valerio,
+F.
+Facchinei,
+V. Grassi, F. L. Presti, and V. Piccialli, “A game-theoretic approach
+to computation ofﬂoading in mobile cloud computing,” Mathematical
+Programming,
+(submitted,
+August
+2013).
+[Online].
+Available:
+http://www.optimization-online.org/DB_HTML/2013/08/3981.html
+[12] K. Kumar and Y.-H. Lu, “Cloud computing for mobile users: can
+ofﬂoading computation save energy?” Computer Society, IEEE, vol. 43,
+no. 4, pp. 51–56, April 2010.
+[13] Y. Cui, X. Ma, H. Wang, I. Stojmenovic, and J. Liu, “A survey of
+energy efﬁcient wireless transmission and modeling in mobile cloud
+computing,” Mobile Networks and Applications, vol. 18, no. 1, pp. 148–
+155, February 2013.
+[14] A. P. Miettinen and J. K. Nurminen, “Energy efﬁciency of mobile clients
+in cloud computing,” in Proc. of the 2nd USENIX conference on Hot
+topics in cloud computing, pp. 4–4, June 2010.
+[15] D. Huang, P. Wang, and D. Niyato, “A dynamic ofﬂoading algorithm
+for mobile computing,” IEEE Trans. Wireless Commun., vol. 11, no. 6,
+pp. 1991–1995, April 2012.
+[16] B. K. Yi-Hsuan Kao, “Optimizing mobile computational ofﬂoading
+with delay constraints,” in Proc. of Global Communication Conference
+(Globecom 14), Austin, TX, USA, Dec. 8-12 2014, pp. 49–62.
+[17] F. Liu, P. Shu, H. Jin, L. Ding, J. Yu, D. Niu, and B. Li, “Gear-
+ing resource-poor mobile devices with powerful clouds: architectures,
+challenges, and applications,” Wireless Communications, IEEE, vol. 20,
+no. 3, 2013.
+[18] Z. Sanaei, S. Abolfazli, A. Gani, and R. Buyya, “Heterogeneity in mobile
+cloud computing: Taxonomy and open challenges,” IEEE Communica-
+tions Surveys and Tutorials, vol. 20, no. 3, pp. 369–392, 2014.
+[19] E. Cuervo, A. Balasubramanian, D. Cho, A. Wolman, S. Saroiu,
+R. Chandra, and P. Bahl, “Maui: making smartphones last longer with
+code ofﬂoad,” in Proc. of the ACM International Conference on Mobile
+Systems, Applications, and Services, San Francisco, CA, USA, 15–18
+June 2010, pp. 49–62.
+[20] S. Kosta, A. Aucinas, P. Hui, R. Mortier, and X. Zhang, “Thinkair:
+Dynamic resource allocation and parallel execution in the cloud for
+mobile code ofﬂoading,” in Proc. of INFOCOM 2012, March 2012, pp.
+945–953.
+[21] F. Xia, F. Ding, J. Li, X. Kong, L. Yang, and J. Ma, “Phone2cloud:
+Exploiting computation ofﬂoading for energy saving on smartphones in
+mobile cloud computing,” Information Systems Frontiers, vol. 16, pp.
+95–111, 2014.
+[22] W. Zhang, Y. Wen, K. Guan, D. Kilper, H. Luo, and D. O. Wu, “Energy-
+optimal mobile cloud computing under stochastic wireless channel,”
+IEEE Transaction on Wireless Communications, vol. 12, no. 9, pp. 2716–
+2720, September.
+[23] S. Barbarossa, S. Sardellitti, and P. Di Lorenzo, “Computation ofﬂoading
+for mobile cloud computing based on wide cross-layer optimization,” in
+Proc. of Future Network and Mobile Summit (FuNeMS2013), Lisboa,
+Portugal, 3–5 July 2013, pp. 1–10.
+[24] ——, “Joint allocation of computation and communication resources
+in multiuser mobile cloud computing,” in Proc. of IEEE Workshop
+on Signal Processing Advances in Wireless Communications (SPAWC
+2013), Darmstadt, Germany, 16–19 June 2013, pp. 26–30.
+[25] ——, “Communicating while computing: Distributed mobile cloud
+computing over 5G heterogeneous networks,” IEEE Signal Processing
+Magazine, vol. 31, no. 6, pp. 45–55, November.
+[26] X. Chen, “Decentralized computation ofﬂoading game for mobile cloud
+computing,” IEEE Transactions on Parallel and Distributed Systems, (to
+appear) 2014.
+[27] M. Satyanarayanan, P. Bahl, R. Caceres, and N. Davies, “The case for
+vm-based cloudlets in mobile computing,” IEEE Pervasive Computing,
+vol. 8, no. 4, pp. 14–23, Oct.-Dec. 2009.
+[28] TROPIC,
+“Distributed
+computing,
+storage
+and
+radio
+resource
+allocation
+over
+cooperative
+femtocells.”
+[Online].
+Available:
+http://www.ict-tropic.eu.
+[29] ETSI,
+“Etsi
+ﬁrst
+meeting
+of
+new
+standardization
+group
+on
+mobile-edge
+computing.”
+[Online].
+Available:
+http://www.etsi.org/news-events/news/838-2014-10-news-etsi-announces-ﬁrst-meeting-
+[30] G. Scutari, F. Facchinei, L. Lampariello, and P. Song, “Parallel and
+distributed methods for nonconvex optimization,” in Proc. of IEEE Int.
+Conf. on Acoustics, Speech, and Signal Process. (ICASSP 14), Florence,
+Italy, 4–9 May 2014.
+[31] ——, “Distributed Methods for Nonconvex Constraints Multi-Agent
+Problems−Part I: Theory,” IEEE Trans. on Signal Processing, (submit-
+ted, Oct. 2014). [Online]. Available: http://arxiv.org/abs/1410.4754
+[32] G. Scutari, F. Facchinei, P. Song, D. Palomar, and J.-S. Pang, “De-
+composition by partial linearization: Parallel optimization of multi-agent
+systems,” IEEE Trans. on Signal Process., vol. 62, pp. 641–656, Feb.
+2014.
+[33] H. A. L. Thi and P. Tao, “The dc programming and dca revised with
+dc models of real world nonconvex optimization problems,” Annals of
+operations research, vol. 133, no. 1-4, pp. 23–46, January 2005.
+[34] A. Alvarado, G. Scutari, and J. Pang, “A new decomposition method
+for multiuser DC- programming and its applications to Physical Layer
+Security,” IEEE Trans. on Signal Process., vol. 62, no. 11, pp. 2984–
+2998, June 2014.
+[35] D. R. Hunter and K. Lange, “A tutorial on MM algorithms,” Amer.
+Statist., vol. 58, no. 1, pp. 30–37, 2004.
+[36] B. K. Sriperumbudur and G. R. G. Lanckriet, “A proof of convergence
+of the concave-convex procedure using Zangwill’s theory,” Neural
+Computation, vol. 21, pp. 1391–1407, June 2012.
+[37] S.
+Boyd,
+“Sequential
+Convex
+Programming,”
+Lecture
+Note,
+2013.
+[Online].
+Available:
+http://www.stanford.edu/class/ee364b/lectures/seq_slides.pdf
+[38] M. Razaviyayn, M. Hong, and Z.-Q. Luo, “A uniﬁed convergence
+analysis of block successive minimization methods for nonsmooth
+optimization,” SIAM J. on Opt., vol. 23, no. 2, pp. 1126–1153, 2013.
+[39] F. Facchinei, G. Scutari, and S. Sagratella, “Parallel selective algorithms
+for big data optimization,” IEEE Trans. on Signal Process., (to appear),
+2014. [Online]. Available: http://arxiv.org/abs/1402.5521
+[40] M. Patriksson, “Partial linearization methods in nonlinear programming,”
+Journal of Optimization Theory and Applications, vol. 78, no. 2, pp.
+227–246, August 1993.
+[41] J. Bolte, S. Shoham, and M. Teboulle, “Proximal alternating linearized
+minimization for nonconvex and nonsmooth problems,” Mathematical
+Programming, vol. 146, no. 1-2, pp. 459–494, August 2014.
+[42] F. Facchinei and J.-S. Pang, Finite-Dimensional Variational Inequalities
+and Complementarity Problem.
+Springer-Verlag, New York, 2003.
+[43] M. Avriel, W. E. Diewert, S. Schaible, and I. Zang, Generalized
+Concavity, ser. Classics in Applied Mathematics (Book 63).
+SIAM–
+Society for Industrial & Applied Mathematics, 2010.

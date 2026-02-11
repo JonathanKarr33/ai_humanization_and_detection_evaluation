@@ -1,0 +1,1097 @@
+Quadratic Span Programs and Succinct NIZKs
+without PCPs
+Rosario Gennaro1,⋆, Craig Gentry2,
+Bryan Parno3, and Mariana Raykova4,⋆⋆
+1 City University of New York
+rosario@ccny.cuny.edu
+2 IBM T.J.Watson Research Center
+cbgentry@us.ibm.com
+3 Microsoft Research
+parno@microsoft.com
+4 IBM T.J.Watson Research Center
+mariana@cs.columbia.edu
+Abstract. We introduce a new characterization of the NP complexity
+class, called Quadratic Span Programs (QSPs), which is a natural exten-
+sion of span programs deﬁned by Karchmer and Wigderson. Our main
+motivation is the quick construction of succinct, easily veriﬁed arguments
+for NP statements.
+To achieve this goal, QSPs use a new approach to the well-known
+technique of arithmetization of Boolean circuits. Our new approach yields
+dramatic performance improvements. Using QSPs, we construct a NIZK
+argument – in the CRS model – for Circuit-SAT consisting of just 7
+group elements. The CRS size and prover computation are quasi-linear,
+making our scheme seemingly quite practical, a result supported by our
+implementation. Indeed, our NIZK argument attains the shortest proof,
+most eﬃcient prover, and most eﬃcient veriﬁer of any known technique.
+We also present a variant of QSPs, called Quadratic Arithmetic Programs
+(QAPs), that “naturally” compute arithmetic circuits over large ﬁelds,
+along with succinct NIZK constructions that use QAPs.
+Finally, we show how QSPs and QAPs can be used to eﬃciently and
+publicly verify outsourced computations, where a client asks a server to
+compute F(x) for a given function F and must verify the result provided
+by the server in considerably less time than it would take to compute
+F from scratch. The resulting schemes are the most eﬃcient, general-
+purpose publicly veriﬁable computation schemes.
+⋆The research of this author was sponsored by the U.S. Army Research Laboratory
+and the U.K. Ministry of Defence and was accomplished under Agreement Number
+W911NF-06-3-0001. The views and conclusions contained in this document are
+those of the author(s) and should not be interpreted as representing the oﬃcial
+policies, either expressed or implied, of the U.S. Army Research Laboratory, the
+U.S. Government, the U.K. Ministry of Defence or the U.K. Government. The
+U.S. and U.K. Governments are authorized to reproduce and distribute reprints
+for Government purposes notwithstanding any copyright notation hereon.
+⋆⋆Supported by NSF Grant No.1017660.
+T. Johansson and P. Nguyen (Eds.): EUROCRYPT 2013, LNCS 7881, pp. 626–645, 2013.
+c
+⃝International Association for Cryptologic Research 2013
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+627
+1
+Introduction
+Arithmetization of Boolean computations is a well known technique: it maps
+a Boolean circuit to a set of polynomial (e.g., quadratic) equations over a
+ﬁeld. The celebrated result IP=PSPACE [35, 41] used arithmetization as a
+crucial tool and set the stage for the PCP theorem [2–4, 20], which provided
+a new characterization of NP that revolutionized the notion of “proof” – in
+particular, it shows that NP statements have probabilistically checkable proofs
+(PCPs) that can be veriﬁed in time polylogarithmic in the size of a classical
+proof.
+Cryptographers quickly seized on the potential applicability of PCPs to secure
+computation. Kilian [32] showed how to use PCPs to construct interactive argu-
+ments (i.e., computationally sound proof systems [14]) for NP that are succinct –
+i.e., polylogarithmic in their communication complexity. Micali [36] showed how
+to make these arguments non-interactive in the random oracle model. Recent
+work [8, 19, 26] (see also [17]) has improved Micali’s construction by removing
+the random oracle, which is known to be uninstantiable [15], and replacing it
+with an “extractable collision-resistant hash function” (ECRH), whose security
+relies on the plausible, but non-falsiﬁable [37], assumption that for any algorithm
+that computes an image of the ECRH, there is an extractor (that watches the
+algorithm) that computes a pre-image.1 These recent constructions have been
+called succinct non-interactive arguments (SNARGs) of knowledge (SNARKs),
+since, under the knowledge assumption, the SNARG permits “knowledge” ex-
+traction of the entire hash preimage – i.e., the entire PCP.
+PCPs are not the only arithmetization technique for creating SNARKs. Groth
+shows how to arithmetize a Boolean circuit so that a proof of its satisﬁabil-
+ity can be written using only a constant number of group elements [27] (af-
+ter a single pre-processing stage to establish a common reference string (CRS)
+[9, 10]).
+Our work provides a brand new form of arithmetization which we call
+Quadratic Span Programs (QSPs), since it is a generalization of the notion of
+Span Programs proposed by Karchmer and Wigderson [31]. We show that our
+new arithmetization technique yields far more eﬃcient SNARKs than either
+PCP-based or Groth-like proofs. Using QSPs, we construct a NIZK argument
+in the CRS model for circuit SAT consisting of just 7 group elements. The CRS
+size and prover computation are quasi-linear in the circuit size, making our
+scheme quite practical, to the point where we have implemented and evaluated
+it (see Section 5). A variant of our technique works directly on arithmetic circuits
+over large ﬁelds, obtaining Quadratic Arithmetic Programs (QAPs) and avoid-
+ing the complexity of a Boolean description of an arithmetic computation (see
+Section 4).
+1 We know that the security of succinct non-interactive arguments cannot be based on
+falsiﬁable assumptions via black box reductions [1, 23]; hence non-falsiﬁable “knowl-
+edge” assumptions seem unavoidable in this context.
+
+628
+R. Gennaro et al.
+1.1
+Quadratic Span Programs
+QSPs are a natural extension of span programs (SPs), a linear-algebraic model
+of computation introduced by Karchmer and Wigderson [31].2 An SP of size m
+over a ﬁeld F consists of a set V = {v0(x), v1(x), . . . , vm(x)} of polynomials of
+degree d −1, a partition of the indices I = {1, . . . , m} into two sets Ilabeled and
+Ifree, and a further partition of Ilabeled as ∪i∈[n],j∈{0,1}Iij meant to represent n
+Boolean inputs. The SP is said to “compute” a function f if the following is true
+for all input assignments u ∈{0, 1}n: the polynomial v0(x) can be expressed as
+a linear combination of the polynomials that “belong” to the input assignment
+u – namely, the set of polynomials Vu with indices in Iu = Ifree ∪i Ii,ui – iﬀ
+f(u) = 1.
+Functions with polynomial size SPs are in NC2, since linear algebra is in
+NC2. Consequently, it is widely believed that SPs cannot eﬃciently compute all
+functions in P (or verify all NP relations).
+We deﬁne QSPs somewhat similarly to SPs.
+Deﬁnition 1 (Quadratic Span Program). A quadratic span program (QSP)
+Q over ﬁeld F contains two sets of polynomials V = {vk(x) : k ∈{0, . . . , m}}
+and W = {wk(x) : k ∈{0, . . . , m}} and a divisor polynomial D(x), all from F[x].
+Q also contains a partition of the indices I = {1, . . ., m} into two sets Ilabeled
+and Ifree, and a further partition of Ilabeled as ∪i∈[n],j∈{0,1}Iij.
+For input u ∈{0, 1}n, let Iu = Ifree ∪i Ii,ui be the set of indices that “belong”
+to input u. Q accepts an input u ∈{0, 1}n iﬀthere exist tuples (a1, . . . , am) and
+(b1, . . . , bm) from F m, with ak = 0 = bk for all k /∈Iu:
+D(x)
+divides
+
+v0(x) +
+m
+
+k=1
+ak · vk(x)
+
+·
+
+w0(x) +
+m
+
+k=1
+bk · wk(x)
+
+.
+(1)
+Q “computes” a Boolean function f : {0, 1}n →{0, 1} if it accepts exactly those
+inputs u where f(u) = 1. Q has size m and degree deg(D(x)).
+QSPs are a natural extension of (linear) SPs. An SP accepts an input u if and
+only if the target polynomial can be written as an aﬃne linear combination
+of polynomials that “belong” to u. A QSP accepts an input u if and only if
+the divisor polynomial divides a product of two aﬃne linear combinations of
+polynomials that “belong” to u, where “product” is polynomial multiplication.
+Unlike SPs, QSPs can eﬃciently compute any function in P, and the “canon-
+ical QSP” we build has performance parameters that yield faster SNARKs, as
+stated in the two theorems below.
+Theorem 1. (Informal) For any Boolean circuit C with s gates and any ﬁeld
+F of size at least d = O(s), there is a QSP of size and degree O(s) (with small
+constants) over F that computes C.
+2 SPs were ﬁrst deﬁned [31] in terms of vectors {v0, v1, . . . , vm}, rather than polyno-
+mials. The “target” vector v0 must be expressible as a linear combination of the
+vectors that “belong” to the input assignment u (as deﬁned above). Our deﬁnition
+in terms of polynomials is equivalent [22]: just think of each vector as the evaluation
+of the corresponding polynomial on a ﬁxed set of points.
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+629
+Theorem 2. (Informal) Given a circuit C with s gates, computing the polyno-
+mials D(x), V and W of our “canonical” QSP, which computes C, takes O(s)
+work (O(s) F operations). Given u ∈{0, 1}n for which C(u) = 1, computing
+suitable tuples (a1, . . . , am), (b1, . . . , bm) ∈{0, 1}m that satisfy Equation 1 takes
+O(s) work. Given (a1, . . . , am), computing v(x) = v0(x) + m
+k=1 ak · vk(x) takes
+O(s) work. (Similarly for w(x).) Computing the quotient h(x) = v(x)·w(x)/D(x)
+takes ˜O(s) work.
+We obtain such performance by exploiting the sparseness of the polynomials
+vk(x)’s and wk(x)’s in our canonical QSP. In particular, they behave similarly
+to Lagrange basis polynomials ℓj(x) = 
+i̸=j(x −ri)/(rj −ri) in that they each
+evaluate to 0 at almost all roots of D(x), which is a product of linear terms.
+This makes it easy to compute v(x) and w(x) in linear time by representing
+them by their evaluation at these roots. Computing h(x) in purely linear, versus
+quasi-linear, time remains an open problem.
+1.2
+From QSPs to SNARKs, NIZKs, and Veriﬁable Computing
+We use QSPs to build SNARKs and NIZKs in the CRS model [9, 10].
+SNARKs. Our SNARK for f uses a CRS in which the QSP polynomials (e.g.,
+{vk(x)}) are represented by terms gvk(σ) (etc.), where g is a generator of a
+bilinear group [12], and σ ∈F is secret. The CRS size is linear in the circuit
+size of f. To oversimplify, to compute a SNARK, the prover uses its satisfying
+input to compute tuples (a1, . . . , am) and (b1, . . . , bm), and then uses them and
+the CRS to compute gv = gv(σ), gw = gw(σ), gh = gh(σ) for v(x), w(x), h(x) as
+deﬁned in Theorem 2. The veriﬁer conﬁrms that e(gv, gw) = e(gh, gt(σ)), where
+e is the bilinear map. (The actual scheme is more complicated – see Section
+3.2.) For security, we require a non-falsiﬁable “knowledge” assumption which, as
+noted above, is necessary [1, 23].
+NIZK. It is straightforward to randomize our public-veriﬁer SNARK to make it
+statistical zero knowledge and obtain a non-interactive zero-knowledge (NIZK)
+argument [9, 10]. Details are in Section 3.3.
+Veriﬁable Computation. In the full version [22], we use our QSP-based
+SNARK to achieve a very eﬃcient scheme for public veriﬁable computation [21,
+39].
+Remark on Eﬃciency and Adaptivity. In the description above, the CRS
+(the QSP polynomials) depend on a particular language or relation. We can
+achieve an “adaptive” solution (where ﬁrst the CRS is ﬁxed, and then the lan-
+guage or relation is selected) by applying our QSP construction to the universal
+circuit, at the cost of expanding the circuit by a logarithmic factor, yielding
+quasi-linear complexity for CRS size and prover computation.
+
+630
+R. Gennaro et al.
+1.3
+Comparisons to Other Work on Succinct Arguments
+PCP-based Protocols. Ishai, Kushilevitz and Ostrovsky [30] were perhaps
+the ﬁrst to seriously investigate how to tweak PCP-techniques to yield the best
+possible succinct arguments. However in their solution the prover’s computation
+(and also the veriﬁer’s computation in a pre-processing step) is quadratic in the
+size of the classical proof.
+Very recently, Ben-Sasson et al. present a new PCP scheme with quasilinear
+complexity for the prover and the CRS [7]. Our direct construction of QSPs
+yields better asymptotic performance, even before these PCPs are converted
+into SNARKs.
+Groth-like Schemes. Groth et al. [28, 29] previously constructed NIZKs over
+bilinear groups with various attractive properties, but with size linear in the
+circuit. More recently, Groth essentially found a way to compress the proof into
+a constant number of group elements [27] (still higher than ours – 42 group
+elements versus 7 for ours). Security relies on a non-falsiﬁable “knowledge of
+exponent” assumption, similar to the one we use.
+The main drawbacks of Groth’s succinct NIZK are the prover complexity and
+the CRS size, which are both quadratic in the circuit size. Lipmaa [33] showed
+how to reduce the size of the CRS in Groth’s construction from quadratic to
+quasi-linear in the circuit size, but prover complexity remains quadratic.
+2
+Quadratic Span Programs (QSPs)
+Above, we deﬁned Quadratic Span Programs (QSPs) in a manner that is su-
+perﬁcially similar to that of span programs (SPs). The crucial diﬀerence is that
+QSPs can compute any eﬃciently computable function. We demonstrate this via
+an explicit construction of a QSP for any circuit C.3 The construction uses two
+components: a gate checker and a wire checker.
+2.1
+A Gate Checker
+While we do not know how to eﬃciently construct SPs for arbitrary functions
+f ∈P, we can always eﬃciently construct an SP for a function related to f,
+called the gate checker function for f, which ensures that a set of wire values is
+consistent with the gates in a circuit for f.
+Deﬁnition 2 (Gate Checker Function). Let f : {0, 1}n →{0, 1} be a func-
+tion whose Boolean circuit C has s gates. Let N = n + s – the total number of
+wires in C (wires that fan out are considered one wire). Deﬁne φ : {0, 1}N →
+{0, 1} to be a function that outputs ‘1’ iﬀthe input is a valid assignment of C’s
+wires with output wire set to ‘1’. We say that φ is the gate checker function
+for f.
+3 The full version of the paper [22] gives a formal reduction from circuit SAT to a
+QSP satisﬁability problem, hence proving that QSP SAT is NP complete.
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+631
+An SP for the gate checker function φ does not, however, compute the function
+f; such an SP has labeled (non-free) polynomials even for the interior wires of C,
+whereas an SP for f is only permitted to have labeled polynomials for C’s input
+wires. If we simply move the polynomials for the interior wires to the “free” set,
+then we might introduce additional valid linear combinations that do not satisfy
+C; in particular these linear combinations could use polynomials that correspond
+to conﬂicting assignments (both ‘0’ and ‘1’) for some interior wire in C.
+What we prove however, is that these conﬂicting assignments are the only
+possible problem we introduce by moving the polynomials for the interior wires
+to the “free” set. In other words, if we restrict the linear combination to use
+polynomials associated with at most one value per wire, then the SP for φ can
+also be used to compute the function f. The following lemma formalizes the
+property.
+Lemma 1. Let S = ({v0(x), . . . , vm(x)}, Ifree, Ilabeled = ∪i∈[N],j∈{0,1}Iij) be
+an SP that computes the gate checker function φ of f. Then, for all u ∈{0, 1}n,
+the following is true iﬀf(u) = 1: there exists a tuple (a1, . . . , am) satisfying the
+following constraints:
+– Target in Span: v0(x) = 
+k ak · vk(x).
+– Correct Inputs: For all k ∈∪n
+i=1Iiui, we have ak = 0.
+– No Double Assignments: For all i ∈{n + 1, . . . , N} and all k1 ∈Ii0 and
+k2 ∈Ii1, at most one of ak1, ak2 is nonzero.
+In particular, if f(u) ̸= 1, then a linear combination that satisﬁes the ﬁrst and
+second constraints must violate the third – i.e., must make a “double assignment”
+of some wire i ∈{n + 1, . . . , N}.
+Proof. (Lemma 1) If f(u) = 1, then we can assign the wires of C validly with
+the output wire set to 1. Therefore, we can extend u ∈{0, 1}n to an input
+u′ ∈{0, 1}N that satisﬁes φ. Since u′ satisﬁes φ, there is a linear combination
+(a1, . . . , am) such that v0(x) = 
+k ak · vk(x) and ak = 0 for all k ∈∪n
+i=1Iiu′i,
+thus satisfying the constraints listed in the lemma.
+Conversely, suppose that (a1, . . . , am) satisﬁes the constraints. Then, since S
+computes φ, there is an extension u′ ∈{0, 1}N of u ∈{0, 1}n such that φ(u′) = 1
+and such that u′ “agrees” with the tuple (a1, . . . , am) in the sense that ak = 0
+for all k ∈Iiu′i, i ∈[N]. Since φ(u′) = 1 where u′ is an extension of u, and since
+φ tests the satisfaction of f’s Boolean circuit, we must have f(u) = 1.
+Looking ahead, our construction will use the span program for φ to obtain
+eﬃcient proofs about the correct evaluation of f. The second component of
+our construction, the wire checker, will eﬃciently verify that the No Double
+Assignments property holds.
+2.2
+A Wire Checker
+To prevent double wire assignments, we introduce some additional polynomials
+in the form of a wire checker, deﬁned as follows.4
+4 While Deﬁnition 3 resembles a QSP, a wire checker is not, on its own, a QSP.
+
+632
+R. Gennaro et al.
+Deﬁnition 3 (Aggregate Wire Checker). Let I = ∪i∈[N],j∈{0,1}Iij be a
+partition of [m]. An aggregate wire checker for I consists of polynomials D(x),
+V = {vk(x) : k ∈I} and W = {wk(x) : k ∈I} such that
+D(x)
+divides
+ 
+k∈I
+ak · vk(x)
+
+·
+ 
+k∈I
+bk · wk(x)
+
+(2)
+if {ak} and {bk} indicate consistent bit assignments of all N bits (i.e., for each
+i ∈[N], for some bit Bi, ak = bk = 0 for all k ∈Ii ¯
+Bi), but not if {ak} and {bk}
+indicate inconsistent bit assignments of any of the N bits in the following sense:
+For some i ∈[N],
+– There exist ka ∈Ii0 and k′
+a ∈Ii1 and kb ∈Ii0 ∪Ii1 such that aka ̸= 0,
+ak′a ̸= 0 and bkb ̸= 0, or
+– There exist ka ∈Ii0 ∪Ii1 and kb ∈Ii0 and k′
+b ∈Ii1 such that aka ̸= 0,
+bkb ̸= 0 and bk′
+b ̸= 0.
+The size of the wire checker is |I|, and the degree is deg(D(x)).
+To construct an aggregate wire checker, we ﬁrst construct a checker for a single
+wire. Let I0 = {1, . . . , L0}, I1 = {L0 + 1, . . . , L0 + L1}, and I = I0 ∪I1 be the
+indices associated with the wire.
+Construction of a Wire Checker.
+1. Let Lmax = max(L0, L1). For L′ = 3Lmax −2, select distinct roots R(0) =
+{r(0)
+1 , . . . , r(0)
+L′ } and R(1) = {r(1)
+1 , . . . , r(1)
+L′ } from F. Set R = R(0) ∪R(1). Set
+D(x) = 
+r∈R(x −r).
+2. Interpolate the polynomials in {vk(x)} and {wk(x)} to have degree (L′ +
+L0 −1) if k ∈I0 and (L′ + L1 −1) if k ∈I1, and to satisfy:
+(a) For k ∈I0, vk(r) = 0 for all r ∈R(0)∪{r(1)
+1 , . . . , r(1)
+L0 } except vk(r(1)
+k ) = 1,
+and wk(r) = 0 for all r ∈R(1) ∪{r(0)
+1 , . . . , r(0)
+L0 } except wk(r(0)
+k ) = 1.
+(b) For k ∈I1, vk(r) = 0 for all r ∈R(1)∪{r(0)
+1 , . . . , r(0)
+L1 } except vk(r(0)
+k−L0) =
+1, and wk(r) = 0 for all r ∈R(0) ∪{r(1)
+1 , . . . , r(1)
+L1 } except wk(r(1)
+k−L0) = 1.
+Lemma 2. The construction above is a wire checker.
+Proof. (Lemma 2) Clearly, D(x) divides the product in Equation 2 – i.e.,
+(
+k∈I ak · vk(r)) · (
+k∈I bk · wk(r)) = 0 for all r ∈R – if {ak}, {bk} indicate
+consistent assignments.
+If {ak} indicates a double assignment and {bk} is nonzero, then 
+k∈I0 ak ·
+vk(x) has at most L0 −1 roots in R(1), since it is nonzero of degree L′ + L0 −1
+and already has R(0) as roots. A similar analysis shows that 
+k∈I1 ak · vk(x)
+has at most L1 −1 roots in R(0). Note that 
+k∈I ak ·vk(x) has exactly the same
+roots in R(1) that 
+k∈I0 ak·vk(x) does, since the other part of the sum – namely,
+
+k∈I1 ak ·vk(x) – has everything in R(1) as a root. Similarly, 
+k∈I ak ·vk(x) has
+exactly the same roots in R(0) that 
+k∈I1 ak · vk(x) does. So, 
+k∈I ak · vk(x)
+has at most L0+L1−2 ≤2Lmax−2 roots in R. Since 
+k∈I bk ·wk(x) is nonzero
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+633
+and degree-(L′ + Lmax −1), it has at most L′ + Lmax −1 roots in R. So, the
+overall product has at most L′ + 3Lmax −3 < 2L′ roots, and is therefore not
+divisible by D(x).
+Using the Chinese Remainder Theorem, we compose the wire checkers for indi-
+vidual wires into an aggregate wire checker for the whole circuit.
+Construction of an Aggregate Wire Checker.
+1. Generate all of the roots and the divisor polynomial. For each wire i ∈[N],
+select distinct roots for R(i0) and R(i1) from F as in the single-wire checker.
+Note that the roots are distinct across the i’s as well. Set R = ∪iR(i0)∪R(i1).
+Set the aggregate wire checker’s divisor polynomial to D(x) = 
+i Di(x) =
+
+r∈R(x −r).
+2. Generate polynomials for the individual wire checkers. For each wire i ∈[N],
+construct the sets of polynomials V(i) and W(i) as in the single-wire checker.
+3. Compose individual wire checkers via CRT. For i ∈[N], for k ∈Ii0 ∪Ii1,
+interpolate vk(x) to be of degree at most deg(D(x)) −1 and satisfy vk(x) =
+v(i)
+k (x) mod Di(x) and vk(x) = 0 mod D(x)/Di(x). Analogously for wk(x).
+Set V = {vk(x)} and W = {wk(x)}.
+Lemma 3. The above construction is an aggregate wire checker.
+Proof. (Lemma 3) If {ak}, {bk} indicate consistent assignments, then they are
+consistent on the i-th bit for k restricted to Ii0 ∪Ii1. Hence, Di(x) divides the
+product in Eqn.2 when the summations are restricted to k ∈Ii0∪Ii1. Since vk(x)
+and wk(x) are divisible by Di(x) for all k /∈Ii0 ∪Ii1, the overall (unrestricted)
+product in Eqn.2 is divisible by Di(x). Since this holds for all i, the product is
+divisible by D(x).
+If, for some i, {ak} indicates a double assignment of the i-th bit and {bk} is
+nonzero over k ∈Ii0 ∪Ii1, then, by Lemma 2, Di(x) does not divide the product
+in Eqn.2 when the summations are restricted to k ∈Ii0 ∪Ii1. As above, Di(x)
+divides everything else, and thus the overall product in Eqn.2 is not divisible by
+Di(x), and thus not divisible by D(x).
+2.3
+Conscientious Span Programs
+Notice that the aggregate wire checker deﬁnition above enforces a slightly weaker
+condition than forbidding double assignments: it states that double assigning a
+wire with the {ak} (i.e., using non-zero ak values from both Ii0 and Ii1) is
+forbidden, unless the {bk} indicate a non-assignment of that wire – i.e., all the
+corresponding bk = 0 (and vice versa for a double assignment in the {bk}).
+To compensate for the weakness of the wire checker, we require the SP being
+checked to be conscientious, which guarantees that every satisfying linear com-
+bination uses at least one polynomial from the sets associated with its input.
+In our canonical QSP, we will use the wire checker above on two instances of a
+conscientious SP for φ. Conscientiousness guarantees that each instance includes
+
+634
+R. Gennaro et al.
+a non-zero coeﬃcient for each wire used in the satisfying assignment, and hence
+the wire checker will always catch double assignments in either instance.
+More formally, we deﬁne a conscientious SP as follows:
+Deﬁnition 4. Let S = ({v0(x), . . . , vm(x)}, Ifree, Ilabeled = ∪i∈[n],j∈{0,1} Iij)
+be an SP. We say that S is a conscientious SP for f : {0, 1}n →{0, 1} if, for
+any tuple (a1, . . . , am) that satisﬁes the usual SP requirements that f(u) = 1 for
+u ∈{0, 1}n iﬀ(1) v0(x) = 
+k ak · vk(x) and (2) for all k ∈∪n
+i=1Ii¯ui we have
+ak = 0, we also have the property that for all i ∈[n], there exists k ∈Iiui such
+that ak ̸= 0. Let m be the size of the SP and deg(v0(x)) + 1 be the degree of the
+SP.
+To construct a conscientious SP for φ, we ﬁrst build a conscientious SP for a
+single NAND gate.
+Lemma 4. There is a degree-9 conscientious SP for NAND of size 12.
+Proof. (Lemma 4) Choose a set of 9 distinct roots in F to get R = (r0, rl0, r′
+l0,
+rl1, r′
+l1, rr0, r′
+r0, rr1, r′
+r1). Deﬁne 9 “linearly independent” polynomials {v0(x),
+vl0(x), v′
+l0(x), vl1(x), v′
+l1(x), vr0(x), v′
+r0(x), vr1(x), v′
+r1(x)} to be the correspond-
+ing Lagrange basis polynomials for R; that is, they are the degree-8 polynomials
+obtained by interpolating such that ∀r ∈R, v0(r) = 0, except that v0(r0) = 1;
+vl0(r) = 0, except that vl0(rl0) = 1, and so on. We will use the convention that
+the pair of polynomials Vl0 = (vl0(x), v′
+l0(x)) belongs to the assignment of 0 to
+the left wire, etc.
+Set vo0(x) = v0(x) −vl1(x) −vr1(x) and Vo0 = {vo0(x)}, so that one can
+express v0(x) as a linear combination of polynomials in Vl1 ∪Vr1 ∪Vo0.
+Set vo1(x) = v0(x) −vl0(x) −vr0(x), v′
+o1(x) = v0(x) −v′
+l0(x) −v′
+r1(x), and
+v′′
+o1(x) = v0(x) −v′
+l1(x) −v′
+r0(x), and Vo1 = {vo1(x), v′
+o1(x), v′′
+o1(x)}, so that one
+can express v0(x) as a linear combination of polynomials associated to the other
+satisfying gate assignments.
+That the above polynomials deﬁne a conscientious SP for NAND of the
+claimed size and degree follows by inspection. The details are elaborated in
+the full version.
+To obtain a conscientious SP for an entire circuit, we build a conscientious SP
+for each gate, using a distinct set of roots Ri for each SP, and then compose the
+gate SPs together using the Chinese Remainder Theorem, just as we did when
+building the aggregate wire checker.
+Lemma 5. Suppose a circuit C consists of s Boolean gates from some set Γ –
+e.g, Γ = {NAND}. Suppose that, for each gate g ∈Γ, there is a conscientious SP
+of size m′ and degree d′ that computes whether its input is a satisfying assignment
+of g’s input/output wires. Then there is a conscientious SP S of size m = s · m′
+and degree d = s · d′ that computes the gate checker function φ for C. S is a
+straightforward composition of SPs {Sg} for the individual gates g of C.
+Intuition. The proof is constructive. For each gate g, build an SP S(g) follow-
+ing Lemma 4, obtaining from each a unique set of roots R(g) and polynomi-
+als {v(g)
+0 (x)} ∪V(g). Let R = ∪gR(g). Let v0(x) be a polynomial such that
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+635
+v0(r) = v(g)
+0 (r) for all r ∈R(g) and all gates g in the circuit. For each gate g,
+extend g’s polynomials such that for all v(x) ∈V(g), and r ∈R/R(g), v(r) = 0.
+The aggregate SP’s set of polynomials V will consist of v0(x) along with all of
+the extended polynomials. Since the roots used in each SP are unique across all
+SPs, this composition preserves all of the local linearity relationships created by
+Lemma 4; it also does not introduce any new relationships, since the unique roots
+prevent “interactions” across the gate SPs. See the full version of the paper [22]
+for the full proof.
+2.4
+The Canonical Quadratic Span Program
+We now describe how to take any polynomial-time computable function f, and
+construct a polynomial-size QSP that computes f. The construction uses the
+Chinese Remainder Theorem (CRT) to merge the two components above, the
+gate checker and the wire checker, so that the quadratic test (Eq. 1) checks both
+at once. The wire checker’s guarantee of no double assignments relies on the fact
+that the SP for the gate checker is conscientious, and hence must use at least
+one polynomial for each wire to arrive at a satisfying linear combination. Thus,
+we can conclude that the wire values are consistent with the circuit’s gates, and
+that no wire is set to both 0 and 1.
+More speciﬁcally, we build two copies of the conscientious SP for the gate
+checker, ensuring that all of the roots used are distinct. One copy will become the
+V polynomials in the QSP, while the other copy will become the W polynomials.
+We then construct the polynomials for the aggregate wire checker described
+above, using a third set of distinct roots. Since all of the divisor polynomials
+from the diﬀerent components have diﬀerent roots, they are relatively prime.
+Hence, we can use the CRT to deﬁne the ﬁnal QSP polynomials so that they
+match the value of the constituent polynomials from each component.
+The Canonical QSP: Qcan,f.
+1. Take as input the Boolean circuit C for f : {0, 1}n →{0, 1}, which has s
+gates.
+2. Using disjoint sets of roots R(V) and R(W), construct two instances of the con-
+scientious gate checker SP for C – namely, S(V) = (ˆV = {ˆv0(x), . . . , ˆvm(x)},
+Ifree, Ilabeled) and S(W) = ( ˆ
+W = { ˆw0(x), . . . , ˆwm(x)}, Ifree, Ilabeled).
+3. Deﬁne ˆD(V)(x) = 
+r∈R(V)(x −r) and ˆD(W)(x) = 
+r∈R(W)(x −r). Note
+that because we use distinct roots for each incarnation, the resulting divisor
+polynomials ˆD(V)(x) and ˆD(W)(x) are relatively prime.
+4. Using disjoint sets of roots R = {R(i0), R(i1) : i ∈[N]} and the partition of
+Ilabeled, construct the aggregate wire checker from Lemma 3, which consists
+of the following polynomials: D′(x) = 
+r∈R(x−r), V′ = {v′
+1(x), . . . , v′
+m(x)}
+and W′ = {w′
+1(x), . . . , w′
+m(x)}.
+5. Deﬁne D(x) = ˆD(V)(x) · ˆD(W)(x) · D′(x).
+6. Finally, deﬁne V = {v0(x), . . . , vm(x)} and W = {w0(x), . . . , wm(x)} using
+the CRT to interpolate vk(x) and wk(x) as follows:
+
+636
+R. Gennaro et al.
+vk(x) =
+⎧
+⎪
+⎪
+⎨
+⎪
+⎪
+⎩
+ˆvk(x) mod ˆD(V)(x)
+v′
+k(x) mod D′(x)
+1
+mod ˆD(W)(x) if k = 0
+0
+mod ˆD(W)(x) if k ̸= 0
+wk(x) =
+⎧
+⎪
+⎪
+⎨
+⎪
+⎪
+⎩
+ˆwk(x) mod ˆD(W)(x)
+w′
+k(x) mod D′(x)
+1
+mod ˆD(V)(x) if k = 0
+0
+mod ˆD(V)(x) if k ̸= 0
+7. Output Qcan,f = (V, W, D(x), Ifree, Ilabeled = ∪i∈[n],j∈{0,1}Iij), where the
+labeled indices ∪i∈[n+1,N]Iij from the gate checker SP for C have been moved
+to Ifree.
+The proof of the following theorem is in the full version [22].
+Theorem 3. For any Boolean circuit C with n inputs, s gates, and N = n + s
+total wire values, the canonical QSP computes C.
+2.5
+Performance and Technical Issues
+By Lemmas 4 and 5, given a function f whose Boolean circuit has s (NAND)
+gates, we have a conscientious SP of size 12s and degree 9s for f’s gate-checker
+function. However, for performance and technical reasons, we use a larger con-
+scientious SP of size 36s and degree 27s.
+The ﬁrst reason we use a larger SP is that we transform f’s Boolean circuit to
+one with fan-out two (except that one “dummy” input, set to ‘1’, may feed into
+multiple gates). The resulting circuit may be larger by a constant factor. We
+reduce fan-out to two before applying the SP composition lemma (Lemma 5) be-
+cause we want the evaluation vectors {(vk(r1), . . . , vk(rd)), (wk(r1), . . . , wk(rd)) :
+k ∈[m], r ∈R} of our QSP to be sparse – i.e., to have only constant nonzero sup-
+port. Sparseness allows us, for example, to compute v(x) = v0(x) +  ak · vk(x)
+very quickly in evaluation representation, in time linear in the degree of the QSP.
+The second reason is that we obtain a strong QSP.
+Deﬁnition 5 (Strong QSP). A QSP Q
+=
+(V, W, t(x), Ifree, Ilabeled
+=
+∪i∈[n],j∈{0,1}Iij) is a strong QSP if |Iij| = 1 for all i ∈[n], j ∈{0, 1} and
+the QSP divisibility requirement (Eq.1) holds only if {ak}, {bk} are “unequiv-
+ocally” bound to some input u ∈{0, 1}n – in particular, ak = 1 = bk for all
+{k = Iiui} and ak = 0 = bk for all {k = Ii ¯
+ui}.
+In a strong QSP, the labeled sets are singletons, and the QSP can be satisﬁed
+only by applying an unequivocal 0/1 linear combination to the labeled vectors.
+Ultimately, this property helps improve the performance of our cryptographic
+constructions for NIZKs and veriﬁable computation, since a veriﬁer who knows
+part of the circuit input (e.g., the statement u portion of the input to a rela-
+tion) will be able to “predict” the portion of the QSP linear combination that
+corresponds to u (and therefore this portion does not need to be “sent” by the
+prover).
+When it is applied to the partition Ilabeled = ∪i∈[N],j∈{0,1}Iij of the SP for
+the gate checker function, the size of the aggregate wire checker is |Ilabeled| ≤24s
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+637
+and the degree is 76s. (See full version [22] for details.) Since the QSP has two
+SPs and one aggregate wire checker, and since composing the SPs with the wire
+checker does not increase the size, the QSP has size 36s and degree 130s.
+3
+Overview of Cryptographic Constructions and Security
+We build SNARKs and NIZKs in the common reference string (CRS) model [9,
+10] for relations R(u, w) with n′-bit statements and (n −n′)-bit witnesses. We
+apply our QSPs for n-bit inputs to the circuit computing R.
+Groth’s construction [27] speciﬁcally targets the circuit SAT relation; in par-
+ticular, he takes u to be a circuit that can be chosen adaptively and uses
+R(u, w) = u(w). The CRS size and prover computation grow quadratically with
+|u|. The veriﬁer computation is O(|u|), but it can be reduced to O(1) in an amor-
+tized sense with u-dependent pre-processing. To compare directly with Groth,
+we can handle u being an adaptively-chosen circuit by constructing R from a
+universal circuit. In this case, the size of the circuit computing R may be larger
+than |u| by a logarithmic factor, which correspondingly increases the CRS size
+and prover computation to ˜O(|u|). The veriﬁer computation is O(|u|), but it can
+be reduced to O(1) in an amortized sense just as in Groth. If u, or any part of
+u, can be chosen non-adaptively, our scheme becomes more eﬃcient.
+We present our constructions with their proof intuition, deferring the formal
+proofs to the full version [22].
+3.1
+Deﬁnitions
+First, we deﬁne a SNARK for a Prover P who holds a witness w which he can
+use to convince a Veriﬁer V of a statement u.
+Deﬁnition 6 (SNARK). We say that Π = (Gen, P, V) is a succinct non-
+interactive argument of knowledge ( SNARK) with security parameter κ for an
+NP language L with a corresponding NP relation R with n′-bit statements and
+(n −n′)-bit witnesses , if it satisﬁes the following properties:
+Perfect Completeness: For all A,
+Pr
+⎡
+⎣V(priv, u, π) = 1
+if (u, w) ∈R
+						
+(crs, priv) ←Gen(1κ)
+(u, w) ←A(crs)
+π ←P(crs, u, w)
+⎤
+⎦= 1,
+where P(crs, u, w) runs in time poly(κ, n).
+Soundness: For all eﬃcient A,
+Pr
+V(priv, u, π) = 1
+u ̸∈L
+				
+(crs, priv) ←Gen(1κ)
+(u, π) ←A(1κ, crs)
+
+= negl(κ).
+Succinctness: The proof length is |π| = poly(κ).
+
+638
+R. Gennaro et al.
+Extraction: For any poly-size prover P∗, there exists a poly-size extractor EP ∗,
+such that for any auxiliary information z ∈{0, 1}κ, the following holds
+Pr
+⎡
+⎣V(priv, u, π) = 1
+(u, w) /∈R
+						
+(crs, priv) ←Gen(1κ)
+(u, π) ←P∗(crs, z)
+w ←EP ∗(crs, z)
+⎤
+⎦= negl(κ).
+We omit the standard deﬁnition of NIZKs. Note that, to build a NIZK, it suﬃces
+to build (as we do) a SNARK that is statistical zero-knowledge.
+3.2
+Our SNARK Construction
+We can create a SNARK for an NP relation R = {(u, w)} with n′-bit statements
+and (n −n′)-bit witnesses by building a canonical QSP for the function f such
+that f(u, w) = 1 iﬀ(u, w) ∈R. At a high-level, the prover uses his inputs to
+evaluate the circuit for f, hence obtaining linear combinations for the QSP that
+satisfy Eq.1. He uses these combinations to compute v(x) = v0(x) +  ak · vk(x)
+(and similarly for w(x)), and convinces the veriﬁer that the QSP’s quadratic
+property holds (Eq.1), which implies f(u, w) = 1, by calculating h(x) such that
+h(x) · D(x) = v(x)w(x).
+To protect against malicious provers, all of the calculations described above
+are performed over encoded values. Speciﬁcally, the CRS holds an encoding of
+the evaluation of each polynomial (e.g., the {vk(x)}) at a secret point σ. The
+encoding permits homomorphic operations, which allow the prover to calculate
+v(σ), w(σ), and h(σ) inside the encoding. The encoding also permits a quadratic
+equality check so that the veriﬁer can check that Equation 1 holds.
+An encoding scheme E has two algorithms (Setup, E), where Setup takes the
+security parameter and generates parameters for the scheme, and E (possibly
+randomized) produces an encoding for an element. Our preferred encoding is
+exponentiation within a bilinear group: E(vk(σ)) = gvk(σ), in which case, the
+quadratic equality check is performed via a pairing. One may also use an addi-
+tively homomorphic encryption scheme, e.g., Paillier5: E(vk(σ)) = Encpk(vk(σ)).
+In this case, the veriﬁer needs a secret key sk to remove the encoding and perform
+the quadratic check, and hence the SNARK is designated-veriﬁer.
+As a ﬁnal note, to ensure the prover uses circuit inputs matching u, the veriﬁer
+calculates the portion of v(σ) that corresponds to u independently, leaving the
+portion of v(σ) that corresponds to the witness to the prover.
+To base the security of our scheme on an existing knowledge of exponent
+assumption [27], we add terms to the CRS of the form E(ασi), E(αvk(σ)),
+E(αwk(σ)), E(βvvk(σ)), E(βwwk(σ)), and extend the proof with relations be-
+tween these terms and those in the basic proof (see Section 3.4).
+5 Technically, our constructions apply only where the encoding space is a ﬁeld, and the
+plaintext space of Paillier is a ring, not a ﬁeld. However, it would be easy to extend
+our results to Paillier, using the fact that one is unlikely to encounter encodings of
+nontrivial zero divisors in ZN unless one is able to factor N.
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+639
+CRS generation Gen: On input security parameter κ, construct a common
+random string CRS = (crsP , crsV ). Let f be the function checking the rela-
+tion R(u, w) and let Qf = (V, W, D(x), Ifree, Ilabeled = ∪i∈[n],j∈{0,1}Iij, I =
+Ifree ∪Ilabeled) be a QSP of size m and degree d for the functionality f 6.
+Let Iin = ∪n′
+i=1Iij and Imid = I \ Iin. Generate public and private param-
+eters (pk, sk) for the encoding scheme E. Generate uniformly at random
+α, σ, βv, βw, γ ←F ∗and set the output:
+crsP =
+
+pk, Qf, n′, {E(σi)}i∈[0,d], {E(ασi)}i∈[0,d],
+{E(vk(σ))}k∈Imid, {E(wk(σ))}k∈I,
+{E(αvk(σ))}k∈Imid, {E(αwk(σ))}k∈I,
+{E(βvvk(σ))}k∈Imid, {E(βwwk(σ))}k∈I
+
+crsV =
+
+pk, sk, E(1), E(α), E(γ), E(βvγ), E(βwγ),
+{E(vk(σ))}k∈{0}∪Iin, E(w0(σ)), E(D(σ))
+
+.
+Prove P: On input crsP , statement u ∈{0, 1}n′ and witness w, P evaluates Qf
+to obtain (a1, . . . , am) and (b1, . . . , bm) and polynomial h(x) such that
+h(x) · D(x) =
+
+v0(x) +
+m
+
+k=1
+ak · vk(x)
+
+·
+
+w0(x) +
+m
+
+k=1
+bk · wk(x)
+
+.
+Let vmid(x) = 
+k∈Imid ak · vk(x) and w(x) = 
+k∈I bk · wk(x). Then, P uses
+the encoding’s homomorphism to output the following proof:
+π =
+
+E(vmid(σ)), E(w(σ)), E(h(σ)),
+E(αvmid(σ)), E(αw(σ)), E(αh(σ)), E(βv vmid(σ) + βww(σ))
+
+.
+Verify V: On input crsV , u, and π = (πvmid, πw, πh, πv′
+mid, πw′, πh′, πy), V con-
+ﬁrms that the terms are in the support of validly encoded elements. Let
+Vmid, W, H, V ′
+mid, W ′, H′, and Y be what is encoded. V computes an en-
+coding E(vin(σ)) of vin(σ) = 
+k∈Iin ak·vk(σ). V conﬁrms that the following
+equations hold:
+H · D(σ) = (v0(σ) + vin(σ) + Vmid) · (w0(σ) + W),
+V ′
+mid = αVmid, W ′ = αW, H′ = αH, γY = (βvγ)Vmid + (βwγ)W.
+3.3
+Making the SNARK Statistical Zero-Knowledge (NIZKs)
+In our NIZK construction, the prover simply randomizes each of the terms
+v0(σ) + vin(σ) + Vmid and w0(σ) + W so that their product is still divisible by
+D(σ), but the terms reveal nothing more about the original values. We achieve
+this by adding random multiples of D(σ) to both terms, which preserves the di-
+visibility property for their product. We supplement crsP with additional terms
+6 For example, with circuit SAT, f is a universal circuit.
+
+640
+R. Gennaro et al.
+to facilitate computation of the remainder of the randomized proof. Speciﬁcally,
+we include: E(D(σ)), E(αD(σ)), E(βvD(σ)), E(βwD(σ)), E(v0(σ)), E(αv0(σ)),
+E(w0(σ)) and E(αw0(σ)).
+After generating a proof π as above, the prover randomizes it as follows. He
+picks random δvmid, δw ←F and outputs the following proof:
+π′ =
+
+E(v′
+mid(σ)), E(w′(σ)), E(h′(σ)),
+E(αv′
+mid(σ)), E(αw′(σ)), E(αh′(σ)), E(βvv′
+mid(σ) + βww′(σ))
+
+,
+where v′
+mid(x) = vmid(x) + δvmidD(x), w′(x) = w(x) + δwD(x), h′(x) = (v0(x) +
+vin(x)+v′
+mid(x))·(w0(x)+w′(x))/D(x), and v0(x), vin(x), vmid(x) and w(x) are
+the values computed in the SNARK construction from the previous section. The
+encodings in the new proof π′ can be computed eﬃciently from the encodings in
+π and the augmented crsP .
+3.4
+Security
+We base security on two assumptions, the q-power Diﬃe-Hellman (q-PDH) as-
+sumption and the q-power knowledge of exponent (q-PKE) assumption. When
+we instantiate our construction and the q-PDH and q-PKE assumptions with
+an encoding scheme E(a) = ga over a bilinear group, the q-PDH and q-PKE
+assumptions are virtually identical to those used by Groth in his NIZK construc-
+tion [27].7 Also, the bilinear group version of our q-PDH assumption is very
+similar to, but weaker than, assumptions that were used to construct hierar-
+chical identity-based encryption and broadcast encryption schemes with short
+ciphertexts [11, 13].
+The q-PDH assumption is a “conventional” falsiﬁable assumption, though
+still somewhat unusual in its dependence on q, which is related to the size of the
+circuits for the functions computed by our SNARKs.
+Assumption 1 (q-PDH). Let κ be a security parameter, and q = poly(κ). The
+q-power Diﬃe-Hellman (q-PDH) assumption holds for encoding E if for all non-
+uniform probabilistic polynomial time adversaries A we have
+Pr
+⎡
+⎣
+pk ←E.Setup(1κ) ; σ ←F ∗;
+τ ←(pk, E(1), E(σ), . . . , E(σq), E(σq+2), . . . , E(σ2q)) ;
+y ←A(τ) : y = E(σq+1)
+⎤
+⎦= negl(κ).
+The q-PKE assumption is a non-falsiﬁable “knowledge” assumption, similar in
+spirit to (but more complicated than) early knowledge-of-exponent assumptions
+(KEAs) [6, 18].
+Assumption 2 (q-PKE). Let κ be a security parameter, and q = poly(κ). The
+q-power knowledge of exponent (q-PKE) assumption holds for encoding E if for
+7 Our q-PDH assumption is actually weaker than his q-CPDH assumption, and our
+q-PKE assumption is identical to Groth’s [27] and Lipmaa’s [33], except that we
+extend the assumption to handle auxiliary inputs.
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+641
+every non-uniform probabilistic polynomial time adversary A, there exists a non-
+uniform probabilistic polynomial time extractor χA such that
+Pr
+⎡
+⎢⎢⎣
+pk ←E.Setup(1κ) ; α, σ ←F ∗;
+τ ←(pk, E(1), E(σ), . . . , E(σq), E(α), E(ασ), . . . , E(ασq));
+(E(c), E(ˆc); a0, . . . , aq) ←(A||χA)(τ, z) :
+ˆc = αc ∧c ̸= q
+k=0 akσk
+⎤
+⎥⎥⎦= negl(κ)
+for any auxiliary information z ∈{0, 1}poly(κ) that is independent of α.
+Next we state our main security theorem.
+Theorem 4. If the q-PDH and d-PKE assumptions hold for some q ≥max{2d−
+1, d + 2}, then the NIZK scheme deﬁned in Section 3.3, instantiated with a QSP
+of degree d, is secure under Deﬁnition 6.
+Here, we provide some intuition, using a simpler version of our scheme, which
+has the following 6 element proof:
+π = (E(vmid(σ)), E(w(σ)), E(h(σ)), E(αvvmid(σ)), E(αww(σ)), E(αhh(σ))) .
+For the version above, the intuition is that it is hard for the prover, who knows
+the CRS but not αw, to output any pair (E(W), E(W ′)) with W ′ = αwW unless
+he knows a representation {bk : k ∈I} of W such that W =  bkwk(σ). Knowl-
+edge of exponent assumptions (KEAs)8 formalize this intuition: they say that
+for any algorithm that outputs a pair of encoded elements with ratio αw, there
+is an extractor that “watches” the algorithm’s computation and outputs the rep-
+resentation (the linear combination). In the security proof, extractors for the v,
+w and h terms extract out polynomials vmid(x), w(x), h(x) that are in the spans
+of {vk(x) : k ∈Imid}, {wk(x) : k ∈I}, {xi : i ∈[d]}. If the proof veriﬁes, then
+(v0(σ) + v(σ)) · (w0(σ) + w(σ)) = h(σ) · D(σ) for v(x) = vmid(x) + 
+k∈Iin vk(x).
+If indeed (v0(x) + v(x)) · (w0(x) + w(x)) = h(x) · D(x) as polynomials, then the
+soundness of our QSP implies that we have extracted a true proof. Otherwise,
+(v0(x) + v(x)) · (w0(x) + w(x)) −h(x) · D(x) is a nonzero polynomial having σ
+as a root, which allows the simulator to solve a hard problem.
+We modiﬁed this simpler scheme to the more complicated SNARK construc-
+tion in order to base security on assumptions slightly weaker than Groth’s [27].
+With these assumptions, we can only extract representations of the encoded
+terms with respect to the power basis {xi} (as in [27]), not with respect to {vk(x) :
+k ∈Imid}. Thus, this extraction does not guarantee that vmid(x) and w(x) are
+in their proper spans. We ensure this via the ﬁnal term E(βvvmid(σ) + βww(σ)),
+from which the simulator can solve a hard problem if vmid(x) or w(x) lies outside
+its proper span.
+3.5
+Eﬃciency
+Next we state the complexities for our SNARK construction and refer the reader
+to the full version of the paper [22] for the proofs.
+8 KEAs [6, 18, 24] exist for Paillier/RSA [19, 24], bilinear groups [27, 33], and even
+lattices [34].
+
+642
+R. Gennaro et al.
+Prover’s Work. The prover computation requires a number of group operations
+linear in the size of the QSP, aside from the computation of h(x), which can be
+computed in O(d·log2(d)) time, where d is the degree of the QSP, via multipoint
+evaluation and interpolation. When we construct a SNARK for circuit SAT, we
+use a QSP for a universal circuit, which has size O(|C| log |C|) where |C| is the
+maximum size of the circuits in the satisﬁability problem.
+Veriﬁer’s Work. The veriﬁcation of the SNARK is proportional to the state-
+ment size and independent of the size of the witness. We can further reduce the
+veriﬁcation work [22] to a constant plus a hash function evaluation by applying
+an ordinary hash function to the statement and proving a new relation which
+takes the the hash output as the statement.
+4
+Quadratic Programs for Arithmetic Circuits
+We also construct Quadratic Arithmetic Programs (QAPs), a natural extension
+of QSPs which “naturally” compute arithmetic circuits modulo the group order
+p. For some functions, arithmetic circuits are much smaller than their Boolean
+counterparts, suggesting that, in such cases, QAPs are a more attractive option.
+In fact, it turns out (see [38]) that QAPs are more eﬃcient than QSPs, even for
+the Boolean case.
+The full details of the QAP construction appear in the ﬁnal version [22]; here
+we present the deﬁnition of QAPs and our main result about them.
+Deﬁnition 7 (Quadratic Arithmetic Programs (QAP)). A quadratic
+arithmetic program (QAP) Q over ﬁeld F contains three sets of polynomials
+V = {vk(x) : k ∈{0, . . ., m}}, W = {wk(x) : k ∈{0, . . . , m}}, Y = {yk(x) : k ∈
+{0, . . ., m}}, and a divisor polynomial D(x), all from F[x].
+Let f : F n −→F n′ be a function having input variables with labels 1, . . . , n and
+output variables with labels m−n′+1, . . . , m. We say that Q is a QAP that com-
+putes f if the following is true: a1, . . . , an, am−n′+1, . . . , am ∈F n+n′ is a valid
+assignment to the input/output variables of f iﬀthere exist (an+1, . . . , am−n′) ∈
+F m−n−n′ such that D(x) divides:
+
+v0(x) +
+m
+
+k=1
+ak · vk(x)
+
+·
+
+w0(x) +
+m
+
+k=1
+ak · wk(x)
+
+−
+
+y0(x) +
+m
+
+k=1
+ak · yk(x)
+
+.
+The size of Q is m. The degree of Q is deg(D(x)).
+We prove that we can build very eﬃcient QAPs for arbitrary circuits.
+Theorem 5. Let C be an arithmetic circuit with input from F n that has s
+multiplication gates, each with fan-in two, and whose output gates are all multi-
+plication gates. There is a QAP with size n + s and degree s that computes C.
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+643
+5
+Concrete Performance
+We developed a system called Pinocchio [38] that includes a compiler that trans-
+forms a subset of C into either a QSP or QAP, and a set of programs for generat-
+ing the CRS, creating proofs, and verifying proofs. It supports NIZK proofs and
+VC proofs, with both designated and public veriﬁers. We use a pairing-based
+encoding, with a 256-bit BN-curve [5] that provides 128 bits of security.
+We ﬁnd that QAPs outperform QSPs, and that Pinocchio signiﬁcantly outper-
+forms state-of-the-art systems [16, 40] based on PCPs [2, 25, 30].9 For example,
+we measured the time for NxN matrix multiplication using random 32-bit ma-
+trix entries. For N = 25 to 100, Pinocchio’s veriﬁer takes 8-13ms, making it 5-7
+orders of magnitude faster than previous work, while the worker takes 8.9-776.4s,
+making it 19 −60× faster.
+Acknowledgments. We thank Nir Bitansky, Jens Groth, Yuval Ishai, Seny
+Kamara, Helger Lipmaa, and the anonymous reviewers for all of their helpful
+suggestions.
+References
+[1] Abe, M., Fehr, S.: Perfect NIZK with adaptive soundness. In: Vadhan, S.P. (ed.)
+TCC 2007. LNCS, vol. 4392, pp. 118–136. Springer, Heidelberg (2007)
+[2] Arora, S., Lund, C., Motwani, R., Sudan, M., Szegedy, M.: Proof veriﬁcation and
+the hardness of approximation problems. J. ACM 45(3), 501–555 (1998)
+[3] Arora, S., Safra, S.: Probabilistic checking of proofs: A new characterization of
+NP. J. ACM 45(1), 70–122 (1998)
+[4] Babai, L., Fortnow, L., Levin, L.A., Szegedy, M.: Checking computations in poly-
+logarithmic time. In: STOC, pp. 21–31 (1991)
+[5] Barreto, P.S.L.M., Naehrig, M.: Pairing-friendly elliptic curves of prime order. In:
+Preneel, B., Tavares, S. (eds.) SAC 2005. LNCS, vol. 3897, pp. 319–331. Springer,
+Heidelberg (2006)
+[6] Bellare, M., Palacio, A.: The knowledge-of-exponent assumptions and 3-round
+zero-knowledge protocols. In: Franklin, M. (ed.) CRYPTO 2004. LNCS, vol. 3152,
+pp. 273–289. Springer, Heidelberg (2004)
+[7] Ben-Sasson, E., Chiesa, A., Genkin, D., Tromer, E.: On the concrete-eﬃciency
+threshold of probabilistically-checkable proofs. In: STOC (to appear 2013)
+[8] Bitansky, N., Canetti, R., Chiesa, A., Tromer, E.: From extractable collision re-
+sistance to succinct non-interactive arguments of knowledge, and back again. In:
+ITCS, pp. 326–349 (2012)
+[9] Blum, M., Feldman, P., Micali, S.: Non-interactive zero-knowledge and its appli-
+cations (extended abstract). In: STOC, pp. 103–112 (1988)
+[10] Blum, M., De Santis, A., Micali, S., Persiano, G.: Noninteractive zero-knowledge.
+SIAM Journal on Computing 20(6), 1084–1118 (1991)
+[11] Boneh, D., Boyen, X., Goh, E.-J.: Hierarchical identity based encryption with con-
+stant size ciphertext. In: Cramer, R. (ed.) EUROCRYPT 2005. LNCS, vol. 3494,
+pp. 440–456. Springer, Heidelberg (2005)
+9 We are not aware of any implementations based on other non-PCP-based approaches
+(e.g., Groth [27] or Lipmaa [33]), making direct comparisons diﬃcult.
+
+644
+R. Gennaro et al.
+[12] Boneh, D., Franklin, M.: Identity-based encryption from the weil pairing. In: Kil-
+ian, J. (ed.) CRYPTO 2001. LNCS, vol. 2139, pp. 213–229. Springer, Heidelberg
+(2001)
+[13] Boneh, D., Gentry, C., Waters, B.: Collusion resistant broadcast encryption with
+short ciphertexts and private keys. In: Shoup, V. (ed.) CRYPTO 2005. LNCS,
+vol. 3621, pp. 258–275. Springer, Heidelberg (2005)
+[14] Brassard, G., Chaum, D., Cr´epeau, C.: Minimum disclosure proofs of knowledge.
+J. Comput. Syst. Sci. 37(2), 156–189 (1988)
+[15] Canetti, R., Goldreich, O., Halevi, S.: The random oracle methodology, revisited.
+J. ACM 51(4), 557–594 (2004)
+[16] Cormode, G., Mitzenmacher, M., Thaler, J.: Practical veriﬁed computation with
+streaming interactive proofs. In: ITCS (2012)
+[17] Di Crescenzo, G., Lipmaa, H.: Succinct NP proofs from an extractability assump-
+tion. In: Beckmann, A., Dimitracopoulos, C., L¨owe, B. (eds.) CiE 2008. LNCS,
+vol. 5028, pp. 175–185. Springer, Heidelberg (2008)
+[18] Damg˚ard, I.B.: Towards practical public key systems secure against chosen cipher-
+text attacks. In: Feigenbaum, J. (ed.) CRYPTO 1991. LNCS, vol. 576, pp. 445–456.
+Springer, Heidelberg (1992)
+[19] Damg˚ard, I., Faust, S., Hazay, C.: Secure two-party computation with low com-
+munication. In: Cramer, R. (ed.) TCC 2012. LNCS, vol. 7194, pp. 54–74. Springer,
+Heidelberg (2012)
+[20] Feige, U., Goldwasser, S., Lov´asz, L., Safra, S., Szegedy, M.: Interactive proofs
+and the hardness of approximating cliques. J. ACM 43(2), 268–292 (1996)
+[21] Gennaro, R., Gentry, C., Parno, B.: Non-interactive veriﬁable computing: Out-
+sourcing computation to untrusted workers. In: Rabin, T. (ed.) CRYPTO 2010.
+LNCS, vol. 6223, pp. 465–482. Springer, Heidelberg (2010)
+[22] Gennaro, R., Gentry, C., Parno, B., Raykova, M.: Quadratic span programs
+and succinct NIZKs without PCPs. Cryptology ePrint Archive, Report 2012/215
+(2012)
+[23] Gentry, C., Wichs, D.: Separating succinct non-interactive arguments from all
+falsiﬁable assumptions. In: STOC, pp. 99–108. ACM (2011)
+[24] Gjøsteen, K.: Subgroup membership problems and public key cryptosystems. PhD
+thesis, Norwegian University of Science and Technology (2004)
+[25] Goldwasser, S., Kalai, Y.T., Rothblum, G.N.: Delegating computation: Interactive
+proofs for muggles. In: STOC, pp. 113–122 (2008)
+[26] Goldwasser, S., Lin, H., Rubinstein, A.: Delegation of computation without rejec-
+tion problem from designated veriﬁer CS-proofs. IACR Cryptology ePrint Archive,
+2011: 456 (2011)
+[27] Groth, J.: Short pairing-based non-interactive zero-knowledge arguments. In: Abe,
+M. (ed.) ASIACRYPT 2010. LNCS, vol. 6477, pp. 321–340. Springer, Heidelberg
+(2010)
+[28] Groth, J., Ostrovsky, R., Sahai, A.: New techniques for noninteractive zero-
+knowledge. Journal of the ACM 59(3), 11:1–11:35 (2012)
+[29] Groth, J., Sahai, A.: Eﬃcient non-interactive proof systems for bilinear groups.
+SIAM Journal on Computing 41(5), 1193–1232 (2012)
+[30] Ishai, Y., Kushilevitz, E., Ostrovsky, R.: Eﬃcient arguments without short PCPs.
+In: IEEE Conference on Computational Complexity (2007)
+[31] Karchmer, M., Wigderson, A.: On span programs. In: Structure in Complexity
+Theory Conference, pp. 102–111 (1993)
+[32] Kilian, J.: A note on eﬃcient zero-knowledge proofs and arguments (extended
+abstract). In: STOC, pp. 723–732 (1992)
+
+Quadratic Span Programs and Succinct NIZKs without PCPs
+645
+[33] Lipmaa, H.: Progression-free sets and sublinear pairing-based non-interactive zero-
+knowledge arguments. In: Cramer, R. (ed.) TCC 2012. LNCS, vol. 7194, pp. 169–
+189. Springer, Heidelberg (2012)
+[34] Loftus, J., May, A., Smart, N.P., Vercauteren, F.: On CCA-secure somewhat homo-
+morphic encryption. In: Miri, A., Vaudenay, S. (eds.) SAC 2011. LNCS, vol. 7118,
+pp. 55–72. Springer, Heidelberg (2012)
+[35] Lund, C., Fortnow, L., Karloﬀ, H.J., Nisan, N.: Algebraic methods for interactive
+proof systems. J. ACM 39(4), 859–868 (1992)
+[36] Micali, S.: Computationally sound proofs. SIAM J. Comput. 30(4), 1253–1298
+(2000); Extended abstract in FOCS (1994)
+[37] Naor, M.: On cryptographic assumptions and challenges. In: Boneh, D. (ed.)
+CRYPTO 2003. LNCS, vol. 2729, pp. 96–109. Springer, Heidelberg (2003)
+[38] Parno, B., Gentry, C., Howell, J., Raykova, M.: Pinocchio: Nearly practical ver-
+iﬁable computation. In: Proceedings of the IEEE Symposium on Security and
+Privacy (May 2013)
+[39] Parno, B., Raykova, M., Vaikuntanathan, V.: How to delegate and verify in public:
+Veriﬁable computation from attribute-based encryption. In: Cramer, R. (ed.) TCC
+2012. LNCS, vol. 7194, pp. 422–439. Springer, Heidelberg (2012)
+[40] Setty, S., Vu, V., Panpalia, N., Braun, B., Blumberg, A.J., Walﬁsh, M.: Taking
+proof-based veriﬁed computation a few steps closer to practicality. In: Proceedings
+of USENIX Security (August 2012)
+[41] Shamir, A.: IP = PSPACE. J. ACM 39(4), 869–877 (1992)

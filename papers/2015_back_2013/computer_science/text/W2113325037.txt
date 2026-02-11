@@ -1,0 +1,971 @@
+DeepPose: Human Pose Estimation via Deep Neural Networks
+Alexander Toshev
+Christian Szegedy
+Google
+1600 Amphitheatre Pkwy
+Mountain View, CA 94043
+toshev,szegedy@google.com
+Figure 1. Besides extreme variability in articulations, many of the
+joints are barely visible. We can guess the location of the right
+arm in the left image only because we see the rest of the pose and
+anticipate the motion or activity of the person. Similarly, the left
+body half of the person on the right is not visible at all. These
+are examples of the need for holistic reasoning. We believe that
+DNNs can naturally provide such type of reasoning.
+Abstract
+We propose a method for human pose estimation based
+on Deep Neural Networks (DNNs). The pose estimation
+is formulated as a DNN-based regression problem towards
+body joints. We present a cascade of such DNN regres-
+sors which results in high precision pose estimates. The
+approach has the advantage of reasoning about pose in a
+holistic fashion and has a simple but yet powerful formula-
+tion which capitalizes on recent advances in Deep Learn-
+ing. We present a detailed empirical analysis with state-of-
+art or better performance on four academic benchmarks of
+diverse real-world images.
+1. Introduction
+The problem of human pose estimation, deﬁned as the
+problem of localization of human joints, has enjoyed sub-
+stantial attention in the computer vision community.
+In
+Fig. 1, one can see some of the challenges of this prob-
+lem – strong articulations, small and barely visible joints,
+occlusions and the need to capture the context.
+The main stream of work in this ﬁeld has been motivated
+mainly by the ﬁrst challenge, the need to search in the large
+space of all possible articulated poses. Part-based models
+lend themselves naturally to model articulations ([16, 8])
+and in the recent years a variety of models with efﬁcient
+inference have been proposed ([6, 19]).
+The above efﬁciency, however, is achieved at the cost of
+limited expressiveness – the use of local detectors, which
+reason in many cases about a single part, and most impor-
+tantly by modeling only a small subset of all interactions
+between body parts. These limitations, as exempliﬁed in
+Fig. 1, have been recognized and methods reasoning about
+pose in a holistic manner have been proposed [15, 21] but
+with limited success in real-world problems.
+In this work we ascribe to this holistic view of human
+pose estimation. We capitalize on recent developments of
+deep learning and propose a novel algorithm based on a
+Deep Neural Network (DNN). DNNs have shown outstand-
+ing performance on visual classiﬁcation tasks [14] and more
+recently on object localization [23, 9]. However, the ques-
+tion of applying DNNs for precise localization of articulated
+objects has largely remained unanswered. In this paper we
+attempt to cast a light on this question and present a simple
+and yet powerful formulation of holistic human pose esti-
+mation as a DNN.
+We formulate the pose estimation as a joint regression
+problem and show how to successfully cast it in DNN set-
+tings. The location of each body joint is regressed to using
+as an input the full image and a 7-layered generic convolu-
+tional DNN. There are two advantages of this formulation.
+First, the DNN is capable of capturing the full context of
+each body joint – each joint regressor uses the full image
+as a signal. Second, the approach is substantially simpler
+to formulate than methods based on graphical models – no
+need to explicitly design feature representations and detec-
+tors for parts; no need to explicitly design a model topology
+and interactions between joints. Instead, we show that a
+generic convolutional DNN can be learned for this problem.
+Further, we propose a cascade of DNN-based pose pre-
+dictors. Such a cascade allows for increased precision of
+1
+arXiv:1312.4659v3  [cs.CV]  20 Aug 2014
+
+joint localization. Starting with an initial pose estimation,
+based on the full image, we learn DNN-based regressors
+which reﬁnes the joint predictions by using higher resolu-
+tion sub-images.
+We show state-of-art results or better than state-of-art on
+four widely used benchmarks against all reported results.
+We show that our approach performs well on images of peo-
+ple which exhibit strong variation in appearance as well as
+articulations. Finally, we show generalization performance
+by cross-dataset evaluation.
+2. Related Work
+The idea of representing articulated objects in general,
+and human pose in particular, as a graph of parts has been
+advocated from the early days of computer vision [16]. The
+so called Pictorial Strictures (PSs), introduced by Fishler
+and Elschlager [8], were made tractable and practical by
+Felzenszwalb and Huttenlocher [6] using the distance trans-
+form trick. As a result, a wide variety of PS-based models
+with practical signiﬁcance were subsequently developed.
+The above tractability, however, comes with the limita-
+tion of having a tree-based pose models with simple binary
+potential not depending on image data. As a result, research
+has focused on enriching the representational power of the
+models while maintaining tractability. Earlier attempts to
+achieve this were based on richer part detectors [19, 1, 4].
+More recently, a wide variety of models expressing complex
+joint relationships were proposed. Yang and Ramanan [27]
+use a mixture model of parts. Mixture models on the full
+model scale, by having mixture of PSs, have been studied
+by Johnson and Everingham [13]. Richer higher-order spa-
+tial relationships were captured in a hierarchical model by
+Tian et al. [25]. A different approach to capture higher-
+order relationship is through image-dependent PS models,
+which can be estimated via a global classiﬁer [26, 20, 18].
+Approaches which ascribe to our philosophy of reason-
+ing about pose in a holistic manner have shown limited
+practicality. Mori and Malik [15] try to ﬁnd for each test
+image the closest exemplar from a set of labeled images
+and transfer the joint locations. A similar nearest neighbor
+setup is employed by Shakhnarovich et al. [21], who how-
+ever use locality sensitive hashing. More recently, Gkioxari
+et al. [10] propose a semi-global classiﬁer for part conﬁg-
+uration. This formulation has shown very good results on
+real-world data, however, it is based on linear classiﬁers
+with less expressive representation than ours and is tested
+on arms only. Finally, the idea of pose regression has been
+employed by Ionescu et al. [11], however they reason about
+3D pose.
+The closest work to ours uses convolution NNs together
+with Neighborhood Component Analysis to regress toward
+a point in an embedding representing pose [24]. However,
+this work does not employ a cascade of networks. Cascades
+of DNN regressors have been used for localization, however
+of facial points [22]. On the related problem of face pose
+estimation, Osadchy et al. [17] employ a NN-based pose
+embedding trained with a contrastive loss.
+3. Deep Learning Model for Pose Estimation
+We use the following notation. To express a pose, we en-
+code the locations of all k body joints in pose vector deﬁned
+as y = (. . . , yT
+i , . . .)T , i ∈{1, . . . , k}, where yi contains
+the x and y coordinates of the ith joint. A labeled image is
+denoted by (x, y) where x stands for the image data and y
+is the ground truth pose vector.
+Further, since the joint coordinates are in absolute image
+coordinates, it proves beneﬁcial to normalize them w. r. t. a
+box b bounding the human body or parts of it. In a trivial
+case, the box can denote the full image. Such a box is de-
+ﬁned by its center bc ∈R2 as well as width bw and height
+bh: b = (bc, bw, bh). Then the joint yi can be translated by
+the box center and scaled by the box size which we refer to
+as normalization by b:
+N(yi; b) =
+ 1/bw
+0
+0
+1/bh
+
+(yi −bc)
+(1)
+Further, we can apply the same normalization to the ele-
+ments of pose vector N(y; b) = (. . . , N(yi; b)T , . . .)T re-
+sulting in a normalized pose vector. Finally, with a slight
+abuse of notation, we use N(x; b) to denote a crop of the
+image x by the bounding box b, which de facto normalizes
+the image by the box. For brevity we denote by N(·) nor-
+malization with b being the full image box.
+3.1. Pose Estimation as DNN-based Regression
+In this work, we treat the problem of pose estimation as
+regression, where the we train and use a function ψ(x; θ) ∈
+R2k which for an image x regresses to a normalized pose
+vector, where θ denotes the parameters of the model. Thus,
+using the normalization transformation from Eq. (1) the
+pose prediction y∗in absolute image coordinates reads
+y∗= N −1(ψ(N(x); θ))
+(2)
+Despite its simple formulation, the power and complex-
+ity of the method is in ψ, which is based on a convolutional
+Deep Neural Network (DNN). Such a convolutional net-
+work consists of several layers – each being a linear trans-
+formation followed by a non-linear one. The ﬁrst layer takes
+as input an image of predeﬁned size and has a size equal to
+the number of pixels times three color channels. The last
+layer outputs the target values of the regression, in our case
+2k joint coordinates.
+We base the architecture of the ψ on the work by
+Krizhevsky et al. [14] for image classiﬁcation since it has
+shown outstanding results on object localization as well
+
+(xi, yi)
+(x(s-1)i, y (s-1) i)
+xsi - x(s-1)i
+ysi - y(s-1)i
+Initial stage
+Stage s
+send reﬁned values 
+to next stage
+220 x 220
+DNN-based regressor
+27 x 27 x 128
+13 x 13 x 192
+13 x 13 x192
+13 x 13 x192
+4096 
+4096 
+55 x 55 x 48
+xi
+yi
+...
+DNN-based reﬁner
+27 x 27 x 128
+13 x 13 x 192
+13 x 13 x192
+13 x 13 x192
+4096 
+4096 
+55 x 55 x 48
+Figure 2. Left: schematic view of the DNN-based pose regression. We visualize the network layers with their corresponding dimensions,
+where convolutional layers are in blue, while fully connected ones are in green. We do not show the parameter free layers. Right: at stage
+s, a reﬁning regressor is applied on a sub image to reﬁne a prediction from the previous stage.
+[23]. In a nutshell, the network consists of 7 layers (see
+Fig. 2 left). Denote by C a convolutional layer, by LRN
+a local response normalization layer, P a pooling layer
+and by F a fully connected layer. Only C and F layers
+contain learnable parameters, while the rest are parame-
+ter free. Both C and F layers consist of a linear trans-
+formation followed by a nonlinear one, which in our case
+is a rectiﬁed linear unit.
+For C layers, the size is de-
+ﬁned as width × height × depth, where the ﬁrst two di-
+mensions have a spatial meaning while the depth deﬁnes
+the number of ﬁlters. If we write the size of each layer in
+parentheses, then the network can be described concisely
+as C(55 × 55 × 96) −LRN −P −C(27 × 27 × 256) −
+LRN −P −C(13 × 13 × 384) −C(13 × 13 × 384) −
+C(13 × 13 × 256) −P −F(4096) −F(4096). The ﬁlter
+size for the ﬁrst two C layers is 11 × 11 and 5 × 5 and for
+the remaining three is 3 × 3. Pooling is applied after three
+layers and contributes to increased performance despite the
+reduction of resolution. The input to the net is an image
+of 220 × 220 which via stride of 4 is fed into the network.
+The total number of parameters in the above model is about
+40M. For further details, we refer the reader to [14].
+The use of a generic DNN architecture is motivated by
+its outstanding results on both classiﬁcation and localization
+problems. In the experimental section we show that such a
+generic architecture can be used to learn a model resulting
+in state-of-art or better performance on pose estimation as
+well. Further, such a model is a truly holistic one — the
+ﬁnal joint location estimate is based on a complex nonlinear
+transformation of the full image.
+Additionally, the use of a DNN obviates the need to de-
+sign a domain speciﬁc pose model. Instead such a model
+and the features are learned from the data. Although the re-
+gression loss does not model explicit interactions between
+joints, such are implicitly captured by all of the 7 hidden
+layers – all the internal features are shared by all joint re-
+gressors.
+Training
+The difference to [14] is the loss. Instead of a
+classiﬁcation loss, we train a linear regression on top of the
+last network layer to predict a pose vector by minimizing
+L2 distance between the prediction and the true pose vec-
+tor. Since the ground truth pose vector is deﬁned in abso-
+lute image coordinates and poses vary in size from image to
+image, we normalize our training set D using the normal-
+ization from Eq. (1):
+DN = {(N(x), N(y))|(x, y) ∈D}
+(3)
+Then the L2 loss for obtaining optimal network parameters
+reads:
+arg min
+θ
+X
+(x,y)∈DN
+k
+X
+i=1
+||yi −ψi(x; θ)||2
+2
+(4)
+For clarity we write out the optimization over individual
+joints.
+It should be noted, that the above objective can
+be used even if for some images not all joints are labeled.
+In this case, the corresponding terms in the sum would be
+omitted.
+The above parameters θ are optimized for using Back-
+propagation in a distributed online implementation.
+For
+each mini-batch of size 128, adaptive gradient updates are
+computed [3]. The learning rate, as the most important pa-
+rameter, is set to 0.0005. Since the model has large number
+of parameters and the used datasets are of relatively small
+size, we augment the data using large number of randomly
+translated image crops (see Sec. 3.2), left/right ﬂips as well
+as DropOut regularization for the F layers set to 0.6.
+3.2. Cascade of Pose Regressors
+The pose formulation from the previous section has the
+advantage that the joint estimation is based on the full im-
+age and thus relies on context. However, due to its ﬁxed
+input size of 220 × 220, the network has limited capacity
+to look at detail – it learns ﬁlters capturing pose properties
+at coarse scale. These are necessary to estimate rough pose
+but insufﬁcient to always precisely localize the body joints.
+Note that we cannot easily increase the input size since this
+
+will increase the already large number of parameters. In or-
+der to achieve better precision, we propose to train a cascade
+of pose regressors. At the ﬁrst stage, the cascade starts off
+by estimating an initial pose as outlined in the previous sec-
+tion. At subsequent stages, additional DNN regressors are
+trained to predict a displacement of the joint locations from
+previous stage to the true location. Thus, each subsequent
+stage can be thought of as a reﬁnement of the currently pre-
+dicted pose, as shown in Fig. 2.
+Further, each subsequent stage uses the predicted joint
+locations to focus on the relevant parts of the image – sub-
+images are cropped around the predicted joint location from
+previous stage and the pose displacement regressor for this
+joint is applied on this sub-image. In this way, subsequent
+pose regressors see higher resolution images and thus learn
+features for ﬁner scales which ultimately leads to higher
+precision.
+We use the same network architecture for all stages of
+the cascade but learn different network parameters.
+For
+stage s ∈{1, . . . , S} of total S cascade stages, we de-
+note by θs the learned network parameters.
+Thus, the
+pose displacement regressor reads ψ(x; θs).
+To reﬁne a
+given joint location yi we will consider a joint bounding
+box bi capturing the sub-image around yi: bi(y; σ) =
+(yi, σdiam(y), σdiam(y)) having as center the i-th joint
+and as dimension the pose diameter scaled by σ. The diam-
+eter diam(y) of the pose is deﬁned as the distance between
+opposing joints on the human torso, such as left shoulder
+and right hip, and depends on the concrete pose deﬁnition
+and dataset.
+Using the above notation, at the stage s = 1 we start with
+a bounding box b0 which either encloses the full image or
+is obtained by a person detector. We obtain an initial pose:
+Stage 1 :
+y1 ←N −1(ψ(N(x; b0); θ1); b0)
+(5)
+At each subsequent stage s ≥2, for all joints i ∈{1, . . . , k}
+we regress ﬁrst towards a reﬁnement displacement ys
+i −
+y(s−1)
+i
+by applying a regressor on the sub image deﬁned
+by b(s−1)
+i
+from previous stage (s −1). Then, we estimate
+new joint boxes bs
+i:
+Stage s:
+ys
+i ←y(s−1)
+i
++ N −1(ψi(N(x; b); θs); b)(6)
+for b = b(s−1)
+i
+bs
+i ←(ys
+i, σdiam(ys), σdiam(ys))
+(7)
+We apply the cascade for a ﬁxed number of stages S,
+which is determined as explained in Sec. 4.1.
+Training
+The network parameters θ1 are trained as
+outlined in Sec. 3.1, Eq. (4).
+At subsequent stages
+s
+≥
+2, the training is done identically with one im-
+portant difference.
+Each joint i from a training exam-
+ple (x, y) is normalized using a different bounding box
+(y(s−1)
+i
+, σdiam(y(s−1)), σdiam(y(s−1))) – the one cen-
+tered at the prediction for the same joint obtained from pre-
+vious stage – so that we condition the training of the stage
+based on the model from previous stage.
+Since deep learning methods have large capacity, we
+augment the training data by using multiple normalizations
+for each image and joint. Instead of using the prediction
+from previous stage only, we generate simulated predic-
+tions. This is done by randomly displacing the ground truth
+location for joint i by a vector sampled at random from a
+2-dimensional Normal distribution N (s−1)
+i
+with mean and
+variance equal to the mean and variance of the observed dis-
+placements (y(s−1)
+i
+−yi) across all examples in the train-
+ing data. The full augmented training data can be deﬁned
+by ﬁrst sampling an example and a joint from the original
+data at uniform and then generating a simulated prediction
+based on a sampled displacement δ from N (s−1)
+i
+:
+Ds
+A
+=
+{(N(x; b), N(yi; b))|
+(x, yi) ∼D, δ ∼N (s−1)
+i
+,
+b = (yi + δ, σdiam(y))}
+The training objective for cascade stage s is done as in
+Eq. (4) by taking extra care to use the correct normalization
+for each joint:
+θs = arg min
+θ
+X
+(x,yi)∈Ds
+A
+||yi −ψi(x; θ)||2
+2
+(8)
+4. Empirical Evaluation
+4.1. Setup
+Datasets
+There is a wide variety of benchmarks for hu-
+man pose estimation. In this work we use datasets, which
+have large number of training examples sufﬁcient to train a
+large model such as the proposed DNN, as well as are real-
+istic and challenging.
+The ﬁrst dataset we use is Frames Labeled In Cinema
+(FLIC), introduced by [20], which consists of 4000 train-
+ing and 1000 test images obtained from popular Hollywood
+movies. The images contain people in diverse poses and es-
+pecially diverse clothing. For each labeled human, 10 upper
+body joints are labeled.
+The second dataset we use is Leeds Sports Dataset [12]
+and its extension [13], which we will jointly denote by LSP.
+Combined they contain 11000 training and 1000 testing im-
+ages. These are images from sports activities and as such
+are quite challenging in terms of appearance and especially
+articulations. In addition, the majority of people have 150
+pixel height which makes the pose estimation even more
+challenging. In this dataset, for each person the full body is
+labeled with total 14 joints.
+For all of the above datasets, we deﬁne the diameter of a
+pose y to be the distance between a shoulder and hip from
+
+opposing sides and denote it by diam(y). It should be noted,
+that the joints in all datasets are arranged in a tree kinemat-
+ically mimicking the human body. This allows for a deﬁni-
+tion of a limb being a pair of neighboring joints in the pose
+tree.
+Metrics
+In order to be able to compare with published re-
+sults we will use two widely accepted evaluation metrics.
+Percentage of Correct Parts (PCP) measures detection rate
+of limbs, where a limb is considered detected if the distance
+between the two predicted joint locations and the true limb
+joint locations is at most half of the limb length [5]. PCP
+was the initially preferred metric for evaluation, however it
+has the drawback of penalizing shorter limbs, such as lower
+arms, which are usually harder to detect.
+To address this drawback, recently detection rates of
+joints are being reported using a different detection crite-
+rion – a joint is considered detected if the distance between
+the predicted and the true joint is within a certain fraction of
+the torso diameter. By varying this fraction, detection rates
+are obtained for varying degrees of localization precision.
+This metric alleviates the drawback of PCP since the de-
+tection criteria for all joints are based on the same distance
+threshold. We refer to this metric as Percent of Detected
+Joints (PDJ).
+Experimental Details
+For all the experiments we use the
+same network architecture. Inspired by [7], we use a body
+detector on FLIC to obtain initially a rough estimate of the
+human body bounding box. It is based on a face detector –
+the detected face rectangle is enlarged by a ﬁxed scaler. This
+scaler is determined on the training data such that it contains
+all labeled joints. This face-based body detector results in
+a rough estimate, which however presents a good starting
+point for our approach. For LSP we use the full image as
+initial bounding box since the humans are relatively tightly
+cropped by design.
+Using a small held-out set of 50 images for both datasets
+to determine the algorithm hyperparameters. To measure
+optimality of the parameters we used average over PDJ at
+0.2 across all joints. The scaler σ, which deﬁnes the size of
+the reﬁnement joint bounding box as a fraction of the pose
+size, is determined as follows: for FLIC we chose σ = 1.0
+after exploring values {0.8, 1.0, 1.2}, for LSP we use σ =
+2.0 after trying {1.5, 1.7, 2.0, 2.3}. The number of cascade
+stages S is determined by training stages until the algorithm
+stopped improving on the held-out set. For both FLIC and
+LSP we arrived at S = 3.
+To improve generalization, for each cascade stage start-
+ing at s = 2 we augment the training data by sampling 40
+randomly translated crop boxes for each joint as explained
+in Sec. 3.2. Thus, for LSP with 14 joints and after mirror-
+ing the images and sampling the number training examples
+is 11000 × 40 × 2 × 14 = 12M, which is essential for
+training a large network as ours.
+The presented algorithm allows for an efﬁcient imple-
+mentation. The running time is approx. 0.1s per image,
+as measured on a 12 core CPU. This compares favorably
+to other approaches, as some of the current state-of-art ap-
+proaches have higher complexity: [20] runs in approx. 4s,
+while [27] runs in 1.5s. The training complexity, however,
+is higher. The initial stage was trained within 3 days on
+approx. 100 workers, most of the ﬁnal performance was
+achieved after 12 hours though. Each reﬁnement stage was
+trained for 7 days since the amount of data was 40× larger
+than the one for the initial stage due to the data augmenta-
+tion in Sec. 3.2. Note that using more data led to increased
+performance.
+4.2. Results and Discussion
+Comparisons
+We present comparative results to other ap-
+proaches. We compare on LSP using PCP metric in Fig. 1.
+We show results for the four most challenging limbs – lower
+and upper arms and legs – as well as the average value
+across these limbs for all compared algorithms. We clearly
+outperform all other approaches, especially achieving bet-
+ter estimation for legs. For example, for upper legs we ob-
+tain 0.78 up from 0.74 for the next best performing method.
+It is worth noting that while the other approaches exhibit
+strengths for particular limbs, none of the other dataset con-
+sistently dominates across all limbs. In contrary, DeepPose
+shows strong results for all challenging limbs.
+Using the PDJ metric allows us to vary the threshold for
+the distance between prediction and ground truth, which de-
+ﬁnes a detection. This threshold can be thought of as a
+localization precision at which detection rates are plotted.
+Thus one could compare approaches across different de-
+sired precisions. We present results on FLIC in Fig. 3 com-
+paring against additional four methods as well is on LSP in
+Fig. 4. For each dataset we train and test according the pro-
+tocol for each dataset. Similarly to previous experiment we
+outperform all ﬁve algorithms. Our gains are bigger in the
+low precision domain, in the cases where we detect rough
+pose without precisely localizing the joints. On FLIC, at
+normalized distance 0.2 we obtain a an increase of detection
+rates by 0.15 and 0.2 for elbow and wrists against the next
+best performing method. On LSP, at normalized distance
+0.5 we get an absolute increase of 0.1. At low precision
+regime of normalized distance of 0.2 for LSP we show com-
+parable performance for legs and slightly worse arms. This
+can be attributed to the fact that the DNN-based approach
+computes joint coordinates using 7 layers of transformation,
+some of which contain max pooling.
+Another observation is that our approach works well for
+both appearance heavy movie data as well as string articu-
+lation such as the sports images in LSP.
+Effects of cascade-based reﬁnement
+A single DNN-
+based joint regressor gives rough joint location. However,
+
+0
+0.05
+0.1
+0.15
+0.2
+0.1
+0.3
+0.5
+0.7
+0.9
+Elbows
+Normalized distance to true joint
+Detection rate
+ 
+ 
+DeepPose
+MODEC
+Eichner et al.
+Yang et al.
+Sapp et al.
+0
+0.05
+0.1
+0.15
+0.2
+0.1
+0.3
+0.5
+0.7
+0.9
+Wrists
+Normalized distance to true joint
+Detection rate
+Figure 3. Percentage of detected joints (PDJ) on FLIC for two joints: elbow and wrist. We compare DeepPose, after two cascade stages,
+with four other approaches.
+Method
+Arm
+Leg
+Ave.
+Upper
+Lower
+Upper
+Lower
+DeepPose-st1
+0.5
+0.27
+0.74
+0.65
+0.54
+DeepPose-st2
+0.56
+0.36
+0.78
+0.70
+0.60
+DeepPose-st3
+0.56
+0.38
+0.77
+0.71
+0.61
+Dantone et al. [2]
+0.45
+0.25
+0.65
+0.61
+0.49
+Tian et al. [25]∗
+0.52
+0.33
+0.70
+0.60
+0.56
+Johnson et al. [13]
+0.54
+0.38
+0.75
+0.66
+0.58
+Wang et al. [26]∗
+0.565
+0.37
+0.76
+0.68
+0.59
+Pishchulin [18]◦
+0.49
+0.32
+0.74
+0.70
+0.56
+Table 1. Percentage of Correct Parts (PCP) at 0.5 on LSP for Deep-
+Pose as well as ﬁve state-of-art approaches.
+∗The authors use a
+slightly looser version of PCP in which for each limb the average
+distance from predicted limb joints belonging to the correspond-
+ing true joints is used to determine whether the limb is correctly
+detected. ◦The authors use person-centric joint annotations.
+0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.1
+0.3
+0.5
+0.7
+0.9
+Arms
+Normalized distance to true joint
+Detection rate
+ 
+ 
+DeepPose − wrists
+DeepPose − elbows
+Dantone et al. − wrists
+Dantone et al. − elbows
+0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.1
+0.3
+0.5
+0.7
+0.9
+Legs
+Normalized distance to true joint
+Detection rate
+ 
+ 
+DeepPose − ankle
+DeepPose − knee
+Dantone et al. − ankle
+Dantone et al. − knee
+Figure 4.
+Percentage of detected joints (PDJ) on LSP for four
+limbs for DeepPose and Dantone et al. [2] over an extended range
+of distances to true joint: [0, 0.5] of the torso diameter. Results of
+DeepPose are plotted with solid lines while all the results by [2]
+are plotted in dashed lines. Results for the same joint from both
+algorithms are colored with same color.
+to obtain higher precision the subsequent stages of the cas-
+cade, which serve as a reﬁnement of the initial prediction,
+are of paramount importance.
+To see this, in Fig. 5 we
+present the joint detections at different precisions for the ini-
+tial prediction as well as two subsequent cascade stages. As
+expected, we can see that the major gains of the reﬁnement
+0
+0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4
+0.1
+0.3
+0.5
+0.7
+0.9
+Wrists
+Normalized distance to true joint
+Detection rate
+ 
+ 
+DeepPose − initial stage 1
+DeepPose − stage 2
+DeepPose − stage 3
+0
+0.05
+0.1
+0.15
+0.2
+0.25
+0.3
+0.35
+0.4
+0.1
+0.3
+0.5
+0.7
+0.9
+Elbows
+Normalized distance to true joint
+Detection rate
+Figure 5. Percent of detected joints (PDJ) on FLIC or the ﬁrst three
+stages of the DNN cascade. We present results over larger spec-
+trum of normalized distances between prediction and ground truth.
+procedure are at high-precision regime of at normalized dis-
+tances of [0.15, 0.2]. Further, the major gains are achieved
+after one stage of reﬁnement. The reason being that subse-
+quent stages end up using smaller sub-images around each
+joint. And although the subsequent stages look at higher
+resolution inputs, they have more limited context.
+Examples of cases, where reﬁnement helps, are visual-
+ized in Fig. 6. The initial stage is usually successful at es-
+timating a roughly correct pose, however, this pose is not
+”snapped” to the correct one. For example, in row three the
+pose has the right shape but incorrect scale. In the second
+row, the predicted pose is translated north from the ideal
+one. In most cases, the second stage of the cascade resolves
+this snapping problem and better aligns the joints. In more
+rare cases, such as in ﬁrst row, further facade stages improve
+on individual joints.
+Cross-dataset Generalization
+To evaluate the general-
+ization properties of our algorithm, we used the trained
+models on LSP and FLIC on two related datasets. The full-
+body model trained on LSP is tested on the test portion of
+the Image Parse dataset [19] with results presented in Ta-
+ble 2. The ImageParse dataset is similar to LSP as it con-
+tains people doing sports, however it contains a lot of peo-
+ple from personal photo collections involved in other activ-
+ities. Further, the upper-body model trained on FLIC was
+applied on the whole Buffy dataset [7]. We can see that our
+
+Initial stage 1
+stage 2
+stage 3
+Figure 6. Predicted poses in red and ground truth poses in green
+for the ﬁrst three stages of a cascade for three examples.
+0
+0.05
+0.1
+0.15
+0.2
+0.1
+0.3
+0.5
+0.7
+0.9
+Elbows
+Normalized distance to true joint
+Detection rate
+ 
+ 
+Eichner et al.
+Yang et al.
+Sapp et al.
+MODEC
+DeepPose
+0
+0.05
+0.1
+0.15
+0.2
+0.1
+0.3
+0.5
+0.7
+0.9
+Wrists
+Normalized distance to true joint
+Detection rate
+Figure 7.
+Percentage of detected joints (PDJ) on Buffy dataset
+for two joints: elbow and wrist. The models have been trained on
+FLIC. We compare DeepPose, after two cascade stages, with four
+other approaches.
+Method
+Arm
+Leg
+Ave.
+Upper
+Lower
+Upper
+Lower
+DeepPose
+0.8
+0.75
+0.71
+0.5
+0.69
+Pishchulin [18]
+0.80
+0.70
+0.59
+037
+0.62
+Johnson et al. [13]
+0.75
+0.67
+0.67
+0.46
+0.64
+Yang et al. [27]
+0.69
+0.64
+0.55
+0.35
+0.56
+Table 2. Percentage of Correct Parts (PCP) at 0.5 on Image Parse
+dataset for DeepPose as well as two state-of-art approaches on Im-
+age Parse dataset. Results obtained from [18].
+approach can retain state-of-art performance compared to
+other approaches. This shows good generalization abilities.
+Example poses
+To get a better idea of the performance of
+our algorithm, we visualize a sample of estimated poses on
+images from LSP in Fig. 8. We can see that our algorithm is
+able to get correct pose for most of the joints under variety
+of conditions: upside-down people (row 1, column 1), se-
+vere foreshortening (row1, column 3), unusual poses (row
+3, column 5), occluded limbs as the occluded arms in row
+3, columns 2 and 6, unusual illumination conditions (row 3,
+column 3). In most of the cases, when the estimated pose is
+not precise, it still has a correct shape. For example, in the
+last row some of the predicted limbs are not aligned with
+the true locations, however the overall shape of the pose is
+correct. A common failure mode is confusing left with right
+side when the person was photographed from the back (row
+6, column 6). Results on FLIC (see Fig. 9) are usually better
+with occasional visible mistakes on lower arms.
+5. Conclusion
+We present, to our knowledge, the ﬁrst application of
+Deep Neural Networks (DNNs) to human pose estimation.
+Our formulation of the problem as DNN-based regression to
+joint coordinates and the presented cascade of such regres-
+sors has the advantage of capturing context and reasoning
+about pose in a holistic manner. As a result, we are able to
+achieve state-of-art or better results on several challenging
+academic datasets.
+Further, we show that using a generic convolutional neu-
+ral network, which was originally designed for classiﬁca-
+tion tasks, can be applied to the different task of localiza-
+tion. In future, we plan to investigate novel architectures
+which could be potentially better tailored towards localiza-
+tion problems in general, and in pose estimation in particu-
+lar.
+Acknowledgements
+I would like to thank Luca Bertelli,
+Ben Sapp and Tianli Yu for assistance with data and fruitful
+discussions.
+References
+[1] M. Andriluka, S. Roth, and B. Schiele. Pictorial structures
+revisited: People detection and articulated pose estimation.
+In CVPR, 2009.
+[2] M. Dantone, J. Gall, C. Leistner, and L. Van Gool. Human
+pose estimation using body parts dependent joint regressors.
+In CVPR, 2013.
+[3] J. Duchi, E. Hazan, and Y. Singer.
+Adaptive subgradient
+methods for online learning and stochastic optimization. In
+COLT. ACL, 2010.
+[4] M. Eichner and V. Ferrari.
+Better appearance models for
+pictorial structures. 2009.
+[5] M. Eichner, M. Marin-Jimenez, A. Zisserman, and V. Ferrari.
+Articulated human pose estimation and search in (almost)
+unconstrained still images.
+ETH Zurich, D-ITET, BIWI,
+Technical Report No, 272, 2010.
+[6] P. F. Felzenszwalb and D. P. Huttenlocher. Pictorial struc-
+tures for object recognition. International Journal of Com-
+puter Vision, 61(1):55–79, 2005.
+[7] V. Ferrari, M. Marin-Jimenez, and A. Zisserman. Progressive
+search space reduction for human pose estimation. In CVPR,
+2008.
+[8] M. A. Fischler and R. A. Elschlager. The representation and
+matching of pictorial structures. Computers, IEEE Transac-
+tions on, 100(1):67–92, 1973.
+
+Figure 8. Visualization of pose results on images from LSP. Each pose is represented as a stick ﬁgure, inferred from predicted joints.
+Different limbs in the same image are colored differently, same limb across different images has the same color.
+Figure 9. Visualization of pose results on images from FLIC. Meaning of stick ﬁgures is the same as in Fig. 8 above.
+[9] R. Girshick, J. Donahue, T. Darrell, and J. Malik. Rich fea-
+ture hierarchies for accurate object detection and semantic
+segmentation. In CVPR, 2014.
+[10] G. Gkioxari, P. Arbel´aez, L. Bourdev, and J. Malik. Articu-
+lated pose estimation using discriminative armlet classiﬁers.
+In CVPR, 2013.
+[11] C. Ionescu, F. Li, and C. Sminchisescu. Latent structured
+models for human pose estimation. In ICCV, 2011.
+[12] S. Johnson and M. Everingham. Clustered pose and nonlin-
+ear appearance models for human pose estimation. In BMVC,
+2010.
+[13] S. Johnson and M. Everingham. Learning effective human
+pose estimation from inaccurate annotation. In CVPR, 2011.
+[14] A. Krizhevsky, I. Sutskever, and G. Hinton. Imagenet clas-
+siﬁcation with deep convolutional neural networks. In NIPS,
+2012.
+[15] G. Mori and J. Malik. Estimating human body conﬁgurations
+using shape context matching. In ECCV, 2002.
+[16] R. Nevatia and T. O. Binford. Description and recognition of
+curved objects. Artiﬁcial Intelligence, 8(1):77–98, 1977.
+[17] M. Osadchy, Y. LeCun, and M. L. Miller. Synergistic face
+detection and pose estimation with energy-based models.
+The Journal of Machine Learning Research, 8:1197–1215,
+2007.
+[18] L. Pishchulin, M. Andriluka, P. Gehler, and B. Schiele. Pose-
+let conditioned pictorial structures. In CVPR, 2013.
+[19] D. Ramanan. Learning to parse images of articulated bodies.
+In NIPS, 2006.
+[20] B. Sapp and B. Taskar. Modec: Multimodal decomposable
+models for human pose estimation. In CVPR, 2013.
+[21] G. Shakhnarovich, P. Viola, and T. Darrell. Fast pose estima-
+tion with parameter-sensitive hashing. In CVPR, 2003.
+[22] Y. Sun, X. Wang, and X. Tang.
+Deep convolutional net-
+work cascade for facial point detection. In Computer Vision
+and Pattern Recognition (CVPR), 2013 IEEE Conference on,
+pages 3476–3483. IEEE, 2013.
+
+[23] C. Szegedy, A. Toshev, and D. Erhan. Object detection via
+deep neural networks. In NIPS 26, 2013.
+[24] G. W. Taylor, R. Fergus, G. Williams, I. Spiro, and C. Bre-
+gler. Pose-sensitive embedding by nonlinear nca regression.
+In NIPS, 2010.
+[25] Y. Tian, C. L. Zitnick, and S. G. Narasimhan. Exploring the
+spatial hierarchy of mixture models for human pose estima-
+tion. In ECCV, 2012.
+[26] F. Wang and Y. Li. Beyond physical connections: Tree mod-
+els in human pose estimation. In CVPR, 2013.
+[27] Y. Yang and D. Ramanan. Articulated pose estimation with
+ﬂexible mixtures-of-parts. In CVPR, 2011.

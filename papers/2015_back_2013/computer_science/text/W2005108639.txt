@@ -1,0 +1,2183 @@
+arXiv:1208.1977v3  [cs.IT]  15 Apr 2013
+1
+Ofﬂoading in Heterogeneous Networks: Modeling,
+Analysis, and Design Insights
+Sarabjot Singh, Student Member, IEEE, Harpreet S. Dhillon, Student Member, IEEE,
+and Jeffrey G. Andrews, Fellow, IEEE
+Abstract—Pushing data trafﬁc from cellular to WiFi is an
+example of inter radio access technology (RAT) ofﬂoading. While
+this clearly alleviates congestion on the over-loaded cellular
+network, the ultimate potential of such ofﬂoading and its effect
+on overall system performance is not well understood. To address
+this, we develop a general and tractable model that consists of M
+different RATs, each deploying up to K different tiers of access
+points (APs), where each tier differs in transmit power, path
+loss exponent, deployment density and bandwidth. Each class of
+APs is modeled as an independent Poisson point process (PPP),
+with mobile user locations modeled as another independent PPP,
+all channels further consisting of i.i.d. Rayleigh fading. The
+distribution of rate over the entire network is then derived for a
+weighted association strategy, where such weights can be tuned
+to optimize a particular objective. We show that the optimum
+fraction of trafﬁc ofﬂoaded to maximize SINR coverage is not
+in general the same as the one that maximizes rate coverage,
+deﬁned as the fraction of users achieving a given rate.
+I. INTRODUCTION
+Wireless networks are facing explosive data demands driven
+largely by video. While operators continue to rely on their
+(macro) cellular networks to provide wide-area coverage,
+they are eager to ﬁnd complementary alternatives to ease
+the pressure, especially in areas where subscriber density is
+high. Complementing the fast evolving heterogeneous cellular
+networks (HCNs) [2] with the already widely deployed WiFi
+APs is very attractive to operators and a key aspect of their
+strategy [3]. In fact, WiFi access points (APs) along with
+femtocells are projected to carry over 60% of all the global
+data trafﬁc by 2015 [4]. A future wireless heterogeneous
+network (HetNet) can be envisioned to have operator-deployed
+macro base stations (BSs) providing a coverage blanket, along
+with pico BSs, low powered user-deployed femtocells and
+user/operator-deployed low powered WiFi APs.
+A. Motivation and Related Work
+Aggressively ofﬂoading mobile users from macro BSs to
+smaller BSs like WiFi hotspots, however, can lead to degrada-
+tion of user-speciﬁc as well as network wide performance. For
+example, a WiFi AP with excellent signal strength may suffer
+from heavy load or have less effective bandwidth (channels),
+thus reducing the effective rate it can serve at [5]. On the other
+This work has been supported by the Intel-Cisco Video Aware Wireless
+Networks (VAWN) program and NSF grant CIF-1016649. A part of this paper
+is accepted for presentation at IEEE ICC 2013 in Budapest, Hungary [1].
+The authors are with Wireless Networking and Communications Group
+(WNCG), The University of Texas at Austin (email: sarabjot@utexas.edu,
+dhillon@utexas.edu, jandrews@ece.utexas.edu).
+hand, a conservative approach may result in load disparity,
+which not only leads to underutilization of resources but also
+degrades the performance of multimedia applications due to
+bursty interference caused by the lightly loaded APs [6].
+Clearly, in such cases any ofﬂoading strategy agnostic to these
+conditions is undesirable, which emphasizes the importance of
+more adaptive ofﬂoading strategies.
+RAT selection has been studied extensively in earlier works
+both from centralized as well as decentralized aspects (see
+[7] for a survey). Fully centralized schemes, such as in [8]–
+[10], try to maximize a network wide utility as a solution to
+the association optimization problem. Decentralized schemes
+have been studied from game theoretic approaches in [11]–
+[13] and as heuristic randomized algorithms in [14]. However
+most of these works focused on ﬂow level assignment and
+lacked explicit spatial location modeling of the APs and users
+and the corresponding impact on association. The presented
+work is more similar to “cell breathing” [15]–[17], wherein the
+BS association regions are expanded or shrunk depending on
+the load. Contemporary cellular standards like LTE use a cell
+breathing approach to address the problem of load balancing
+in HCNs through cell range expansion (CRE) [2], [18] where
+users are ofﬂoaded to smaller cells using an association bias. A
+positive association bias implies that a user would be ofﬂoaded
+to a smaller BS as soon as the received power difference from
+the macro and small BS drops below the bias value. The
+presented work employs CRE to tune the aggressiveness of
+ofﬂoading from one RAT to another in HetNets. Tools from
+Poisson point process (PPP) theory and stochastic geometry
+[19] allow us to quantify the optimal association bias of each
+constituent tier of each RAT, which maximizes the fraction of
+time a typical user in the network is served with a rate greater
+than its minimum rate requirement.
+The metric of rate coverage used in this paper, which
+signiﬁes the fraction of user population able to meet their rate
+thresholds, captures the inelasticity of trafﬁc such as video
+services [20], whereas traditional utility based metrics are
+more suitable for elastic trafﬁc with no hard rate thresholds.
+There has been considerable advancement in the theory of
+HCNs [21]–[23] whereby the locations of APs of each tier are
+assumed to form a homogeneous PPP. The case of modeling
+macro cellular networks using a PPP has been strengthened
+through empirical validation in [24] and theoretical validation
+in [25]. Load distribution was derived for macro cellular
+networks in [26] and an empirical ﬁtting based approach
+was proposed in [27] for association area distribution in a
+two-tier cellular network. See [6], [28], [29] for a spectral
+
+2
+efﬁciency analysis, where load is modeled through activity
+of AP queues. While the PPP assumption offers attractive
+tractability in modeling interference and hence the signal-to-
+interference-and-noise ratio (SINR) in HetNets, the distribution
+of rate has been elusive. Superposition of point processes, each
+denoting a class1 of APs, leads to the formation of disparate
+association regions (and hence load distribution) due to the
+unequal transmit powers, path loss exponents and association
+weights among different classes of APs. Thus, resolving to
+complicated system level simulations for investigating impact
+of various wireless algorithms on rate, even for preliminary
+insights, is not uncommon. One of the goals of this paper
+is to bridge this gap and provide a tractable framework for
+deriving the rate distribution in HetNets.
+B. Contributions
+The contributions of this paper can be categorized under
+two main headings.
+1) Modeling and Analysis. A general M-RAT K-tier
+HetNet model is proposed with each class of APs drawn
+from a homogeneous PPP. This is similar to [21]–[23]
+with the key difference being the APs of a RAT act as
+interferers to only the user associated with that RAT.
+For example, cellular BSs do not interfere with the
+users associated with a WiFi AP and vice versa. The
+proposed model is validated by comparing the analytical
+results with those of a realistic multi-RAT deployment
+in Section III-E.
+Association Regions in HetNet: Based on the weighted
+path loss based association used in this work, the tes-
+sellation formed by association regions of APs (region
+served by the AP) is characterized as a general form
+of the multiplicatively weighted Poisson Voronoi (PV).
+Much progress has been made in modeling the area of
+Poisson Voronoi, see [30]–[32] and references therein,
+however that of a general multiplicatively weighted PV
+is an open problem. We propose an analytic approxima-
+tion for characterizing the association areas (and hence
+the load) of an AP, which is shown to be quite accurate
+in the context of rate coverage.
+Rate Distribution in HetNet: We derive the rate com-
+plementary cumulative distribution function (CCDF) of
+a typical user in the presented HetNet setting in Section
+III. Rate distribution incorporates congestion in addition
+to the proximity effects that may not be accurately
+captured by the SINR distribution alone. Under certain
+plausible scenarios the derived expression is in closed
+form and provides insight into system design.
+2) System Design Insights. This work allows the inter-
+RAT ofﬂoading to be seen through the prism of associa-
+tion bias wherein the bias can be tuned to suit a network
+wide objective. We present the following insights in
+Section IV and V.
+SINR Coverage: The probability that a randomly located
+user has SINR greater than an arbitrary threshold is
+1A class refers to a distinct RAT-tier pair.
+called SINR coverage; equivalently this is the CCDF of
+SINR. In a simpliﬁed two-RAT scenario, e.g. cellular
+and WiFi, it is shown that the optimal amount of trafﬁc
+to be ofﬂoaded, from one to another, depends solely on
+their respective SINR thresholds. The optimal association
+bias, however, is shown to be inversely proportional to
+the density and transmit power of the corresponding
+RAT. The maximum SINR coverage under the optimal
+association bias is then shown to be independent of the
+density of APs in the network.
+Rate Coverage: The probability that a randomly located
+user has rate greater than an arbitrary threshold is called
+rate coverage; equivalently this is the CCDF of rate. We
+show that the amount of trafﬁc to be routed through
+a RAT for maximizing rate coverage can be found
+analytically and depends on the ratio of the respective re-
+sources/bandwidth at each RAT and the user’s respective
+rate (QoS) requirements. Speciﬁcally, higher the corre-
+sponding ratio, the more trafﬁc should be routed through
+the corresponding RAT. Also, unlike SINR coverage, the
+optimal trafﬁc ofﬂoad fraction increases with the density
+of the corresponding RAT. Further, the rate coverage
+always increases with the density of the infrastructure.
+II. SYSTEM MODEL
+The system model in this paper considers up to a K-tier
+deployment of the APs for each of the M-RATs. The set of
+APs belonging to the same RAT operate in the same spectrum
+and hence do not interfere with the APs of other RATs.
+The locations of the APs of the kth tier of the mth RAT
+are modeled as a 2-D homogeneous PPP, Φmk, of density
+(intensity) λmk. Also, for every class (m, k) there might
+be BSs allowing no access (closed access) and thus acting
+only as interferers. For example, subscribers of a particular
+operator are not able to connect to another operator’s WiFi
+APs but receive interference from them. Such closed access
+APs are modeled as an independent tier (k′) with PPP Φmk′ of
+density λmk′ . The set of all such pairs with non-zero densities
+in the network is denoted by V
+≜SM
+m=1
+S
+k∈Vm(m, k)
+with Vm denoting the set of all the tiers of RAT-m, i.e.,
+Vm = {k : λmk + λmk′ ̸= 0}. Similarly, Vo
+m and Vc
+m is
+used to denote the set of open and closed access tiers of
+RAT-m, respectively. Further, the set of open access classes of
+APs is Vo ≜SM
+m=1
+S
+k∈Vo
+m(m, k). The users in the network
+are assumed to be distributed according to an independent
+homogeneous PPP Φu with density λu.
+Every AP of (m, k) transmits with the same transmit
+power Pmk over bandwidth Wmk. The downlink desired and
+interference signals are assumed to experience path loss with
+a path loss exponent αk for the corresponding tier k. The
+power received at a user from an AP of (m, k) at a distance x
+is Pmkhx−αk where h is the channel power gain. The random
+channel gains are Rayleigh distributed with average power of
+unity, i.e., h ∼exp(1). The general fading distributions can
+be considered at some loss of tractability [33]. The noise is
+assumed additive with power σ2
+m corresponding to the mth
+RAT. Readers can refer to Table I for quick access to the
+
+3
+TABLE I: Notation Summary
+Notation
+Description
+M
+Maximum number of RATs in the network
+K
+Maximum number of tiers of a RAT
+(m, k)
+Pair denoting the kth tier of the mth RAT
+V; Vo
+The set of classes of APs SM
+m=1
+S
+k∈Vm(m, k),
+where Vm = {k : λmk + λmk′ ̸= 0}; the set of
+open access classes of APs SM
+m=1
+S
+k∈Vom(m, k),
+where Vo
+m = {k : λmk ̸= 0}
+Φmk; Φmk′ ; Φu
+PPP of the open access APs of (m, k); PPP of the
+closed access APs of (m, k); PPP of the mobile
+users
+λmk; λmk′ ; λu
+Density of open access APs of (m, k); density of
+closed access APs of (m, k); density of mobile
+users
+Tmk; ˆTmk
+Association weight for (m, k); normalized (divided
+by that of the serving AP) association weight for
+(m, k)
+Pmk; ˆPmk
+Transmit power of APs of (m, k), speciﬁcally
+Pm1 = 53 dBm, Pm2 = 33 dBm, Pm3 = 23
+dBm; normalized transmit power of APs of (m, k)
+Bmk; ˆBmk
+Association bias for (m, k); normalized association
+bias for (m, k).
+αk; ˆαk
+Path loss exponent of kth tier; normalized path loss
+exponent of kth tier
+σ2
+m
+Thermal noise power corresponding to mth RAT
+Wmk
+Effective bandwidth at an AP of (m, k)
+τmk
+SINR threshold of user when associated with
+(m, k)
+ρmk
+Rate threshold of user when associated with (m, k)
+Nmk
+Load (number of users) associated with an AP of
+(m, k)
+Cmk
+Association area of a typical AP of (m, k)
+Smk; S
+SINR coverage of user when associated with
+(m, k); overall SINR coverage of user
+Rmk; R
+Rate coverage of user when associated with
+(m, k); overall rate coverage of user
+notation used in this paper. In the table and the rest of the
+paper, the normalized value of a parameter of a class is its
+value divided by the value it takes for the class of the serving
+AP.
+A. User Association
+For the analysis that follows, let Zmk denote the distance
+of a typical user from the nearest AP of (m, k). In this paper,
+a general association metric is used in which a mobile user is
+connected to a particular RAT-tier pair (i, j) if
+(i, j) = arg
+max
+(m,k)∈Vo TmkZ−αk
+mk ,
+(1)
+where Tmk is the association weight for (m, k) and ties are
+broken arbitrarily. These association weights can be tuned
+to suit a certain network-wide objective. As an example, if
+T1k ≫T2k, then more trafﬁc is routed through RAT-1 as
+compared to RAT-2. Special cases for the choice of association
+weights, Tmk, include:
+• Tmk = 1: the association is to the nearest base station.
+• Tmk = PmkBmk: is the cell range expansion (CRE)
+technique [2] wherein the association is based on the
+maximum biased received power, with Bmk denoting the
+association bias corresponding to (m, k).
+• Further, if Bmk ≡1, then the association is based on
+maximum received power.
+Note that “≡” is henceforth used to assign the same value
+to a parameter for all classes of APs, i.e., xmk ≡c is
+equivalent to xmk = c ∀(m, k) ∈V. The optimal association
+weights maximizing rate coverage would depend on load,
+SINR, transmit powers, densities, respective bandwidths, and
+path loss exponents of AP classes in the network. Further
+discussion on the design of optimal association weights is
+deferred to Section IV. For notational brevity the normalized
+parameters of (m, k), conditioned on (i, j) being the serving
+class, are
+ˆTmk ≜Tmk
+Tij
+, ˆPmk ≜Pmk
+Pij
+, ˆBmk ≜Bmk
+Bij
+, ˆαk ≜αk
+αj
+.
+The association model described above leads to the forma-
+tion of association regions in the Euclidean plane as described
+below.
+Deﬁnition 1. Association region of an AP is the region of
+the Euclidean plane in which all users are served by the
+corresponding AP. Mathematically, the association region of
+an AP of class (i, j) located at x is
+Cxij =
+(
+y ∈R2 : ∥y−x∥≤
+ Tij
+Tmk
+1/αj
+∥y−X∗
+mk(y)∥ˆαk
+∀(m, k) ∈Vo
+)
+,
+(2)
+where X∗
+mk(y) = arg min
+x∈Φmk ∥y −x∥.
+The readers familiar with the ﬁeld of spatial tessellations
+would recognize that the random tessellation formed by the
+collection {Cxij} of association regions is a general case of
+the circular Dirichlet tessellation [34]. The circular Dirichlet
+tessellation (also known as multiplicatively weighted Voronoi)
+is the special case of the presented model with equal path loss
+coefﬁcients. Fig. 1 shows the association regions with two
+classes of APs in the network (V = {(1, 1); (2, 3)}, say) for
+two ratios of association weights T11
+T23 = 20 dB and T11
+T23 = 10
+dB. The path loss exponent is αk ≡3.5.
+B. Resource Allocation
+A saturated resource allocation model is assumed in the
+downlink of all the APs. This assumption implies that each
+AP always has data to transmit to its associated mobile users
+and hence users can be allocated more rate than their rate
+thresholds. Under the assumed resource allocation, each user
+receives rate proportional to its link’s spectral efﬁciency. Thus,
+the rate of a user associated with (i, j) is given by
+Rij = Wij
+Nij
+log (1 + SINRij) ,
+(3)
+where Nij denotes the total number of users served by the
+AP, henceforth referred to as the load. The presented rate
+model captures both the congestion effect (through load) and
+proximity effect (through SINR). For 4G cellular systems, this
+rate allocation model has the interpretation of scheduler allo-
+cating the OFDMA resources “fairly” among users. For 802.11
+CSMA networks, assuming equal channel access probabilities
+
+4
+Association region expansion
+Fig. 1: Association regions of a network with
+V
+=
+{(1, 1); (2, 3)}. The APs of (1, 1) are shown as hollow circles
+and those of (2, 3) are shown as solid diamonds. Solid lines
+show the association regions with T11
+T23 = 20 dB and dotted
+lines show the expanded association regions of (2, 3) resulting
+from the use of T11
+T23 = 10 dB.
+[10], [14] across associated users, leads to the rate model (3).
+Although the above mentioned resource allocation strategy is
+assumed in the paper, the ensuing analysis can be extended to
+a RAT-speciﬁc resource allocation methodology as well.
+III. RATE COVERAGE
+This section derives the rate coverage and is the main
+technical section of the paper. The rate coverage is deﬁned
+as
+R ≜P(R > ρ),
+(4)
+and can be thought of equivalently as: (i) the probability that
+a randomly chosen user can achieve a target rate ρ, (ii) the
+average fraction of users in the network that achieve rate ρ, or
+(iii) the average fraction of the network area that is receiving
+rate greater than ρ.
+A. Load Characterization
+This section analyzes the load, which is crucial to get a
+handle on the rate distribution. The following analysis uses
+the notion of typicality, which is made rigorous using Palm
+theory [19, Chapter 4].
+Lemma 1. The load at a typical AP of (i, j) has the proba-
+bility generating function (PGF) given by
+GNij(z) = E [exp (λuCij (z −1))],
+(5)
+where Cij is the association area of a typical AP of (i, j).
+Proof: We consider the process Φij ∪{0} obtained by
+adding an AP of (i, j) at the origin of the coordinate system,
+which is the typical AP under consideration. This is allowed
+by Slivnyak’s theorem [19], which states that the properties
+observed by a typical2 point of the PPP, Φij, is same as those
+2The term typical and random are interchangeably used in this paper.
+observed by the point at origin in the process Φij ∪{0}.
+The random variable (RV) Nij is the number of users from
+Φu lying in the association region C0ij of the typical cell
+constructed from the process Φij ∪{0}. Letting Cij denote
+the random area of this typical association region, the PGF of
+Nij is given by
+GNij(z) = E
+
+zNij
+= E [exp (λuCij (z −1))] ,
+where the property used is that conditioned on Cij, Nij is a
+Poisson RV with mean λuCij.
+As per the association rule (1), the probability that a
+typical user associates with a particular RAT-tier pair would
+be directly proportional to the corresponding AP density and
+association weights. The following lemma identiﬁes the exact
+relationship.
+Lemma 2. The probability that a typical user is associated
+with (i, j) is given by
+Aij = 2πλij
+Z ∞
+0
+z exp
+
+−π
+X
+(m,k)∈Vo
+Gij(m, k)z2/ˆαk
+
+dz,
+(6)
+where
+Gij(m, k) = λmk ˆT2/αk
+mk .
+(7)
+If αk ≡α, then the association probability is simpliﬁed to
+Aij =
+λij
+P
+(m,k)∈Vo Gij(m, k).
+(8)
+Proof: The result can be proved by a minor modiﬁcation
+of Lemma 1 of [22]. The proof is presented in Appendix A
+for completeness.
+The following two remarks provide alternate interpretations
+of the association probability.
+Remark 1. The probability that a typical user is associated with
+the ith RAT is given by Ai = P
+j∈Vo
+i Aij. This probability
+is also the average fraction of the trafﬁc ofﬂoaded, referred
+henceforth as trafﬁc ofﬂoad fraction, to the ith RAT.
+Remark 2. Using the ergodicity of the PPP, Aij is the average
+fraction of the total area covered by the association regions of
+the APs of (i, j).
+Based on Remark 2 we note that the mean association area
+of a typical AP of (i, j) is Aij
+λij . Below we propose a linear
+scaling based approximation for association areas in HetNets,
+which matches this ﬁrst moment. The results based on the area
+approximation are validated in Section III-E.
+Area Approximation: The area Cij of a typical AP of the jth
+tier of the ith RAT can be approximated as
+Cij = C
+ λij
+Aij
+
+,
+(9)
+where C (y) is the area of a typical PV of density y (a scale
+parameter).
+Remark 3. The approximation is trivially exact for a single
+tier, single RAT scenario, i.e., for ∥V∥= 1.
+
+5
+S =
+X
+(i,j)∈Vo
+2πλij
+Z ∞
+0
+y exp
+
+−
+τij
+SNRij(y) −π
+
+
+
+X
+k∈Vi
+Dij(k, τij)y2/ˆαk +
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+
+
+
+
+dy ,
+(19)
+Remark 4. If Tmk ≡T and αk ≡α, then the approximation
+is exact. In this case, Aij =
+λij
+P
+(m,k)∈Vo λmk and
+C
+ λij
+Aij
+
+= C
+
+
+X
+(m,k)∈Vo
+λmk
+
+.
+(10)
+With equal association weights and path loss coefﬁcients, the
+HetNet model becomes the superposition of independent PPPs,
+which is again a PPP with density equal to the sum of that of
+the constituents and hence the resulting tessellation is a PV.
+The right hand side of the above equation is equivalent to a
+typical association area of a PV with density P
+(m,k)∈Vo λmk.
+Remark 5. Using the distribution proposed in [32] for C(y),
+the distribution of Cij is
+fCij(c) = 3.53.5
+Γ(3.5)
+λij
+Aij
+ λij
+Aij
+c
+2.5
+exp
+
+−3.5 λij
+Aij
+c
+
+,
+(11)
+where Γ(x) =
+R ∞
+0
+exp(−t)tx−1dt is the gamma function.
+To characterize the load at the tagged AP (AP serving the
+typical mobile user) the implicit area biasing needs to be
+considered and the PGF of the number of other – apart from
+the typical – users (No,ij) associated with the tagged AP needs
+to be characterized.
+Lemma 3. The PGF of the other users associated with the
+tagged AP of (i, j) is
+GNo,ij(z) = 3.54.5
+
+3.5 + λuAij
+λij
+(1 −z)
+−4.5
+.
+(12)
+Furthermore, the moments of No,ij are given by
+E
+
+N n
+o,ij
+
+=
+n
+X
+k=1
+λuAij
+λij
+k
+S(n, k)E
+
+Ck+1(1)
+
+,
+(13)
+where S(n, k) are Stirling numbers of the second kind3.
+Proof: See Appendix B.
+The moments of the typical association region of a PV
+of unit density can be computed numerically and are also
+available in [30].
+B. SINR Distribution
+The SINR of a typical user associated with an AP of (i, j)
+located at y is
+SINRij(y) =
+Pijhyy−αj
+P
+k∈Vi Iik + σ2
+i
+,
+(14)
+where hy is the channel gain from the tagged AP located at a
+distance y, Iik denotes the interference from the APs of RAT
+3The notation of Stirling numbers given by S(n, k) should not be confused
+with that of SINR coverage, S.
+i in the tier k. The set of APs contributing to interference are
+from Φik
+S Φik′ \ o ∀k ∈Vi , where o denotes the tagged AP
+from (i, j). Thus
+Iik = Pik
+X
+x∈Φik\o
+hxx−αk + Pik
+X
+x′∈Φik′
+hx′x′−αk.
+(15)
+For a typical user, when associated with (i, j), the probability
+that the received SINR is greater than a threshold τij, or SINR
+coverage, is
+Sij(τij) ≜Ey [P{SINRij(y) > τij}],
+(16)
+and the overall SINR coverage is
+S =
+X
+(i,j)∈Vo
+Sij(τij)Aij.
+(17)
+Interestingly, the distance of a typical user to the tagged
+AP in (i, j), Yij, is not only inﬂuenced by Φij but also by
+Φmk ∀(m, k) ∈Vo , as APs of other open access classes also
+compete to become the serving AP. The distribution of this
+distance is given by the following lemma.
+Lemma
+4. The probability distribution function (PDF),
+fYij(y), of the distance Yij between a typical user and the
+tagged AP of (i, j) is
+fYij(y) = 2πλij
+Aij
+y exp
+
+
+−π
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+
+
+.
+(18)
+Proof: See Appendix C.
+The following lemma gives the SINR CCDF/coverage over
+the entire network.
+Lemma 5. The SINR coverage of a typical user is given by
+(19) (at the top of page) where
+Dij(k, τij) = ˆP2/αk
+ik
+n
+λikZ
+
+τij, αk, ˆTik ˆP−1
+ik
+
++ λik′ Z(τij, αk, 0)
+o
+,
+Gij(m, k) = λmk ˆT2/αk
+mk , Z(a, b, c) = a2/b
+Z ∞
+( c
+a )2/b
+du
+1 + ub/2 ,
+and SNRij(y) = Pijy−αj
+σ2
+i
+.
+Proof: See Appendix D.
+The result in Lemma 5 is for the most general case and
+involves a single numerical integration along with a lookup
+table for Z. Lemma 5 reduces to the earlier derived SINR
+coverage expressions in [24] for M = K = 1 (single tier,
+single RAT) and those in [22] for M = 1 (single RAT, multiple
+tiers).
+
+6
+R =
+X
+(i,j)∈Vo
+2πλij
+X
+n≥0
+3.53.5
+n!
+Γ(n + 4.5)
+Γ(3.5)
+λuAij
+λij
+n 
+3.5 + λuAij
+λij
+−(n+4.5)
+×
+Z ∞
+0
+y exp
+
+−t(ˆρij(n + 1))
+SNRij(y)
+−π
+
+
+
+X
+k∈Vi
+Dij(k, t(ˆρij(n + 1)))y2/ˆαk +
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+
+
+
+
+dy ,
+(20)
+¯R =
+X
+(i,j)∈Vo
+2πλij
+Z ∞
+0
+y exp
+ 
+−t(ˆρij ¯Nij)
+SNRij(y) −π
+ X
+k∈Vi
+Dij(k, t(ˆρij ¯Nij))y2/ˆαk +
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+!
+dy ,
+(27)
+C. Main Result
+Having characterized the distribution of load and SINR, we
+now derive the rate distribution over the whole network.
+Theorem 1. The rate coverage of a randomly located mobile
+user in the general HetNet setting of Section II is given by
+(20) (at the top of page) where ρij is the rate threshold for
+(i, j), ˆρij ≜ρij/Wij, and t(x) ≜2x −1.
+Proof: Using (3), the probability that the rate requirement
+of a user associated with (i, j) is met is
+P(Rij > ρij) = P
+Wij
+Nij
+log(1 + SINRij) > ρij
+
+= P(SINRij > 2ρijNij/Wij −1)
+(21)
+= ENij [Sij (t(ˆρijNij))],
+(22)
+where t(ˆρijNij) = 2ρijNij/Wij −1 and Nij = 1 + No,ij, i.e.,
+the load at the tagged AP equals the typical user plus the other
+users. Using Lemma 3, (22) is simpliﬁed as
+ENij [Sij (t(ˆρijNij))]
+=
+X
+n≥0
+P(No,ij = n)Sij (t(ˆρij(n + 1)))
+(23)
+=
+X
+n≥0
+3.53.5
+n!
+Γ(n + 4.5)
+Γ(3.5)
+λuAij
+λij
+n
+×
+
+3.5 + λuAij
+λij
+−(n+4.5)
+Sij (t(ˆρij(n + 1))) . (24)
+Using the law of total probability, the rate coverage is
+R =
+X
+(i,j)∈Vo
+AijP(Rij > ρij) =
+X
+(i,j)∈Vo
+Aij
+X
+n≥0
+3.53.5
+n!
+Γ(n + 4.5)
+Γ(3.5)
+×
+λuAij
+λij
+n 
+3.5 + λuAij
+λij
+−(n+4.5)
+Sij (t(ˆρij(n + 1))) .
+(25)
+Using Lemma 5 in the above equation gives the desired result.
+The rate distribution expression for the most general setting
+requires a single numerical integral and use of lookup tables
+for Z and Γ. Since both the terms P(Nij = n) and Sij (t(n))
+decay rapidly for large n, the summation over n in Theorem
+1 can be accurately approximated as a ﬁnite summation to a
+sufﬁciently large value, Nmax. We found Nmax = 4λu to be
+sufﬁcient for results presented in Section III-E.
+D. Mean Load Approximation
+The rate coverage expression can be further simpliﬁed
+(sacriﬁcing accuracy) if the load at each AP of (i, j) is
+assumed equal to its mean.
+Corollary 1. Rate coverage with the mean load approximation
+is given by (27) (at the top of page), where
+¯Nij = E [Nij] = 1 + 1.28λuAij
+λij
+.
+Proof: Lemma 3 gives the ﬁrst moment of load as
+E [Nij]
+=
+1 + E [No,ij] =
+1 + λuAij
+λij E
+
+C2(1)
+
+where
+E
+
+C2(1)
+
+= 1.28 [30]. Using an approximation for (22) with
+ENij [Sij (t(ˆρijNij))] ≈Sij (t(ˆρijE [Nij])), the simpliﬁed
+rate coverage expression is obtained.
+The mean load approximation above simpliﬁes the rate
+coverage expression by eliminating the summation over n. The
+numerical integral can also be eliminated in certain plausible
+scenarios given in the following corollary.
+Corollary 2. In interference limited scenarios (σ2 →0) with
+mean load approximation and with same path loss exponents
+(ˆαk ≡1), the rate coverage is
+¯R =
+X
+(i,j)∈Vo
+λij
+P
+k∈Vi Dij(k, t(ˆρij ¯
+Nij)) + P
+(m,k)∈Vo Gij(m, k).
+(27)
+In the above analysis, rate distribution is presented as a
+function of association weights. So, in principle, it is possible
+to ﬁnd the optimal association weights and hence the optimal
+fraction of trafﬁc to be ofﬂoaded to each RAT so as to
+maximize the rate coverage. This aspect is studied in a special
+case of a two-RAT network in Section IV.
+E. Validation
+In this section, the emphasis is on validating the area and
+mean load approximations proposed for rate coverage and on
+validating the PPP as a suitable AP location model. In all
+the simulation results, we consider a square window of 20 ×
+20 km2. The AP locations are drawn from a PPP or a real
+deployment or a square grid depending upon the scenario that
+is being simulated. The typical user is assumed to be located
+at the origin. The serving AP for this user (tagged AP) is
+determined by (1). The received SINR can now be evaluated
+
+7
+as being the ratio of the power received from the serving AP
+and the sum of the powers received from the rest of the APs
+as given in (14). The rest of the users are assumed to form
+a realization of an independent PPP. The serving AP of each
+user is again determined by (1), which provides the total load
+on the tagged AP in terms of the number of users it is serving.
+The rate of the typical user is then computed according to (3).
+In each Monte-Carlo trial, the user locations, the base station
+locations, and the channel gains are independently generated.
+The rate distribution is obtained by simulating 105 Monte-
+Carlo trials.
+In the discussion that follows we use a speciﬁc form of the
+association weight as Tmk = PmkBmk corresponding to the
+biased received power based association [2], where Bmk is
+the association bias for (m, k). The effective resources at an
+AP are assumed to be uniformly Wmk ≡10 MHz and equal
+rate thresholds are assumed for all classes. Thermal noise is
+ignored. Also, without any loss of generality the bias of (1, 1)
+is normalized to 1, or B11 = 0 dB.
+1) Analysis: Our goal here is to validate the area approx-
+imation and the mean load approximation (Theorem 1 and
+Corollary 1, respectively) in the context of rate coverage. A
+scenario with two-RATs, one with a single open access tier and
+the other with two tiers – one open and one closed access –
+is considered ﬁrst. In this case, V = {(1, 1); (2, 3); (2, 3
+′)},
+λ11 = 1 BS/km2, λ23 = λ23′ = 10 BS/km2, λu = 50
+users/km2, α1 = 3.5, and α3 = 4. Fig. 2 shows the rate
+distribution obtained through simulation and that from Theo-
+rem 1 and Corollary 1 for two values of association biases.
+Fig. 3 shows the the rate distribution in a two-RAT three-
+tier setting with V = {(1, 1); (1, 2); (2, 2); (2, 3)}, λ11 = 1
+BS/km2, λ12 = λ22 = 5 BS/km2, λ23 = 10 BS/km2, λu = 50
+users/km2, α1 = 3.5, α2 = 3.8, and α3 = 4 for two values of
+association bias of (2, 3). In both cases, B12 = B22 = 5 dB.
+As it can be observed from both the plots, the analytic
+distributions obtained from Theorem 1 and Corollary 1 are in
+quite good agreement with the simulated one and thus validate
+the analysis. See [1] for validation of a three-RAT scenario.
+2) Spatial Location Model: To simulate a realistic spatial
+location model for a two-RAT scenario, the cellular BS
+location data of a major metropolitan city used in [24] is
+overlaid with that of an actual WiFi deployment [35]. Along
+with the PPP, a square grid based location model in which the
+APs for both the RATs are located in a square lattice (with
+different densities) is also used in the following comparison.
+Denoting the macro tier as (1, 1) and WiFi APs as (2, 3),
+V = {(1, 1); (2, 3)} in this setup. The superposition is done
+such that λ23 = 10λ11. Fig. 4 shows the rate distribution of
+a typical user obtained from the real data along with that of
+a square grid based model and that from a PPP, Theorem 1,
+for three cases. As evident from the plot, Theorem 1 is quite
+accurate in the context of rate distribution with regards to the
+actual location data.
+IV. DESIGN OF OPTIMAL OFFLOAD
+In this section, we consider the design of optimal ofﬂoading
+under a speciﬁc form of the association weight as Tmk =
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+1.4
+1.6
+1.8
+2
+x 10
+6
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Rate threshold, ρ (bps)
+ Rate coverage, Pr (Rate > ρ)
+ 
+ 
+Simulation
+Theorem 1
+Corollary 1
+B23= 5 dB
+B23= 15 dB
+Fig. 2: Comparison of rate distribution obtained from simu-
+lation, Theorem 1, and Corollary 1 for λ23 = λ23′ = 10λ11,
+α1 = 3.5, and α3 = 4.
+0
+1
+2
+3
+4
+5
+6
+x 10
+6
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Rate threshold, ρ (bps)
+Rate coverage, Pr (R > ρ)
+ 
+ 
+Simulation
+Theorem 1
+Corollary 1
+B23 = 0 dB
+B23 =10 dB
+Fig. 3: Comparison of rate distribution obtained from simu-
+lation, Theorem 1, and Corollary 1 for λ12 = λ22 = 5λ11,
+λ23 = 10λ11, α1 = 3.5, α2 = 3.8, and α3 = 4.
+PmkBmk. For general settings, the optimum association biases
+{Bmk} for SINR and rate coverage can be found using the de-
+rived expressions of Lemma 5 and Theorem 1 respectively. As
+discussed in Section III-E, simpliﬁed expression of Corollary
+1 can also be used for rate coverage. We consider below a two-
+RAT single tier scenario with qth tier of RAT-1 overlaid with
+rth tier of RAT-2, i.e., V = {(1, q); (2, r)}. Optimal association
+bias and optimal trafﬁc ofﬂoad fraction is investigated here in
+the context of both the SIR coverage (i.e., neglecting noise)
+and rate coverage.
+A. Ofﬂoading for Optimal SIR Coverage
+Proposition 1. Ignoring thermal noise (interference limited
+scenario, σ2 →0), assuming equal path loss coefﬁcients
+(ˆαk ≡1), the value of association bias B2r
+B1q maximizing SIR
+
+8
+0
+2
+4
+6
+8
+10
+12
+x 10
+5
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Rate threshold, ρ (bps)
+Rate Coverage, Pr (Rate> ρ)
+ 
+ 
+Actual two RAT network
+Square grid for both RATs
+PPP, Theorem 1
+B23 = 10 dB
+B23 = 0 dB
+B23 = 5 dB
+Fig. 4: Rate distribution comparison for the three spatial
+location models: real, grid, and PPP for a two-RAT setting
+with λ23 = 10λ11 and α1 = α3 = 4
+coverage is
+bopt = P1q
+P2r
+ Z(τ1q, α, 1)
+aZ(τ2r, α, 1)
+α/2
+,
+(28)
+where λ2r = aλ1q and the corresponding optimum trafﬁc
+ofﬂoad fraction to RAT-2 is
+A2 =
+Z(τ1q, α, 1)
+Z(τ2r, α, 1) + Z(τ1q, α, 1).
+(29)
+The corresponding SIR coverage is
+Z(τ2r, α, 1) + Z(τ1q, α, 1)
+Z(τ2r, α, 1) + Z(τ1q, α, 1) + Z(τ2r, α, 1)Z(τ1q, α, 1).
+(30)
+Proof: See Appendix E.
+The following observations can be made from the above
+Proposition:
+• The optimal bias for SIR coverage is inversely propor-
+tional to the density and transmit power of the corre-
+sponding RAT. This is because the denser the second RAT
+and the higher the transmit power of the corresponding
+APs, the higher the interference experienced by ofﬂoaded
+users leading to a decrease in the optimal bias. Also, with
+increased density and power, lesser bias is required to
+ofﬂoad the same fraction of trafﬁc.
+• The optimal fraction of trafﬁc/user population to be
+ofﬂoaded to either RAT for maximizing SIR coverage
+is independent of the density and power and is solely
+dependent on SIR thresholds. The higher the RAT-1
+threshold, τ1q, compared to that of RAT-2 threshold, τ2r,
+the more percentage of trafﬁc is ofﬂoaded to RAT-2 as
+Z is a monotonically increasing function of τ. In fact,
+if τ1q = τ2r, ofﬂoading half of the user population
+maximizes SIR coverage.
+B. Ofﬂoading for Optimal Rate Coverage
+For the design of optimal ofﬂoading for rate coverage, the
+mean load approximation (Corollary 1) is used.
+Proposition 2. Ignoring thermal noise (interference limited
+scenario, σ2 →0), assuming equal path loss coefﬁcients
+(ˆαk ≡1), the value of association bias B2r
+B1q maximizing rate
+coverage is
+bopt = arg max
+b
+( 
+Z(t1q(ˆρ1q ¯
+N1q), α, 1) + 1 + a(ˆP2rb)2/α−1
++
+ 
+Z(t2r(ˆρ2r ¯
+N2r), α, 1) + 1 +
+1
+a(ˆP2rb)2/α
+!−1 )
+,
+(31)
+where a = λ2r/λ1q and b = B2r/B1q.
+Proof: The optimum association bias can be found by
+maximizing the expression obtained from Corollary 2 using
+V = {(1, q); (2, r)}, λ2r = aλ1q, and B2r = bB1q.
+Unfortunately, a closed form expression for the optimal
+bias is not possible in this case, as the load (and hence the
+threshold) is dependent on the association bias b. However,
+the optimal association bias, bopt, for the rate coverage can be
+found out through a linear search using the above Proposition.
+In a general setting, the computational complexity of ﬁnding
+the optimal biases, however, increases with the number of
+classes of APs in the network as the dimension of the problem
+increases. While the exact computational complexity depends
+upon the choice of optimization algorithm, the proposed
+analytical approach is clearly less complex than exhaustive
+simulations by virtue of the easily computable rate coverage
+expression.
+The analysis in this section shows that for a two-RAT
+scenario, SIR coverage and rate coverage exhibit considerably
+different behavior. The optimal trafﬁc ofﬂoad fraction for
+SIR coverage is independent of the density whereas for rate
+coverage it is expected to increase because of the decreasing
+load per AP for the second RAT. For a ﬁxed bias, rate coverage
+always increases with density, however for a ﬁxed density
+there is always an optimal trafﬁc ofﬂoad fraction. These in-
+sights might be known to practicing wireless system engineers
+but here a theoretical analysis makes the observations rigorous.
+V. RESULTS AND DISCUSSION
+In this section we primarily consider a setting of macro
+tier of RAT-1 overlaid with a low power tier of RAT-2, i.e.,
+V = {(1, 1); (2, 3)}. This setting is similar to the widespread
+use of WiFi APs to ofﬂoad the macro cell trafﬁc. In particular,
+the effect of association bias and trafﬁc ofﬂoad fraction on SIR
+and rate coverage is investigated. Thermal noise is ignored in
+the following results.
+A. SIR coverage
+The variation of SIR coverage with the density of RAT-
+2 APs for different values of association bias is shown in
+Fig. 5. The path loss exponent used is αk ≡3.5 and the
+respective SIR thresholds are τ11 = 3 dB and τ23 = 6 dB.
+It is clear that for any ﬁxed value of association bias, S is
+
+9
+sub-optimal for all values of densities except for the bias
+value satisfying Proposition 1. Also shown is the optimum SIR
+coverage (Proposition 1), which is invariant to the density of
+APs.
+Variation of SIR coverage with the association bias is
+shown in Fig. 6 for different densities of RAT-2 APs. As
+shown, increasing density of RAT-2 APs decreases the optimal
+ofﬂoading bias. This is due to the corresponding increase in
+the interference for ofﬂoaded users in RAT-2. This insight will
+also be useful in rate coverage analysis. Again, at all values of
+association bias, S is sub-optimal for all density values except
+for the optimum density, λopt =
+
+P1q
+P2r ˆB2r
+2/α Z(τ1q,α,1)
+Z(τ2r,α,1).
+B. Rate Coverage
+The variation of rate coverage with the density of RAT-
+2 APs for different values of association bias is shown in
+Fig. 7 and the variation with the association bias is shown in
+Fig. 8 for different densities of RAT-2 APs. In these results,
+the user density λu = 200 users/km2, the rate threshold
+ρmk ≡256 Kbps, the effective bandwidth Wmk ≡10 MHz,
+and the path loss exponent is αk ≡3.5. As expected, rate
+coverage increases with increasing AP density because of
+the decrease in load at each AP. The optimum association
+bias for rate coverage is obtained by a linear search as in
+Proposition 2. For all values of association bias, R is sub-
+optimal except for the one given in Proposition 2. Fig. 9 shows
+the effect of association bias on the 5th percentile rate ρ95
+with R|ρ95 = 0.95 (i.e., 95% of the user population receives
+a rate greater than ρ95) for different densities of RAT-2 APs.
+Comparing Fig. 8 and Fig. 9, it can be seen that the optimal
+bias is agnostic to rate thresholds. This leads to the design
+insight that for given network parameters re-optimization is not
+needed for different rate thresholds. The developed analysis
+can also be used to ﬁnd optimal biases for a more general
+setting. Fig. 10 shows the 5th percentile rate for a setting
+with V = {(1, 1); (1, 2); (2, 2); (2, 3)}, λ11 = 1 BS/km2,
+λ12 = λ12 = 5 BS/km2, B12 = B22 = 5 dB as a function
+of association bias of (2, 3). It can be seen that the choice of
+association biases can heavily inﬂuence rate coverage.
+A common observation in Fig. 8-10 is the decrease in
+the optimal ofﬂoading bias with the increase in density of
+APs of the corresponding RAT. This can be explained by the
+earlier insight of decreasing optimal bias for SIR coverage
+with increasing density. However, in contrast to the trend in
+SIR coverage, the optimum trafﬁc ofﬂoad fraction increases
+with increasing density as the corresponding load at each AP
+of second RAT decreases. These trends are further highlighted
+in Fig. 11 for the following scenarios:
+• Case 1: W11 = 15 MHz, W23 = 5 MHz, ρ11 = 256
+Kbps, and ρ23 = 512 Kbps.
+• Case 2: W11 = 5 MHz, W23 = 15 MHz, ρ11 = 512
+Kbps, and ρ23 = 256 Kbps.
+It can be seen that apart from the effect of deployment
+density, optimum choice of association bias and trafﬁc ofﬂoad
+fraction also depends on the ratio of rate threshold (ρij) to the
+bandwidth (Wij), or ˆρij. In particular, larger the ratio of the
+5
+10
+15
+20
+25
+30
+35
+40
+45
+50
+55
+60
+0.32
+0.34
+0.36
+0.38
+0.4
+0.42
+0.44
+0.46
+Density of RAT-2  APs / λ11
+SINR Coverage
+ 
+ 
+B23 = 0 dB
+B23 = 5 dB
+B23 = 10 dB
+B23 = bopt
+τ11  = 3 dB, τ23 = 6 dB
+Fig. 5: Effect of density of RAT-2 APs on SINR coverage.
+0
+10
+20
+30
+40
+50
+60
+70
+0.25
+0.3
+0.35
+0.4
+0.45
+Association bias for RAT-2 APs, B23 (dB)
+SINR Coverage
+ 
+ 
+λ23 = 5 λ11
+λ23 = 10 λ11
+λ23 = 20 λ11
+λ23 = λopt
+τ11 = 3 dB, τ23 = 6 dB
+Fig. 6: Effect of association bias for RAT-2 APs on SINR
+coverage.
+available resources to the rate threshold more is the tendency
+to be ofﬂoaded to the corresponding RAT.
+VI. CONCLUSION
+In this paper, we presented a tractable model to analyze
+the effects of ofﬂoading in a M-RAT K-tier wireless hetero-
+geneous network setting under a ﬂexible association model.
+To the best of our knowledge, the presented work is the ﬁrst
+to study rate coverage in the context of inter-RAT ofﬂoad.
+Using biased received power based association, it is shown
+that there exists an optimum percentage of the trafﬁc that
+should be ofﬂoaded for maximizing the rate coverage which
+in turn is dependent on user’s QoS requirements and the
+resource condition at each available RAT besides from the
+received signal power and load. Investigating the coupling of
+AP queues induced by ofﬂoading, which has been ignored in
+this work, could be an interesting future extension. Although
+the emphasis of this work has been on inter-RAT ofﬂoad, the
+
+10
+1
+6
+11
+16
+21
+25
+0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+Density of  RAT-2 APs/λ11
+Rate Coverage 
+ 
+ 
+B23 = bopt
+B23 = 10 dB
+B23 = 5 dB
+B23 = 0 dB
+Fig. 7: Effect of density of RAT-2 APs on rate coverage.
+0
+10
+20
+30
+40
+50
+60
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+Association bias for RAT-2 APs, B23 (dB)
+Rate Coverage 
+ 
+ 
+λ23 = 20 λ11
+λ23 = 10 λ11
+λ23 = 5 λ11
+Fig. 8: Effect of association bias for RAT-2 APs on rate
+coverage.
+0
+5
+10
+15
+20
+25
+30
+0
+1
+2
+3
+4
+5
+6
+x 10
+4
+Association bias for RAT-2 APs (dB)
+Fifth percentile rate, ρ95 (bps)
+ 
+ 
+λ23 = 20 λ11
+λ23 = 10 λ11
+λ23 = 5 λ11
+Fig. 9: Effect of association bias for RAT-2 APs on 5th
+percentile rate with V = {(1, 1); (2, 3)}.
+0
+5
+10
+15
+20
+25
+30
+0
+1
+2
+3
+4
+5
+6x 10
+4
+Association bias for RAT-2, tier-3 APs, B23 (dB)
+Fifth percentile rate, ρ95 (bps)
+ 
+ 
+λ23 = 20 λ11
+λ23 = 10 λ11
+λ23 = 5λ11
+Fig. 10: Effect of association bias for third tier of RAT-2 APs
+on 5th percentile rate with λ12 = λ22 = 5λ11, B12 = B22 = 5
+dB.
+5
+10
+15
+20
+25
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Optimum offload fraction
+ 
+ 
+5
+10
+15
+20
+255
+10
+15
+20
+25
+30
+35
+Optimum offloading bias (dB)
+Density of RAT-2 APs / λ1,1
+Case1-optimum offload fraction
+Case2-optimum offload fraction
+Case1-optimum offloading bias
+Case2-optimum offloading bias
+Fig. 11: Effect of user’s rate requirements and effective re-
+sources on the optimum association bias and optimum trafﬁc
+ofﬂoad fraction.
+framework can also be used to provide insights for inter-tier
+ofﬂoad within a RAT. Also, the area approximation for the
+association regions can be improved further by employing a
+non-linear approximation.
+APPENDIX A
+Proof of Lemma 2: If Aij is the association probability
+of a typical user with RAT-tier pair (i, j), then
+Aij = P
+
+
+
+
+\
+(m,k)∈Vo
+(m,k)̸=(i,j)
+n
+TijZ−αj
+ij
+> TmkZ−αk
+mk
+o
+
+
+
+,
+(32)
+
+11
+since Zmk denotes the distance to nearest AP in Φmk. Thus
+Aij
+(a)
+=
+Y
+(m,k)∈Vo
+(m,k)̸=(i,j)
+P
+
+TijZ
+−αj
+ij
+> TmkZ−αk
+mk
+
+(33)
+=
+Z
+z>0
+Y
+(m,k)∈Vo
+(m,k)̸=(i,j)
+P
+
+Zmk > (ˆTmk)1/αkz1/ˆαk
+fZij(z)dz,
+(34)
+where (a) follows from the independence of Φmk, ∀(m, k) ∈
+V. Now
+P (Zmk > z) = P (Φmk ∩b(0, z) = ∅) = e−πλmkz2,
+(35)
+where b(0, z) is the Euclidean ball of radius z centered at
+origin. The probability distribution function fZmk(z) can be
+written as
+fZmk(z) = d
+dz {1 −P(Zmk > z)}
+= 2πλmkz exp(−πλmkz2), ∀z ≥0.
+(36)
+Using (34), (35) and (36)
+Aij = 2πλij
+×
+Z
+z>0
+z exp
+
+
+
+−π
+X
+(m,k)∈Vo
+(m,k)̸=(i,j)
+λmk(ˆTmk)2/αkz2/ˆαk
+
+
+
+
+× exp(−πλijz2)dz,
+(37)
+which gives (6).
+APPENDIX B
+Proof of Lemma 3: As a random user is more likely to
+lie in a larger association region then in a smaller association
+region, the distribution of the association area of the tagged
+AP, C
+′
+ij, is proportional to its area and can be written as
+fC′
+ij(c) ∝cfCij(c).
+(38)
+Using the normalization property of the distribution function
+and (11), the biased area distribution is
+fC′
+ij (c) = cfCij (c)
+E [Cij] = 3.53.5
+Γ(3.5)
+λij
+Aij
+ λij
+Aij c
+3.5
+exp
+
+−3.5 λij
+Aij c
+
+.
+(39)
+The location of the other users (apart from the typical user) in
+the association region of the tagged AP follows the reduced
+Palm distribution of Φu which is the same as the original
+distribution since Φu is a PPP [19, Sec. 4.4]. Thus, using
+Lemma 1 and (39), the PGF of the other users in the tagged
+AP is
+GNo,ij(z) = E
+h
+exp
+
+λuC
+′
+ij(z −1)
+i
+=
+Z
+c>0
+exp (λuc(z −1)) 3.53.5
+Γ(3.5)
+λij
+Aij
+ λij
+Aij
+c
+3.5
+exp
+
+−3.5 λij
+Aij
+c
+
+dc
+(40)
+= 3.54.5
+
+3.5 + λuAij
+λij
+(1 −z)
+−4.5
+.
+(41)
+Using the PGF, the probability mass function can be derived
+as
+P (Nij = n + 1) = P (No,ij = n) =
+G(n)
+No,ij(0)
+n!
+= 3.53.5
+n!
+Γ(n + 4.5)
+Γ(3.5)
+λuAij
+λij
+n
+×
+
+3.5 + λuAij
+λij
+−(n+4.5)
+.
+(42)
+For the second half of the proof, we use the property that the
+moments of a Poisson RV, X ∼Pois(λ) (say), can be written
+in terms of Stirling numbers of the second kind, S(n, k), as
+E [Xn] = Pn
+k=0 λkS(n, k). Now
+E
+
+N n
+o,ij
+
+= E
+h
+E
+h
+N n
+o,ij|C
+′
+ij
+ii
+(43)
+=E
+" n
+X
+k=0
+(λuC
+′
+ij)kS(n, k)
+#
+=
+n
+X
+k=1
+λk
+uS(n, k)E
+h
+C
+′k
+ij
+i
+.
+(44)
+Using (39) and the area approximation (9)
+E
+h
+C
+′k
+ij
+i
+=
+E
+
+Ck+1
+ij
+
+E [Cij]
+= (λij/Aij)−(k+1)E
+
+Ck+1(1)
+
+(λij/Aij)−1E [C(1)]
+,
+(45)
+and thus
+E
+
+N n
+o,ij
+
+=
+n
+X
+k=1
+λuAij
+λij
+k
+S(n, k)E
+
+Ck+1(1)
+
+.
+APPENDIX C
+Proof of Lemma 4: If Yij denotes the distance between
+the typical user and the tagged AP in (i, j), then the distribu-
+tion of Yij is the distribution of Zij conditioned on the user
+being associated with (i, j). Therefore
+P(Yij > y) = P (Zij > y| user is associated with (i, j))
+(46)
+= P (Zij > y, user is associated with (i, j))
+P (user is associated with (i, j))
+.
+(47)
+Now using Lemma 2
+P (Zij > y, user is associated with (i, j))
+= 2πλij
+Z
+z>y
+z exp
+
+−π
+X
+(m,k)∈Vo
+Gij(m, k)z2/ˆαk
+
+dz.
+(48)
+Using (47) and (48) we get
+P(Yij > y)
+= 2πλij
+Aij
+Z
+z>y
+z exp
+
+−π
+X
+(m,k)∈Vo
+Gij(m, k)z2/ˆαk
+
+dz,
+(49)
+
+12
+which leads to the PDF of Yij
+fYij(y) = 2πλij
+Aij
+y exp
+
+−π
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+
+.
+(50)
+APPENDIX D
+Proof of Lemma 5:
+The SINR coverage of a user
+associated with an AP of (i, j) is
+Sij(τij) =
+Z
+y>0
+P(SINRij(y) > τij)fYij(y)dy.
+(51)
+Now P(SINRij(y) > τij) can be written as
+P
+ 
+Pijhyy−αj
+P
+k∈Vi Iik + σ2
+i
+> τij
+!
+(52)
+= P
+ 
+hy > yαjPij
+−1τij
+( X
+k∈Vi
+Iik + σ2
+i
+)!
+(53)
+= E
+"
+exp
+ 
+−yαjτijP−1
+ij
+( X
+k∈Vi
+Iik + σ2
+i
+)!#
+(54)
+(a)
+= exp
+
+−
+τij
+SNRij(y)
+ Y
+k∈Vi
+EIik
+
+exp
+ −yαjτijP−1
+ij Iik
+
+(55)
+= exp
+
+−
+τij
+SNRij(y)
+ Y
+k∈Vi
+MIik
+ yαjτijP−1
+ij
+
+,
+(56)
+where SNRij(y) =
+Pijy−αj
+σ2
+i
+and (a) follows from the inde-
+pendence of Iik and MIik(s) is the the moment-generating
+function (MGF) of the interference. Expanding the interference
+term, the MGF of interference is given by
+MIik(s)
+= EΦik,Φik′ ,hx,hx′
+"
+exp
+ 
+−sPik
+(
+X
+x∈Φik\o
+hxx−αk
++
+X
+x′∈Φik′
+hx′x′−αk
+)!#
+(57)
+(a)
+= EΦik
+
+
+Y
+x∈Φik\o
+Mhx
+ sPikx−αk
+
+
+× EΦik′
+
+Y
+x′∈Φik′
+Mhx′
+ sPikx′−αk
+
+
+(58)
+(b)
+= exp
+
+−2πλik
+Z ∞
+zik
+
+1 −Mhx
+ sPikx−αk	
+xdx
+
+× exp
+
+−2πλik′
+Z ∞
+0
+
+1 −Mhx′
+ sPikx′−αk	
+x′dx′
+
+(59)
+(c)
+= exp
+ 
+−2πλik
+Z ∞
+zik
+x
+1 + (sPik)−1xαk dx
+−2πλik′
+Z ∞
+0
+x′
+1 + (sPik)−1x′αk dx′
+!
+,
+(60)
+where (a) follows from the independence of Φik,Φik′ , hx and
+h′
+x, (b) is obtained using the PGFL [19] of Φik and Φik′ , and
+(c) follows by using the MGF of an exponential RV with unit
+mean. In the above expressions, zik is the lower bound on
+distance of the closest open access interferer in (i, k) which
+can be obtained by using (1)
+Tijy−αj = Tikz−αk
+ik
+or zik = (ˆTik)1/αky1/ˆαk.
+(61)
+Using change of variables with t = (sPik)−2/αkx2, the
+integrals can be simpliﬁed as
+Z ∞
+zik
+2x
+1 + (sPik)−1xαk dx
+= (sPik)2/αk
+Z ∞
+(sPik)−2/αkz2
+ik
+dt
+1 + tαk/2
+= Z (sPik, αk, zαk
+ik ) ,
+(62)
+and
+Z ∞
+0
+2x
+1 + (sPik)−1xαk dx = Z (sPik, αk, 0) ,
+(63)
+where
+Z(a, b, c) = a2/b
+Z ∞
+( c
+a )2/b
+du
+1 + ub/2 .
+This gives the MGF of interference
+MIik (s) = exp
+ 
+−π(sPik)2/αk
+×
+
+λikZ
+
+1, αk, zαk
+ik
+sPik
+
++ λik′ Z (1, αk, 0)
+ !
+.
+(64)
+Using s = yαjτijP−1
+ij
+with zik from (61) for MGF of
+interference in (56) we get
+P(SINRij(y) > τij)
+= exp
+ 
+−
+τij
+SNRij(y) −π
+X
+k∈Vi
+y2/ˆαkDij (k, τij)
+!
+,
+(65)
+where
+Dij(k, τij) = ˆP2/αk
+ik
+n
+λikZ
+
+τij, αk, ˆP−1
+ik ˆTik
+
++ λik′ Z (τij, αk, 0)
+o
+.
+Using (51) along with Lemma 4 gives
+Sij(τij) = 2πλij
+Aij
+Z
+y>0
+y exp
+ 
+−
+τij
+SNRij(y)
+−π
+ X
+k∈Vi
+Dij(k, τij)y2/ˆαk +
+X
+(m,k)∈Vo
+Gij(m, k)y2/ˆαk
+!
+dy.
+(66)
+Using the law of total probability we get
+S =
+X
+(i,j)∈Vo
+Sij(τij)Aij,
+(67)
+which gives the overall SINR coverage of a typical user.
+
+13
+APPENDIX E
+Proof of Proposition 1:
+In the described setting SIR
+coverage can be written as
+S =
+X
+(i,j)∈Vo
+λij
+P
+k∈Vi Dij(k, τij) + P
+(m,k)∈Vo Gij(m, k),
+(68)
+and with V = {(1, q), (2, r)}, λ2r = aλ1q, and B2r = bB1q
+S =
+λ1q
+λ1qZ(τ1q, α, 1) + λ1q + λ2r(ˆP2r ˆB2r)2/α
++
+λ2r
+λ2rZ(τ2r, α, 1) + λ2r + λ1q(ˆP1q ˆB1q)2/α
+=
+1
+Z(τ1q, α, 1) + 1 + a(ˆP2rb)2/α
++
+1
+Z(τ2r, α, 1) + 1 +
+1
+a(ˆP2rb)2/α
+.
+The gradient of S with respect to association bias ∇bS is zero
+at
+bopt = arg max
+b
+( 
+Z(τ1q, α, 1) + 1 + a(ˆP2rb)2/α−1
++
+ 
+Z(τ2r, α, 1) + 1 +
+1
+a(ˆP2rb)2/α
+!−1 )
+= P1q
+P2r
+ Z(τ1q, α, 1)
+aZ(τ2r, α, 1)
+α/2
+.
+With algebraic manipulation, it can be shown that for all b >
+bopt ∇bS < 0 and for all b < bopt ∇bS > 0 and hence S is
+strictly quasiconcave in b and bopt is the unique mode. Using
+Lemma 2, the optimal trafﬁc ofﬂoad fraction is obtained as
+A2 =
+λ2r
+G2r(r) = a
+(
+a +
+
+P1q
+P2rbopt
+2/α)−1
+=
+Z(τ1q, α, 1)
+Z(τ2r, α, 1) + Z(τ1q, α, 1).
+(69)
+The corresponding SIR coverage can then obtained by substi-
+tuting the optimal bias value in (68).
+REFERENCES
+[1] S. Singh, H. S. Dhillon, and J. G. Andrews, “Downlink rate distribution
+in multi-RAT heterogeneous networks,” in IEEE ICC, June 2013.
+[2] A. Damnjanovic, J. Montojo, Y. Wei, T. Ji, T. Luo, M. Vajapeyam,
+T. Yoo, O. Song, and D. Malladi, “A survey on 3GPP heterogeneous
+networks,” IEEE Wireless Commun. Mag., vol. 18, pp. 10–21, June 2011.
+[3] Qualcomm, “A comparison of LTE-Advanced HetNets and WiFi.”
+Whitepaper, available at: http://goo.gl/BFMFR, Sept. 2011.
+[4] Juniper, “WiFi and femtocell integration strategies 2011-2015.” Whitepa-
+per, available at: http://www.juniperresearch.com/, Mar. 2011.
+[5] Qualcomm, “A 3G/LTE Wi-Fi Ofﬂoad Framework.” Whitepaper, avail-
+able at: http://goo.gl/91EqQ, June 2011.
+[6] S. Singh, J. G. Andrews, and G. de Veciana, “Interference shaping for
+improved quality of experience for real-time video streaming,” IEEE J.
+Sel. Areas Commun., vol. 30, pp. 1259–1269, Aug. 2012.
+[7] L. Wang and G. Kuo, “Mathematical modeling for network selection in
+heterogeneous wireless networks – A tutorial,” IEEE Commun. Surveys
+Tuts., vol. PP, no. 99, pp. 1–22, 2012.
+[8] E. Stevens-Navarro, Y. Lin, and V. Wong, “An MDP-based vertical
+handoff decision algorithm for heterogeneous wireless networks,” IEEE
+Trans. Veh. Technol., vol. 57, pp. 1243–1254, Mar. 2008.
+[9] K. Premkumar and A. Kumar, “Optimum association of mobile wireless
+devices with a WLAN-3G access network,” in IEEE ICC, pp. 2002–
+2008, June 2006.
+[10] D. Kumar, E. Altman, and J.-M. Kelif, “Globally optimal user-network
+association in an 802.11 WLAN and 3G UMTS hybrid cell,” in ITC,
+June 2007.
+[11] D. Kumar, E. Altman, and J.-M. Kelif, “User-network association in
+an 802.11 WLAN & 3G UMTS hybrid cell: Individual optimality,” in
+IEEE Sarnoff Symposium, May 2007.
+[12] K. Khawam, M. Ibrahim, J. Cohen, S. Lahoud, and S. Tohme, “In-
+dividual vs. global radio resource management in a hybrid broadband
+network,” in IEEE ICC, June 2011.
+[13] S. Elayoubi, E. Altman, M. Haddad, and Z. Altman, “A hybrid decision
+approach for the association problem in heterogeneous networks,” in
+IEEE INFOCOM, pp. 1–5, Mar. 2010.
+[14] F. Moety, M. Ibrahim, S. Lahoud, and K. Khawam, “Distributed heuristic
+algorithms for RAT selection in wireless heterogeneous networks,” in
+IEEE WCNC, Apr. 2012.
+[15] T. Togo, I. Yoshii, and R. Kohno, “Dynamic cell-size control according
+to geographical mobile distribution in a DS/CDMA cellular system,” in
+IEEE PIMRC, vol. 2, pp. 677–681, Sept. 1998.
+[16] A. Jalali, “On cell breathing in CDMA networks,” in IEEE ICC, vol. 2,
+pp. 985–988, June 1998.
+[17] A. Sang, X. Wang, M. Madihian, and R. D. Gitlin, “Coordinated load
+balancing, handoff/cell-site selection, and scheduling in multi-cell packet
+data systems,” in MobiCom, pp. 302–314, ACM, 2004.
+[18] Nokia Siemens Networks, Nokia, “Aspects of pico node range exten-
+sion,” 3GPP TSG RAN WG1 meeting 61, R1-103824, 2010. Online
+available: http://goo.gl/XDKXI.
+[19] D. Stoyan, W. Kendall, and J. Mecke, Stochastic Geometry and Its
+Applications. John Wiley & Sons, 1996.
+[20] S. Singh, O. Oyman, A. Papathanassiou, D. Chatterjee, and J. G. An-
+drews, “Video capacity and QoE enhancements over LTE,” in IEEE ICC
+Workshop on Realizing Advanced Video Optimized Wireless Networks,
+June 2012.
+[21] H. S. Dhillon, R. K. Ganti, F. Baccelli, and J. G. Andrews, “Modeling
+and analysis of K-tier downlink heterogeneous cellular networks,” IEEE
+J. Sel. Areas Commun., vol. 30, pp. 550–560, Apr. 2012.
+[22] H.-S. Jo, Y. J. Sang, P. Xia, and J. G. Andrews, “Heterogeneous cellular
+networks with ﬂexible cell association: A comprehensive downlink SINR
+analysis,” IEEE Trans. Wireless Commun., vol. 11, pp. 3484–3495, Oct.
+2012.
+[23] S. Mukherjee, “Distribution of downlink SINR in heterogeneous cellular
+networks,” IEEE J. Sel. Areas Commun., vol. 30, pp. 575–585, Apr.
+2012.
+[24] J. G. Andrews, F. Baccelli, and R. K. Ganti, “A tractable approach to
+coverage and rate in cellular networks,” IEEE Trans. Commun., vol. 59,
+pp. 3122–3134, Nov. 2011.
+[25] B. Blaszczyszyn, M. K. Karray, and H.-P. Keeler, “Using Poisson
+processes to model lattice cellular networks,” in IEEE INFOCOM, Apr.
+2013. Available at: http://arxiv.org/abs/1207.7208.
+[26] S. M. Yu and S.-L. Kim, “Downlink capacity and base station density
+in cellular networks,” Available at: http://arxiv.org/abs/1109.2992.
+[27] D. Cao, S. Zhou, and Z. Niu, “Optimal base station density for energy-
+efﬁcient heterogeneous cellular networks,” in IEEE ICC, pp. 4379–4383,
+June 2012.
+[28] H. S. Dhillon, R. K. Ganti, and J. G. Andrews, “Load-aware modeling
+and analysis of heterogeneous cellular networks,” IEEE Trans. Wireless
+Commun., to appear. Available at: http://arxiv.org/abs/1204.1091.
+[29] X. Lin, J. G. Andrews, and A. Ghosh, “Modeling, analysis and design
+for carrier aggregation in heterogeneous cellular networks,” IEEE Trans.
+Commun., submitted. Available at: http://arxiv.org/abs/1211.4041.
+[30] E. N. Gilbert, “Random subdivisions of space into crystals,” The Annals
+of Mathematical Statistics, vol. 33, pp. 958–972, Sept. 1962.
+[31] A. Hinde and R. Miles, “Monte Carlo estimates of the distributions of the
+random polygons of the Voronoi tessellation with respect to a Poisson
+process,” Journal of Statistical Computation and Simulation, vol. 10,
+no. 3-4, pp. 205–223, 1980.
+[32] J.-S. Ferenc and Z. N´eda, “On the size distribution of Poisson Voronoi
+cells,” Physica A: Statistical Mechanics and its Applications, vol. 385,
+pp. 518 – 526, Nov. 2007.
+[33] F. Baccelli, B. Blaszczyszyn, and P. Muhlethaler, “Stochastic analysis of
+spatial and opportunistic Aloha,” IEEE J. Sel. Areas Commun., pp. 1105–
+1119, Sept. 2009.
+[34] P. F. Ash and E. D. Bolker, “Generalized Dirichlet tessellations,”
+Geometriae Dedicata, vol. 20, pp. 209–243, 1986.
+
+14
+[35] Google, “Google WiFi Mountain View coverage map.” Available:
+http://wiﬁ.google.com/city/mv/apmap.html.

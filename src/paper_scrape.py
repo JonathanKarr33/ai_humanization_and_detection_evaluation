@@ -9,12 +9,17 @@ import fitz  # PyMuPDF
 import re
 import argparse
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from collections import deque
 from dotenv import load_dotenv
 from typing import Optional
+
+from pdfminer.high_level import extract_text as pdfminer_extract_text
+import pikepdf
 
 # Load environment variables from .env file
 load_dotenv()
@@ -60,6 +65,9 @@ DATE_TO = None
 # This is useful for tightly-scoped date-range collections where you want guaranteed PDFs.
 REQUIRE_PDF = False
 MAX_WORKERS = 10
+# PyMuPDF/MuPDF can be unstable with multithreaded PDF parsing on some PDFs.
+# Use 1 worker by default for text extraction to avoid hard crashes (segfaults).
+TEXT_MAX_WORKERS = 1
 # How many candidate papers to download/process per batch.
 # Bigger = fewer OpenAlex roundtrips; smaller = less wasted work when many PDFs fail.
 PROCESS_BATCH_SIZE = 80
@@ -110,32 +118,60 @@ def _candidate_pdf_urls_from_work(work: dict) -> list:
     Return a prioritized list of URLs that might yield a PDF.
     OpenAlex often provides better links via best_oa_location than open_access.oa_url.
     """
-    urls = []
+    def _variants(u: str) -> list[str]:
+        if not u:
+            return []
+        out = [u]
+
+        # Common OpenAlex -> direct PDF heuristics.
+        # arXiv
+        if "arxiv.org/abs/" in u:
+            out.append(u.replace("arxiv.org/abs/", "arxiv.org/pdf/") + ".pdf")
+        if "arxiv.org/pdf/" in u and (not u.endswith(".pdf")):
+            out.append(u + ".pdf")
+        # Some hosts use ?download=1
+        if (not u.lower().endswith(".pdf")) and ("download" not in u.lower()):
+            out.append(u + ("&" if "?" in u else "?") + "download=1")
+        return out
+
+    urls: list[str] = []
+
     best = work.get("best_oa_location") or {}
     if isinstance(best, dict):
-        for k in ("pdf_url", "url"):
+        for k in ("pdf_url", "url_for_pdf", "url", "landing_page_url"):
             v = best.get(k)
-            if v:
-                urls.append(v)
+            if isinstance(v, str) and v:
+                urls.extend(_variants(v))
 
     primary = work.get("primary_location") or {}
     if isinstance(primary, dict):
-        for k in ("pdf_url", "landing_page_url"):
+        for k in ("pdf_url", "url_for_pdf", "landing_page_url", "url"):
             v = primary.get(k)
-            if v:
-                urls.append(v)
+            if isinstance(v, str) and v:
+                urls.extend(_variants(v))
+
+    # OpenAlex may have many locations; iterate them for more PDF candidates.
+    locs = work.get("locations") or []
+    if isinstance(locs, list):
+        for loc in locs:
+            if not isinstance(loc, dict):
+                continue
+            for k in ("pdf_url", "url_for_pdf", "landing_page_url", "url"):
+                v = loc.get(k)
+                if isinstance(v, str) and v:
+                    urls.extend(_variants(v))
 
     oa = work.get("open_access") or {}
     if isinstance(oa, dict):
         v = oa.get("oa_url")
-        if v:
-            urls.append(v)
+        if isinstance(v, str) and v:
+            urls.extend(_variants(v))
 
     # Unique preserving order
-    seen = set()
-    out = []
+    seen: set[str] = set()
+    out: list[str] = []
     for u in urls:
-        if u not in seen:
+        if u and u not in seen:
             seen.add(u)
             out.append(u)
     return out
@@ -305,7 +341,33 @@ def download_pdf(url, path):
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-            return os.path.exists(path) and os.path.getsize(path) > 0
+            # Validate that the PDF is likely complete (avoid truncated downloads).
+            try:
+                if os.path.exists(path) and os.path.getsize(path) > 0:
+                    with open(path, "rb") as pf:
+                        pf.seek(max(0, os.path.getsize(path) - 4096))
+                        tail = pf.read(4096)
+                    if b"%%EOF" not in tail:
+                        # Truncated/invalid; remove so we can retry later.
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                        return False
+                    # Additional sanity check: ensure we can parse it and it has pages.
+                    try:
+                        with pikepdf.open(path) as pdf:
+                            if len(pdf.pages) <= 0:
+                                raise ValueError("pdf_has_no_pages")
+                    except Exception:
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                        return False
+                return os.path.exists(path) and os.path.getsize(path) > 0
+            except Exception:
+                return os.path.exists(path) and os.path.getsize(path) > 0
         
         # If we got HTML, try to find a PDF link (common for DOI/landing pages)
         if content_type.startswith("text/html"):
@@ -1215,6 +1277,798 @@ def backfill_pdfs_for_abstract_files(max_workers: int = MAX_WORKERS, max_to_atte
 
 
 # ==========================
+# BACKFILL: TEXT FOR ALL EXISTING PDF FILES
+# ==========================
+def backfill_text_for_pdf_files(
+    max_workers: int = TEXT_MAX_WORKERS,
+    max_to_attempt: Optional[int] = None,
+    ocr_fallback: bool = False,
+    ocr_lang: str = "eng",
+) -> bool:
+    """
+    Ensure that for every existing PDF on disk:
+      papers/{collection}/{domain}/pdfs/{id}.pdf
+    we have a corresponding extracted text file:
+      papers/{collection}/{domain}/text/{id}.txt
+
+    Uses Grobid if available; otherwise falls back to PyMuPDF. Resumable.
+    """
+    # Index metadata by (domain, id) using the last occurrence (for re-download links if PDF is bad).
+    latest: dict = {}
+    if os.path.exists(META_FILE):
+        try:
+            with open(META_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except Exception:
+                        continue
+                    dom = rec.get("domain")
+                    pid = rec.get("id")
+                    if dom and pid:
+                        latest[(dom, pid)] = rec
+        except Exception:
+            pass
+
+    tasks: list[tuple[str, str]] = []
+    for domain in CONCEPTS.keys():
+        pdf_dir = os.path.join(OUTPUT_DIR, domain, "pdfs")
+        text_dir = os.path.join(OUTPUT_DIR, domain, "text")
+        if not os.path.isdir(pdf_dir):
+            continue
+        os.makedirs(text_dir, exist_ok=True)
+
+        for pdf_path in Path(pdf_dir).glob("*.pdf"):
+            pid = pdf_path.stem
+            txt_path = Path(text_dir) / f"{pid}.txt"
+            if txt_path.exists() and txt_path.stat().st_size > 0:
+                continue
+            tasks.append((domain, pid))
+
+    if max_to_attempt is not None:
+        tasks = tasks[: max(0, int(max_to_attempt))]
+
+    print(f"Backfilling text for {len(tasks)} PDFs missing text files...")
+    if not tasks:
+        print("All PDFs already have extracted text.")
+        return True
+
+    failures_path = os.path.join(OUTPUT_DIR, "text_backfill_failures.jsonl")
+    seen_failures = set()
+    if os.path.exists(failures_path):
+        try:
+            with open(failures_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                        # Only treat as "seen" if it already has a reason; otherwise allow
+                        # re-logging with more detail on subsequent runs.
+                        if "reason" in r:
+                            seen_failures.add((r.get("domain"), r.get("id")))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+    lock = Lock()
+    extracted = 0
+    failed = 0
+
+    def _try_redownload_pdf(domain: str, pid: str) -> bool:
+        rec = latest.get((domain, pid))
+        if not rec:
+            return False
+        pdf_path = os.path.join(OUTPUT_DIR, domain, "pdfs", f"{pid}.pdf")
+        urls = []
+        if rec.get("pdf_url"):
+            urls.append(rec["pdf_url"])
+        if rec.get("openalex_id"):
+            work = fetch_openalex_work(rec["openalex_id"])
+            if work:
+                urls.extend(_candidate_pdf_urls_from_work(work))
+        seen = set()
+        for u in urls:
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            if download_pdf(u, pdf_path):
+                return True
+        return False
+
+    def _extract_with_pdfminer(pdf_path: str) -> Optional[str]:
+        try:
+            text = pdfminer_extract_text(pdf_path) or ""
+            text = text.strip()
+            return text if text else None
+        except Exception:
+            return None
+
+    def _repair_pdf_with_pikepdf(pdf_path: str) -> Optional[str]:
+        """
+        Try to repair/make a more standards-compliant PDF.
+
+        This often fixes broken xref tables that PyMuPDF refuses to open but that
+        still contain real embedded text.
+        """
+        # Write repaired PDF outside the pdfs/ folder to avoid leaving behind
+        # extra "*.pdf" artifacts that get counted as real papers.
+        tmp = tempfile.NamedTemporaryFile(prefix="repaired_", suffix=".pdf", delete=False)
+        repaired_path = tmp.name
+        try:
+            tmp.close()
+        except Exception:
+            pass
+        try:
+            with pikepdf.open(pdf_path) as pdf:
+                pdf.save(repaired_path)
+            if os.path.exists(repaired_path) and os.path.getsize(repaired_path) > 0:
+                return repaired_path
+        except Exception:
+            pass
+        try:
+            if os.path.exists(repaired_path):
+                os.remove(repaired_path)
+        except Exception:
+            pass
+        return None
+
+    def _extract_with_pymupdf(pdf_path: str) -> tuple[Optional[str], Optional[str]]:
+        try:
+            # Reduce noisy MuPDF stderr spam (best-effort across versions).
+            try:
+                fitz.TOOLS.mupdf_display_errors(False)
+            except Exception:
+                pass
+
+            doc = fitz.open(pdf_path)
+            parts = []
+            for page in doc:
+                parts.append(page.get_text())
+            doc.close()
+            text = "\n".join(parts).strip()
+            return (text if text else None, "pymupdf")
+        except Exception:
+            return (None, None)
+
+    def _extract_with_ocrmypdf(pdf_path: str) -> Optional[str]:
+        """
+        OCR fallback using the `ocrmypdf` CLI, if installed.
+
+        This is significantly slower, but can recover text for scanned/image-only PDFs.
+        """
+        exe = shutil.which("ocrmypdf")
+        if not exe:
+            return None
+        sidecar = pdf_path + ".ocr.sidecar.txt"
+        out_pdf = pdf_path + ".ocr.pdf"
+        try:
+            # `--sidecar` writes recognized text to a separate file.
+            # `--skip-text` avoids OCRing pages that already have text.
+            subprocess.run(
+                [
+                    exe,
+                    "--skip-text",
+                    "--sidecar",
+                    sidecar,
+                    "-l",
+                    ocr_lang,
+                    pdf_path,
+                    out_pdf,
+                ],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=600,
+            )
+            if os.path.exists(sidecar) and os.path.getsize(sidecar) > 0:
+                try:
+                    with open(sidecar, "r", encoding="utf-8", errors="ignore") as f:
+                        text = f.read().strip()
+                    return text if text else None
+                except Exception:
+                    return None
+            return None
+        except Exception:
+            return None
+        finally:
+            for p in (sidecar, out_pdf):
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+
+    def _extract_one(domain: str, pid: str) -> tuple[bool, str]:
+        pdf_path = os.path.join(OUTPUT_DIR, domain, "pdfs", f"{pid}.pdf")
+        txt_path = os.path.join(OUTPUT_DIR, domain, "text", f"{pid}.txt")
+
+        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+            return (False, "missing_pdf")
+
+        # If the PDF is truncated/corrupted, try re-downloading before extraction.
+        # Do NOT rely on size alone; some valid PDFs can be small (short notes).
+        force_redownload = False
+        try:
+            if os.path.getsize(pdf_path) < 10_000:
+                force_redownload = True
+            else:
+                try:
+                    with pikepdf.open(pdf_path) as pdf:
+                        if len(pdf.pages) <= 0:
+                            force_redownload = True
+                except Exception:
+                    force_redownload = True
+        except Exception:
+            force_redownload = False
+
+        # Try Grobid (best effort; may not be running).
+        if not force_redownload:
+            tei_xml = grobid_extract(pdf_path)
+            if tei_xml and tei_xml.strip():
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(tei_xml)
+                    return (os.path.getsize(txt_path) > 0, "grobid")
+                except Exception:
+                    return (False, "grobid_write_error")
+
+        if not force_redownload:
+            # Try PyMuPDF first (fast).
+            text, method = _extract_with_pymupdf(pdf_path)
+            if text:
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    return (os.path.getsize(txt_path) > 0, method or "pymupdf")
+                except Exception:
+                    return (False, "write_error_after_pymupdf")
+
+        if not force_redownload:
+            # If PyMuPDF produced empty or couldn't open, try repairing and re-extracting.
+            repaired_path = _repair_pdf_with_pikepdf(pdf_path)
+            if repaired_path:
+                try:
+                    text2, method2 = _extract_with_pymupdf(repaired_path)
+                    if not text2:
+                        text2 = _extract_with_pdfminer(repaired_path)
+                        method2 = "pdfminer_after_repair" if text2 else method2
+                    if text2:
+                        with open(txt_path, "w", encoding="utf-8") as f:
+                            f.write(text2)
+                        return (os.path.getsize(txt_path) > 0, method2 or "repaired")
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        os.remove(repaired_path)
+                    except Exception:
+                        pass
+
+        if not force_redownload:
+            # Try pdfminer on the original (more forgiving, but slower).
+            pm_text = _extract_with_pdfminer(pdf_path)
+            if pm_text:
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(pm_text)
+                    return (os.path.getsize(txt_path) > 0, "pdfminer")
+                except Exception:
+                    return (False, "write_error_after_pdfminer")
+
+        # Last resort: try a safe re-download (do NOT delete the existing PDF unless we have a replacement).
+        try:
+            tmp_path = pdf_path + ".tmp_redownload.pdf"
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+
+            rec = latest.get((domain, pid))
+            urls = []
+            if rec and rec.get("pdf_url"):
+                urls.append(rec["pdf_url"])
+            if rec and rec.get("openalex_id"):
+                work = fetch_openalex_work(rec["openalex_id"])
+                if work:
+                    urls.extend(_candidate_pdf_urls_from_work(work))
+
+            seen = set()
+            redownload_ok = False
+            for u in urls:
+                if not u or u in seen:
+                    continue
+                seen.add(u)
+                if download_pdf(u, tmp_path):
+                    redownload_ok = True
+                    break
+
+            if redownload_ok and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                # Replace only after successful download.
+                try:
+                    os.replace(tmp_path, pdf_path)
+                except Exception:
+                    # If replace fails, try to clean up tmp and continue with original.
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+                    redownload_ok = False
+
+            if redownload_ok:
+                # After re-download, re-run the extraction pipeline.
+                text3, method3 = _extract_with_pymupdf(pdf_path)
+                if not text3:
+                    repaired_path2 = _repair_pdf_with_pikepdf(pdf_path)
+                    if repaired_path2:
+                        try:
+                            text3, method3 = _extract_with_pymupdf(repaired_path2)
+                            if not text3:
+                                text3 = _extract_with_pdfminer(repaired_path2)
+                                method3 = "pdfminer_after_redownload_repair" if text3 else method3
+                        finally:
+                            try:
+                                os.remove(repaired_path2)
+                            except Exception:
+                                pass
+                if not text3:
+                    text3 = _extract_with_pdfminer(pdf_path)
+                    method3 = "pdfminer_after_redownload" if text3 else method3
+
+                if text3:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(text3)
+                    return (os.path.getsize(txt_path) > 0, method3 or "after_redownload")
+        except Exception:
+            pass
+
+        if ocr_fallback:
+            ocr_text = _extract_with_ocrmypdf(pdf_path)
+            if ocr_text:
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(ocr_text)
+                    return (os.path.getsize(txt_path) > 0, "ocrmypdf")
+                except Exception:
+                    return (False, "ocr_write_error")
+            if not shutil.which("ocrmypdf"):
+                return (False, "ocrmypdf_not_installed")
+            return (False, "ocr_failed")
+
+        return (False, "pdf_too_small" if force_redownload else "no_text_extracted")
+
+    pbar = tqdm(total=len(tasks), desc="text backfill (from pdfs)", unit="paper")
+    if max_workers <= 1:
+        for domain, pid in tasks:
+            ok, reason = _extract_one(domain, pid)
+            if ok:
+                extracted += 1
+            else:
+                failed += 1
+                key = (domain, pid)
+                if key not in seen_failures:
+                    try:
+                        with open(failures_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"domain": domain, "id": pid, "reason": reason}, ensure_ascii=False) + "\n")
+                        seen_failures.add(key)
+                    except Exception:
+                        pass
+            pbar.update(1)
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_extract_one, d, pid): (d, pid) for d, pid in tasks}
+            for future in as_completed(futures):
+                domain, pid = futures[future]
+                try:
+                    ok, reason = future.result()
+                except Exception:
+                    ok, reason = (False, "unexpected_exception")
+
+                with lock:
+                    if ok:
+                        extracted += 1
+                    else:
+                        failed += 1
+                        try:
+                            key = (domain, pid)
+                            if key not in seen_failures:
+                                with open(failures_path, "a", encoding="utf-8") as f:
+                                    f.write(
+                                        json.dumps(
+                                            {"domain": domain, "id": pid, "reason": reason},
+                                            ensure_ascii=False,
+                                        )
+                                        + "\n"
+                                    )
+                                seen_failures.add(key)
+                        except Exception:
+                            pass
+                    pbar.update(1)
+
+    pbar.close()
+    print(f"Text backfill complete: extracted={extracted}, failed={failed}")
+    if failed:
+        print(f"Failures written to: {failures_path}")
+    return True
+
+
+# ==========================
+# RE-DOWNLOAD: INVALID/CORRUPTED PDFS
+# ==========================
+def redownload_invalid_pdfs(max_to_attempt: Optional[int] = None) -> bool:
+    """
+    Re-download PDFs that appear corrupted/truncated (too small or fail parsing).
+
+    This is for the "a few PDFs are corrupted" scenario: try alternative OA locations
+    via OpenAlex, and only overwrite a local PDF if the replacement validates.
+    """
+    # Index metadata by (domain, id) using the last occurrence (for OpenAlex links).
+    latest: dict = {}
+    if os.path.exists(META_FILE):
+        try:
+            with open(META_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except Exception:
+                        continue
+                    dom = rec.get("domain")
+                    pid = rec.get("id")
+                    if dom and pid:
+                        latest[(dom, pid)] = rec
+        except Exception:
+            pass
+
+    def _is_invalid_pdf(pdf_path: str) -> bool:
+        try:
+            if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+                return True
+            with pikepdf.open(pdf_path) as pdf:
+                return len(pdf.pages) <= 0
+        except Exception:
+            return True
+
+    tasks: list[tuple[str, str]] = []
+    for domain in CONCEPTS.keys():
+        pdf_dir = os.path.join(OUTPUT_DIR, domain, "pdfs")
+        if not os.path.isdir(pdf_dir):
+            continue
+        for pdf in Path(pdf_dir).glob("*.pdf"):
+            if _is_invalid_pdf(str(pdf)):
+                tasks.append((domain, pdf.stem))
+
+    if max_to_attempt is not None:
+        tasks = tasks[: max(0, int(max_to_attempt))]
+
+    print(f"Re-downloading {len(tasks)} invalid PDFs...")
+    if not tasks:
+        print("No invalid PDFs detected.")
+        return True
+
+    out_log = os.path.join(OUTPUT_DIR, "pdf_redownload_invalid_log.jsonl")
+    fixed = 0
+    failed = 0
+    for domain, pid in tqdm(tasks, desc="pdf redownload (invalid)", unit="paper"):
+        pdf_path = os.path.join(OUTPUT_DIR, domain, "pdfs", f"{pid}.pdf")
+        rec = latest.get((domain, pid), {})
+
+        urls: list[str] = []
+        if rec.get("pdf_url"):
+            urls.append(rec["pdf_url"])
+        if rec.get("openalex_id"):
+            work = fetch_openalex_work(rec["openalex_id"])
+            if work:
+                urls.extend(_candidate_pdf_urls_from_work(work))
+
+        # Unique, preserving order
+        seen: set[str] = set()
+        urls2: list[str] = []
+        for u in urls:
+            if u and u not in seen:
+                seen.add(u)
+                urls2.append(u)
+
+        tmp_path = pdf_path + ".tmp_redownload.pdf"
+        ok = False
+        tried = 0
+        for u in urls2:
+            tried += 1
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            if download_pdf(u, tmp_path):
+                try:
+                    os.replace(tmp_path, pdf_path)
+                except Exception:
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+                    continue
+                ok = True
+                break
+
+        if ok:
+            fixed += 1
+            status = "fixed"
+        else:
+            failed += 1
+            status = "failed"
+
+        try:
+            with open(out_log, "a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "domain": domain,
+                            "id": pid,
+                            "status": status,
+                            "tried_urls": tried,
+                            "openalex_id": rec.get("openalex_id"),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+
+    print(f"Invalid PDF re-download complete: fixed={fixed}, failed={failed}")
+    print(f"Log: {out_log}")
+    return True
+
+
+# ==========================
+# TOP-UP: REPLACE PAPERS UNTIL TEXT COVERAGE TARGET MET
+# ==========================
+def extract_plaintext_best_effort(pdf_path: str) -> Optional[str]:
+    """
+    Best-effort plaintext extraction for PDFs that are *already downloaded*.
+
+    Returns None when the PDF has no extractable text (e.g., scanned/image-only)
+    or when parsing fails.
+    """
+    # 1) PyMuPDF (fast)
+    try:
+        try:
+            fitz.TOOLS.mupdf_display_errors(False)
+        except Exception:
+            pass
+        doc = fitz.open(pdf_path)
+        parts: list[str] = []
+        for page in doc:
+            parts.append(str(page.get_text("text")))
+        doc.close()
+        text = "\n".join(parts).strip()
+        if text:
+            return text
+    except Exception:
+        pass
+
+    # 2) pdfminer (more forgiving on some PDFs)
+    try:
+        text = (pdfminer_extract_text(pdf_path) or "").strip()
+        if text:
+            return text
+    except Exception:
+        pass
+
+    # 3) Try pikepdf repair then retry extractors
+    try:
+        tmp = tempfile.NamedTemporaryFile(prefix="repaired_", suffix=".pdf", delete=False)
+        repaired = tmp.name
+        try:
+            tmp.close()
+        except Exception:
+            pass
+        try:
+            with pikepdf.open(pdf_path) as pdf:
+                pdf.save(repaired)
+            # retry PyMuPDF
+            try:
+                doc = fitz.open(repaired)
+                parts = []
+                for page in doc:
+                    parts.append(str(page.get_text("text")))
+                doc.close()
+                text2 = "\n".join(parts).strip()
+                if text2:
+                    return text2
+            except Exception:
+                pass
+            # retry pdfminer
+            try:
+                text3 = (pdfminer_extract_text(repaired) or "").strip()
+                if text3:
+                    return text3
+            except Exception:
+                pass
+        finally:
+            try:
+                if os.path.exists(repaired):
+                    os.remove(repaired)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return None
+
+
+def ensure_min_text_per_domain(
+    min_text_per_domain: int = MAX_PAPERS_PER_DOMAIN,
+    max_candidates_per_domain: int = 5000,
+) -> bool:
+    """
+    Ensure at least `min_text_per_domain` papers per domain have *non-empty* extracted text.
+
+    This is a non-OCR fallback for scanned/empty-text PDFs: we simply add additional
+    OA papers from the same domain until the target is met.
+    """
+    # Existing IDs from metadata (avoid duplicates).
+    existing_ids: set[str] = set()
+    if os.path.exists(META_FILE):
+        try:
+            with open(META_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        pid = rec.get("id")
+                        if pid:
+                            existing_ids.add(pid)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+    # Current text coverage from disk.
+    text_ok_by_domain: dict[str, set[str]] = {d: set() for d in CONCEPTS.keys()}
+    for d in CONCEPTS.keys():
+        text_dir = Path(OUTPUT_DIR) / d / "text"
+        if not text_dir.exists():
+            continue
+        for txt in text_dir.glob("*.txt"):
+            try:
+                if txt.stat().st_size > 0:
+                    text_ok_by_domain[d].add(txt.stem)
+            except Exception:
+                pass
+
+    with open(META_FILE, "a", encoding="utf-8") as meta_out:
+        for domain, concept_id in CONCEPTS.items():
+            have = len(text_ok_by_domain.get(domain, set()))
+            need = max(0, int(min_text_per_domain) - have)
+            if need <= 0:
+                print(f"{domain}: text_ok={have} (>= {min_text_per_domain}); skipping")
+                continue
+
+            print(f"{domain}: text_ok={have}, need={need} (adding additional OA papers with extractable text)")
+
+            stream = fetch_openalex(concept_id)
+            added = 0
+            seen_candidates = 0
+
+            pbar = tqdm(total=need, desc=f"top-up text {domain}", unit="paper")
+            while added < need and seen_candidates < max_candidates_per_domain:
+                try:
+                    work = next(stream)
+                except StopIteration:
+                    break
+                seen_candidates += 1
+
+                concepts = work.get("concepts", [])
+                if not is_domain_first_concept(concepts, domain):
+                    continue
+
+                pid = extract_openalex_id(work)
+                if not pid:
+                    continue
+                if pid in existing_ids:
+                    continue
+                if pid in text_ok_by_domain.get(domain, set()):
+                    continue
+
+                # Abstract must be long enough.
+                abstract = work.get("abstract")
+                if not abstract:
+                    inverted_index = work.get("abstract_inverted_index")
+                    if inverted_index:
+                        abstract = reconstruct_abstract_from_inverted_index(inverted_index)
+                if not abstract or abstract_word_count(abstract) < MIN_ABSTRACT_WORDS:
+                    continue
+
+                # Need a PDF URL.
+                pdf_candidates = _candidate_pdf_urls_from_work(work)
+                if not pdf_candidates:
+                    continue
+
+                domain_dir = os.path.join(OUTPUT_DIR, domain)
+                pdf_dir = os.path.join(domain_dir, "pdfs")
+                text_dir = os.path.join(domain_dir, "text")
+                abstract_dir = os.path.join(domain_dir, "abstracts")
+                os.makedirs(pdf_dir, exist_ok=True)
+                os.makedirs(text_dir, exist_ok=True)
+                os.makedirs(abstract_dir, exist_ok=True)
+
+                pdf_path = os.path.join(pdf_dir, f"{pid}.pdf")
+                txt_path = os.path.join(text_dir, f"{pid}.txt")
+                abstract_path = os.path.join(abstract_dir, f"{pid}.txt")
+
+                # Download PDF (validated by download_pdf()).
+                ok_pdf = False
+                chosen_pdf_url = None
+                for u in pdf_candidates:
+                    if download_pdf(u, pdf_path):
+                        ok_pdf = True
+                        chosen_pdf_url = u
+                        break
+                if not ok_pdf:
+                    continue
+
+                # Extract plaintext; if none, treat as scanned/unusable for this fallback.
+                text = extract_plaintext_best_effort(pdf_path)
+                if not text:
+                    # Keep things clean: remove PDF we can't use for plaintext workflows.
+                    try:
+                        os.remove(pdf_path)
+                    except Exception:
+                        pass
+                    continue
+
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(text)
+                except Exception:
+                    continue
+
+                try:
+                    with open(abstract_path, "w", encoding="utf-8") as f:
+                        f.write(abstract.strip())
+                except Exception:
+                    pass
+
+                publication_date = extract_publication_date(work)
+                metadata = {
+                    "id": pid,
+                    "openalex_id": work.get("id"),
+                    "domain": domain,
+                    "title": work.get("display_name"),
+                    "year": work.get("publication_year"),
+                    "publication_date": publication_date,
+                    "publication_month": publication_month_from_date(publication_date),
+                    "doi": work.get("doi"),
+                    "abstract": abstract.strip(),
+                    "pdf_url": chosen_pdf_url,
+                }
+                meta_out.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+                meta_out.flush()
+
+                existing_ids.add(pid)
+                text_ok_by_domain.setdefault(domain, set()).add(pid)
+                added += 1
+                pbar.update(1)
+
+            pbar.close()
+            if added < need:
+                print(f"{domain}: only added {added}/{need} papers with extractable text (candidates scanned/exhausted)")
+
+    return True
+
+
+# ==========================
 # ENRICH: ADD PUBLICATION DATE/MONTH INTO METADATA JSONL
 # ==========================
 def enrich_metadata_dates() -> bool:
@@ -1374,10 +2228,65 @@ def main():
         help="Download PDFs for every existing abstract file that is missing a PDF (best-effort; paywalls may block).",
     )
     parser.add_argument(
+        "--backfill-text-for-pdfs",
+        action="store_true",
+        help="Extract text for every existing PDF that is missing a text file (best-effort).",
+    )
+    parser.add_argument(
         "--max-pdf-attempts",
         type=int,
         default=None,
         help="Limit the number of missing-PDF abstract files to attempt (debug).",
+    )
+    parser.add_argument(
+        "--max-text-attempts",
+        type=int,
+        default=None,
+        help="Limit the number of missing-text PDFs to attempt (debug).",
+    )
+    parser.add_argument(
+        "--text-workers",
+        type=int,
+        default=TEXT_MAX_WORKERS,
+        help="Workers for text extraction from PDFs (default 1 to avoid MuPDF thread crashes).",
+    )
+    parser.add_argument(
+        "--ocr-fallback",
+        action="store_true",
+        help="If text extraction fails, try OCR using `ocrmypdf` (must be installed separately).",
+    )
+    parser.add_argument(
+        "--ocr-lang",
+        default="eng",
+        help="OCR language(s) for `ocrmypdf -l` (e.g. eng, eng+deu).",
+    )
+    parser.add_argument(
+        "--redownload-invalid-pdfs",
+        action="store_true",
+        help="Re-download PDFs that appear corrupted/truncated using alternative OpenAlex OA links, then re-run text backfill.",
+    )
+    parser.add_argument(
+        "--max-invalid-pdf-attempts",
+        type=int,
+        default=None,
+        help="Limit the number of invalid PDFs to attempt re-download (debug).",
+    )
+    parser.add_argument(
+        "--ensure-min-text-per-domain",
+        action="store_true",
+        help="Top up each domain with additional OA papers until at least N papers have non-empty extracted text (non-OCR fallback).",
+    )
+    parser.add_argument(
+        "--min-text-per-domain",
+        type=int,
+        default=MAX_PAPERS_PER_DOMAIN,
+        help="Target number of papers per domain with non-empty extracted text.",
+    )
+    parser.add_argument(
+        "--max-text-topup-candidates",
+        type=int,
+        default=5000,
+        help="Max OpenAlex candidates to scan per domain during text top-up.",
     )
     parser.add_argument(
         "--enrich-metadata-dates",
@@ -1400,6 +2309,29 @@ def main():
         return
     if args.backfill_pdfs_for_abstracts:
         backfill_pdfs_for_abstract_files(max_to_attempt=args.max_pdf_attempts)
+        return
+    if args.backfill_text_for_pdfs:
+        backfill_text_for_pdf_files(
+            max_workers=args.text_workers,
+            max_to_attempt=args.max_text_attempts,
+            ocr_fallback=args.ocr_fallback,
+            ocr_lang=args.ocr_lang,
+        )
+        return
+    if args.redownload_invalid_pdfs:
+        redownload_invalid_pdfs(max_to_attempt=args.max_invalid_pdf_attempts)
+        backfill_text_for_pdf_files(
+            max_workers=args.text_workers,
+            max_to_attempt=None,
+            ocr_fallback=args.ocr_fallback,
+            ocr_lang=args.ocr_lang,
+        )
+        return
+    if args.ensure_min_text_per_domain:
+        ensure_min_text_per_domain(
+            min_text_per_domain=args.min_text_per_domain,
+            max_candidates_per_domain=args.max_text_topup_candidates,
+        )
         return
     if args.enrich_metadata_dates:
         enrich_metadata_dates()

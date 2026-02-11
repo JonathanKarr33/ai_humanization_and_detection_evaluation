@@ -1,0 +1,2566 @@
+arXiv:1503.06468v1  [cs.LG]  22 Mar 2015
+1
+Machine Learning Methods for Attack Detection in
+the Smart Grid
+Mete Ozay, Member, IEEE, I˜naki Esnaola, Member, IEEE, Fatos T. Yarman Vural, Senior Member, IEEE,
+Sanjeev R. Kulkarni, Fellow, IEEE, and H. Vincent Poor, Fellow, IEEE
+Abstract—Attack detection problems in the smart grid are
+posed as statistical learning problems for different attack sce-
+narios in which the measurements are observed in batch or
+online settings. In this approach, machine learning algorithms
+are used to classify measurements as being either secure or
+attacked. An attack detection framework is provided to exploit
+any available prior knowledge about the system and surmount
+constraints arising from the sparse structure of the problem in
+the proposed approach. Well-known batch and online learning
+algorithms (supervised and semi-supervised) are employed with
+decision and feature level fusion to model the attack detection
+problem. The relationships between statistical and geometric
+properties of attack vectors employed in the attack scenarios and
+learning algorithms are analyzed to detect unobservable attacks
+using statistical learning methods. The proposed algorithms are
+examined on various IEEE test systems. Experimental analyses
+show that machine learning algorithms can detect attacks with
+performances higher than the attack detection algorithms which
+employ state vector estimation methods in the proposed attack
+detection framework.
+Index Terms—Smart grid security, sparse optimization, classi-
+ﬁcation, attack detection, phase transition.
+I. INTRODUCTION
+Machine learning methods have been widely proposed
+in the smart grid literature for monitoring and control of
+power systems [1], [2], [3], [4]. Rudin et al. [1] suggest an
+intelligent framework for system design in which machine
+learning algorithms are employed to predict the failures of
+system components. Anderson et al. [2] employ machine
+learning algorithms for the energy management of loads and
+sources in smart grid networks. Malicious activity prediction
+and intrusion detection problems have been analyzed using
+machine learning techniques at the network layer of smart
+grid communication systems [3], [4].
+In this paper, we focus on the false data injection attack
+detection problem in the smart grid at the physical layer.
+We use the Distributed Sparse Attacks model proposed by
+Ozay et al. [5], where the attacks are directed by injecting
+false data into the local measurements observed by either
+local network operators or smart Phasor Measurement Units
+M. Ozay is with the School of Computer Science, University of Birm-
+ingham, B15 2TT, UK (e-mail: m.ozay@cs.bham.ac.uk). I. Esnaola, S. R.
+Kulkarni and H. V. Poor are with the Department of Electrical Engineering,
+Princeton University, Princeton, NJ 08544, USA (e-mail: {jesnaola, kulkarni,
+poor}@princeton.edu). I. Esnaola is also with the Department of Automatic
+Control and Systems Engineering, University of Shefﬁeld, S1 3JD, UK. F. T.
+Yarman Vural is with the Department of Computer Engineering, Middle East
+Technical University, Ankara, Turkey (e-mail: vural@ceng.metu.edu.tr).
+This research was supported in part by the U. S. National Science
+Foundation under Grant CMMI-1435778.
+(PMUs) in a network with a hierarchical structure, i.e. the
+measurements are grouped into clusters. In addition, network
+operators who employ statistical learning algorithms for attack
+detection know the topology of the network, measurements
+observed in the clusters and the measurement matrix [5].
+In attack detection methods that employ state vector es-
+timation, ﬁrst the state of the system is estimated from
+the observed measurements. Then, the residual between the
+observed and the estimated measurements is computed. If the
+residual is greater than a given threshold, a data injection
+attack is declared [5], [6], [7], [8]. However, exact recovery of
+state vectors is a challenge for state vector estimation based
+methods in sparse networks [5], [9], [10], where the Jacobian
+measurement matrix is sparse. Sparse reconstruction methods
+can be employed to solve the problem, but the performance
+of this approach is limited by the sparsity of the state vectors
+[5], [11], [12]. In addition, if false data injected vectors reside
+in the column space of the Jacobian measurement matrix and
+satisfy some sparsity conditions (e.g., the number of nonzero
+elements is at most κ∗, which is bounded by the size of
+the Jacobian matrix), then false data injection attacks, called
+unobservable attacks, cannot be detected [7], [8].
+The contributions of this paper are as follows:
+1) We conduct a detailed analysis of the techniques pro-
+posed by Ozay et al. [13] who employ supervised learn-
+ing algorithms to predict false data injection attacks.
+In addition, we discuss the validity of the fundamental
+assumptions of statistical learning theory in the smart
+grid. Then, we propose semi-supervised, online learning,
+decision and feature level fusion algorithms in a generic
+attack construction framework, which can be employed
+in hierarchical and topological networks for different
+attack scenarios.
+2) We analyze the geometric structure of the measurement
+space deﬁned by measurement vectors, and the effect
+of false data injection attacks on the distance function
+of the vectors. This leads to algorithms for learning
+the distance functions, detecting unobservable attacks,
+estimating the attack strategies and predicting future
+attacks using a set of observations.
+3) We empirically show that the statistical learning algo-
+rithms are capable of detecting both observable and
+unobservable attacks with performance better than the
+attack detection algorithms that employ state vector
+estimation methods. In addition, phase transitions can be
+observed in the performance of Support Vector Machines
+(SVM) at a value of κ∗[14].
+
+2
+In the next section, the attack detection problem is formu-
+lated as a statistical classiﬁcation problem in a network accord-
+ing to the model proposed by Ozay et al. [5]. In Section II, we
+establish the relationship between statistical learning methods
+and attack detection problems in the smart grid. Supervised,
+semi-supervised, decision and feature level fusion, and online
+learning algorithms are used to solve the classiﬁcation problem
+in Section III. In Section IV, our approach is numerically
+evaluated on IEEE test systems. A summary of the results
+and discussion on future work are given in Section V.
+II. PROBLEM FORMULATION
+In this section, the attack detection problem is formalized
+as a machine learning problem.
+A. False Data Injection Attacks
+False Data Injection Attacks are deﬁned in the following
+model:
+z = Hx + n,
+(1)
+where x ∈RD contains the voltage phase angles at the buses,
+z ∈RN is the vector of measurements, H ∈RN×D is the
+measurement Jacobian matrix and n ∈RN is the measurement
+noise, which is assumed to have independent components [7].
+The attack detection problem is deﬁned as that of deciding
+whether or not there is an attack on the measurements. If
+the noise is distributed normally with zero mean, then a
+State Vector Estimation (SVE) method can be employed by
+computing
+ˆx = (HT ΛH)−1HT Λz,
+(2)
+where Λ is a diagonal matrix whose diagonal elements
+are given by Λii = ν−2
+i , and ν2
+i
+is the variance of ni,
+∀i = 1,2,... ,N [7], [13]. The goal of the attacker is to inject a
+false data vector a ∈RN into the measurements without being
+detected by the operator. The resulting observation model is
+˜z = Hx + a + n.
+(3)
+The false data injection vector, a, is a nonzero vector, such
+that ai ≠0, ∀i ∈A, where A is the set of indices of
+the measurement variables that will be attacked. The secure
+variables satisfy the constraint ai = 0, ∀i ∈¯
+A, where ¯
+A is the
+set complement of A [13].
+In order to detect an attack, the measurement residual [7],
+[13] is examined in ℓ2-norm ρ = ∥˜z −Hˆx∥2
+2, where ˆx ∈RD
+is the state vector estimate. If ρ > τ, where τ ∈R is an
+arbitrary threshold which determines the trade-off between
+the detection and false alarm probabilities, then the network
+operator declares that the measurements are attacked.
+One of the challenging problems of this approach is that
+the Jacobian measurement matrices of power systems in the
+smart grid are sparse under the DC power ﬂow model [13],
+[15]. Therefore, the sparsity of the systems determines the
+performance of sparse state vector estimation methods [11],
+[12]. In addition, unobservable attacks can be constructed even
+if the network operator can estimate the state vector correctly.
+For instance, if a = Hc, where c ∈RD is an attack vector, then
+the attack is unobservable by using the measurement residual
+ρ [7], [8]. In this work, we show that statistical learning
+methods can be used to detect the unobservable attacks with
+performance higher than the attack detection algorithms that
+employ a state vector estimation approach. Following the
+motivation mentioned above, a new approach is proposed
+using statistical learning methods.
+B. Attack Detection using Statistical Learning Methods
+Given a set of samples S = {si}M
+i=1 and a set of labels
+Y = {yi}M
+i=1, where (si,yi) ∈S × Y are independent and
+identically distributed (i.i.d.) with joint distribution P, the
+statistical learning problem can be deﬁned as constructing a
+hypothesis function f ∶S →Y, that captures the relationship
+between the samples and labels [16]. Then, the attack detection
+problem is deﬁned as a binary classiﬁcation problem, where
+yi =
+⎧⎪⎪⎨⎪⎪⎩
+1,
+if
+ai ≠0
+−1,
+if
+ai = 0 .
+(4)
+In other words, yi = 1, if the i-th measurement is attacked,
+and yi = −1 when there is no attack.
+In this paper, the model proposed by Ozay et al. [5] is
+employed for attack construction where the measurements are
+observed in clusters in the network. Measurement matrices,
+and observation and attack vectors are partitioned into G
+blocks, denoted by Gg with ∣Gg∣= Ng for g = 1,2,... ,G.
+Therefore, the observation model is deﬁned as
+⎡⎢⎢⎢⎢⎢⎣
+˜z1
+⋮
+˜zG
+⎤⎥⎥⎥⎥⎥⎦
+=
+⎡⎢⎢⎢⎢⎢⎣
+H1
+⋮
+HG
+⎤⎥⎥⎥⎥⎥⎦
+x +
+⎡⎢⎢⎢⎢⎢⎣
+a1
+⋮
+aG
+⎤⎥⎥⎥⎥⎥⎦
++
+⎡⎢⎢⎢⎢⎢⎣
+n1
+⋮
+nG
+⎤⎥⎥⎥⎥⎥⎦
+,
+(5)
+where ˜zg ∈RNg is the measurement observed in the g-th
+cluster of nodes through measurement matrix Hg ∈RNg×D
+and noise ng ∈RNg, and which is under attack ag ∈RNg
+with g = 1,2,... ,G [5]. Within this framework, each observed
+measurement vector is considered as a sample, i.e., si ≜˜zg,
+where ˜zg ∈RNg 1. Taking this into account, the measurements
+are classiﬁed in two groups, secure and attacked, by computing
+f(si),∀i = 1,2,... ,M.
+The crucial part of the traditional attack detection algorithm,
+which we call State Vector Estimation (SVE), is the estimation
+of ˆx. If the attack vectors, a, are constructed in the column
+space of H, then they are annihilated in the computation of
+the residual [7]. Therefore, SVE cannot detect the attacks and
+these attacks are called unobservable. On the other hand, we
+observe that the distance between the attacked and the secure
+measurement vectors is deﬁned by the attack vector in S. If
+the attacks are unobservable, i.e. ai = Hci and aj = Hcj,
+where ci ∈RD and cj ∈RD are the attack vectors, then the
+distance between ˜zi = zi + ai and ˜zj = zj + aj is computed as
+∥˜zi −˜zj∥2 =
+⎧⎪⎪⎪⎪⎨⎪⎪⎪⎪⎩
+∥zi −zj∥2 + ∥ai −aj∥2,
+if
+i,j ∈A
+∥zi −zj∥2 + ∥ai∥2,
+if
+i ∈A, j ∈¯
+A
+∥zi −zj∥2,
+if
+i,j ∈¯
+A
+,
+(6)
+1For simplicity of notation, we use i as the index of measurements ˜zi, zi,
+and attack vectors ai, ∀i = 1, 2, . . . , M.
+
+3
+where ˜zi ∈S and ˜zj ∈S. In (6), we can extract information
+on the attack vectors by observing the measurements. Since
+the distances between secure and attacked measurements are
+discriminated by the attack vectors, the attacks can be recog-
+nized by the learning algorithms which use the information of
+these distances, even if the attacks are unobservable.
+Two main assumptions from statistical learning theory need
+to be taken into account to classify measurements which
+satisfy (6):
+1) We assume that (si,yi) ∈S×Y are distributed according
+to a joint distribution P [17]. In a smart grid setting, this
+distribution assumption is satisﬁed for the attack models
+in which the measurements ˜z are functions of a, and we
+can extract statistical information about both the attacked
+and secure measurements from the observations.
+2) We assume that (si,yi), ∀i, are sampled from P,
+independently and identically. This assumption is also
+satisﬁed in the smart grid if the entries of n and a are
+i.i.d. random variables [16].
+In order to explain the signiﬁcance of the above assumptions
+in the smart grid, we consider the following example. Assume
+that measurements 1,2 ∈A and 3,4 ∈¯
+A, are given such that
+y1,y2 = 1 and y3,y4 = −1. Furthermore, assume that z1 = 3⋅I,
+z2 = 5 ⋅I, z3 = 2 ⋅I and z4 = 4 ⋅I, where I = (1,1)T . If the
+attack vectors are identical but not independent, then the attack
+vectors can be constructed as a1 = a2 = −1 ⋅I. As a result, we
+observe that ˜z1 = ˜z3 = 2 ⋅I and ˜z2 = ˜z4 = 4 ⋅I. Therefore,
+our assumption about the existence of a joint distribution P
+is not satisﬁed and we cannot classify the measurements with
+the aforementioned approach.
+III. ATTACK DETECTION USING MACHINE LEARNING
+METHODS
+In this section, the attack detection problem is modeled
+by statistical classiﬁcation of measurements using machine
+learning methods.
+A. Supervised Learning Methods
+In the following, the classiﬁcation function f is computed in
+a supervised learning framework by a network operator using
+a set of training data Tr = {(si,yi)}MTr
+i=1 . The class label, y′
+i,
+of a new observation, s′
+i, is predicted using y′
+i = f(s′
+i). We
+employ four learning algorithms for attack detection.
+1) Perceptron: Given a sample si, a perceptron predicts yi
+using the classiﬁcation function f(si) = sign(w ⋅si), where
+w ∈RNi is a weight vector and sign(w ⋅si) is deﬁned as [17]
+sign(w ⋅si) =
+⎧⎪⎪⎨⎪⎪⎩
+−1,
+if
+w ⋅si < 0
+1,
+otherwise.
+(7)
+In the training phase, the weights are adjusted at each
+iteration t = 1,2,... ,T of the algorithm for each training
+sample using
+w(t + 1) ∶= w(t) + ∆w,
+(8)
+where ∆w = γ(yi −f(si))si and γ is the learning rate. The
+algorithm is iterated until a stopping criterion, such as the
+number of algorithm steps, or an error threshold, is achieved.
+In the testing phase, the label of a new test sample is predicted
+by f(s′i) = sign(w(T ) ⋅s′i).
+Despite its success in various machine learning applications,
+the convergence of the algorithm is assured only when the
+samples are linearly separable [17]. For that reason, the
+perceptron can be successfully used for the detection of the
+attacks only if the measurements can be separated by a
+hyperplane. In the following sections, we give examples of
+classiﬁcation algorithms which overcome this limitation by
+employing non-linear classiﬁcation rules or feature extraction
+methods.
+2) k-Nearest Neighbor (k-NN): This algorithm labels an
+unlabeled sample s′
+i according to the labels of its k-nearest
+neighborhood in the feature space [17]. Speciﬁcally, the ob-
+served measurements si ∈S, ∀i = 1,2,... ,M, are taken
+as feature vectors. The set of k-nearest neighbors of s′
+i,
+ℵ(s′
+i) = {si(1),si(2),... ,si(k)}, is constructed by computing
+the Euclidean distances between the samples [18], where
+i(1),i(2),...,i(M) are deﬁned as
+∥s′
+i −si(1)∥2 ≤∥s′
+i −si(2)∥2 ≤... ≤∥s′
+i −si(M)∥2.
+(9)
+Then, the most frequently observed class label is computed
+using majority voting among the class labels of the samples
+in the neighborhood, and assigned as the class label of s′
+i [19].
+One of the challenges of k-NN is the curse of dimensionality,
+which is the difﬁculty of the learning problem when the
+sample size is small compared to the dimension of the feature
+vector [17], [19], [20]. In attack detection, this problem can
+be handled using the following approaches:
+●Feature selection algorithms can be used to reduce the
+dimension of the feature vectors [19], [20]. Development
+of feature selection algorithms may be a promising di-
+rection for smart grid security, and is an interesting topic
+for future work.
+●Kernel machines, such as SVMs, can be used to map the
+feature vectors in S to Hilbert spaces, where the feature
+vectors are processed implicitly in the mappings and the
+computation of the learning models. We give the details of
+the kernel machines and SVMs in the following sections.
+●The samples can be processed in small sizes, e.g. by
+selecting a single measurement vector as a sample,
+which leads to one-dimensional samples. We employ
+this approach in Section IV. If the sample size is large,
+distributed learning and optimization methods can be used
+[5], [15].
+3) Support Vector Machines: We seek a hyperplane that
+linearly separates attacked and secure measurements into two
+half spaces using hyperplanes in a D′ dimensional feature
+space, F, which is constructed by a non-linear mapping
+Ψ ∶S →F [13], [21]. A hyperplane is represented by a weight
+vector wΨ ∈RD′ and a bias variable b ∈R, which results in
+wΨ ⋅Ψ(s) + b = 0,
+(10)
+where Ψ(s) is the feature vector of the sample that lies on the
+hyperplane in F as shown in Fig. 1. We choose the hyperplane
+that is at the largest distance from the closest positive and
+
+4
+ 
+Class of attacked 
+measurements 
+Class of secure 
+measurements 
+ked
+Class of secure
+measurements
+(a) Attack detection using the linearly separable dataset.
+ 
+ 
+ 
+ 
+Class of attacked 
+measurements 
+Class of secure 
+measurements 
+ked 
+Class of secure
+measurements
+(b) Attack detection using the linearly non-separable dataset.
+Fig. 1: Classiﬁcation using SVM. Positive and negative sam-
+ples which belong to the class of attacked and secure mea-
+surements are depicted by disk and star markers, respectively.
+Support vectors and misclassiﬁed samples are depicted by
+dashed circles and hexagonal markers, respectively.
+negative samples. This constraint can be formulated as
+yi(wΨ ⋅Ψ(s) + b) −1 ≥0,
+∀i = 1,2,... ,M Tr.
+(11)
+Since d+ = d−=
+1
+∥wΨ∥2 , where d+ and d−are the shortest
+distances from the hyperplane to the closest positive and
+negative samples respectively, a maximum margin hyperplane
+can be computed by minimizing ∥wΨ∥2.
+If the training examples in the transformed space are not
+linearly separable (see Fig. 1.b), then the optimization prob-
+lem can be modiﬁed by introducing slack variables ξi ≥0,
+∀i = 1,2,... ,M Tr, in (11) which yields
+yi(wΨ ⋅Ψ(si) + b) −1 + ξi ≥0 ,∀i = 1,2,... ,M Tr.
+(12)
+The hyperplane wΨ is computed by solving the following
+optimization problem in primal or dual form [21], [22], [23]
+minimize
+∥wΨ∥2
+2 + C
+MTr
+∑
+i=1
+ξi
+subject to
+yi(wΨ ⋅Ψ(si) + b) −1 + ξi ≥0
+ξi ≥0,
+∀i = 1,2,... ,M Tr
+(13)
+where C is a constant that penalizes (an upper bound on) the
+training error of the soft margin SVM.
+4) Sparse Logistic Regression: In utilizing this approach for
+attack detection, we solve the classiﬁcation problem using the
+Alternating Direction Method of Multipliers (ADMM) [24]
+considering the sparse state vector estimation approach of
+Ozay et al. [5]. Note that, the hyperplanes deﬁned in (10) can
+be computed by employing the generalized logistic regression
+models presented in [19], which provide the distributions
+P(yi∣si)
+=
+1
+1 + exp(−yi(w ⋅si + b)),
+(14)
+P(yi∣Ψ(si))
+=
+1
+1 + exp(−yi(wΨ ⋅Ψ(si) + b)), (15)
+in S and F, respectively. For this purpose, we minimize the
+logistic loss functions
+L(si,yi) = log (1 + exp(−yi(w ⋅si + b))),
+(16)
+L(Ψ(si),yi) = log (1 + exp(−yi(wΨ ⋅Ψ(si) + b))).
+(17)
+Deﬁning a feature matrix S = (sT
+1 ,sT
+2 ,... ,sT
+Mtr)T and a label
+vector Y = (y1,y2,... ,yMtr)T , the ADMM optimization
+problem [24] is constructed as
+minimize
+L(S,Y) + µ(r)
+subject to
+w −r = 0
+(18)
+where w is a weight vector, r is a vector of optimization
+variables, µ(r) = λ∥r∥1 is a regularization function, and λ is
+a regularization parameter which is introduced to control the
+sparsity of the solution [24].
+B. Semi-supervised Learning Methods
+In semi-supervised learning methods, the information ob-
+tained from the unlabeled test samples is used during the
+computation of the learning models [25].
+In this section, a semi-supervised Support Vector Machine
+algorithm, called Semi-supervised SVM (S3VM) [26], [27]
+is employed to establish the analytical relationship between
+supervised and semi-supervised learning algorithms. In this
+setting, the unlabeled samples are incorporated into cost func-
+tion of the optimization problem (13) as
+minimize
+∥w∥2
+2 + C1
+MTr
+∑
+i=1
+LTr(si,yi) + C2
+MTe
+∑
+i=1
+LTe(s′
+i), (19)
+where C1 and C2 are conﬁdence parameters, and LTr(si,yi) =
+max(0,1−yi(wsi +b)) and LTe(s′i) = max(0,1−∥s′i∥1) are
+the loss functions of the training and test samples, respectively.
+The main assumption of the S3VM is that the samples in
+the same cluster have the same labels and the number of sub-
+clusters is not large [27]. In other words, attacked and secure
+measurement vectors should be clustered in distinct regions
+in the feature spaces. Moreover, the difference between the
+number of attacked and secure measurements should not be
+large in order to avoid the formation of sub-clusters.
+This requirement can be validated by analyzing the feature
+space. Following (6), if ∥zi −zj∥2 +∥ai −aj∥2 ≤∥ai∥2 +∥aj∥2,
+and ∥zk −zl∥2 ≤∥ai∥2 + ∥aj∥2, ∀i,j ∈A and ∀k,l ∈¯
+A, then
+
+5
+the samples belonging to different classes are well-separated
+in different classes. Moreover, this requirement is satisﬁed in
+(19) by adjusting C2 [27]. A survey of the methods which are
+used to provide optimal C2 and solve (19) is given in [27].
+C. Decision and Feature Level Fusion Methods
+One of the challenges of statistical learning theory is to ﬁnd
+a classiﬁcation rule that performs better than a set of rules of
+individual classiﬁers, or to ﬁnd a feature set that represents the
+samples better than a set of individual features. One approach
+to solve this problem is to combine a collection of classiﬁers
+or a set of features to boost the performance of the individual
+classiﬁers. The former approach is called decision level fusion
+or ensemble learning, and the latter approach is called feature
+level fusion. In this section, we consider Adaboost [28] and
+Multiple Kernel Learning (MKL) [29] for ensemble learning
+and feature level fusion.
+1) Ensemble Learning for Decision Level Fusion: Various
+methods such as bagging, boosting and stacking have been
+developed to combine classiﬁers in ensemble learning situa-
+tions [17], [30]. In the following, Adaboost is explained as
+an ensemble learning approach, in which a collection of weak
+classiﬁers are generated and combined using a combination
+rule to construct a stronger classiﬁer which performs better
+than the weak classiﬁers [17], [28], [31].
+At each iteration t = 1,2,... ,T of the algorithm, a decision
+or hypothesis ft(⋅) of the weak classiﬁer is computed with
+respect to the distribution on the training samples Dt(⋅) at t by
+minimizing the weighted error ǫt =
+MTr
+∑
+i=1
+Dt(i)I(ft(si) ≠yi),
+where I(⋅) is the indicator function. The distribution is ini-
+tialized uniformly D1(i) =
+1
+MTr at t = 1, and is updated by a
+parameter αt = 1
+2 log( 1−ǫt
+ǫt ) as follows [31]
+Dt+1(i) = Dt(i)exp−αtyift(si)
+Zt
+,
+(20)
+where Zt is a normalization parameter, called the partition
+function. At the output of the algorithm, a strong classi-
+ﬁer H(⋅) is constructed for a sample s′ using H(s′) =
+sign(
+T
+∑
+t=1 αtft(s′)).
+2) Multiple Kernel Learning for Feature Level Fusion: Fea-
+ture level fusion methods combine the feature spaces instead
+of the decisions of the classiﬁers. One of the feature level
+fusion methods is MKL in which different feature mappings
+are represented by kernels that are combined to produce a
+new kernel which represents the samples better than the other
+kernels [29]. Therefore, MKL provides an approach to solve
+the feature mapping selection problem of SVM. In order to
+see this relationship, we ﬁrst give the dual form of (13)
+maximize
+MTr
+∑
+i=1 βi −1
+2
+MTr
+∑
+i=1
+MTr
+∑
+j=1 βiβjyiyjk(si,sj)
+subject to
+MTr
+∑
+i=1 βiyi = 0
+0 ≤βi ≤C,
+∀i = 1,2,... ,M Tr,
+(21)
+where βi is the dual variable and k(si,sj) = Ψ(si) ⋅Ψ(sj) is
+the kernel function. Therefore, (21) is a single kernel learning
+algorithm which employs a single kernel matrix K ∈RMTr×MTr
+with elements K(i,j) = k(si,sj). If we deﬁne the weighted
+combination of U kernels as K =
+U
+∑
+u=1 duKu, where du ≥0 are
+the normalized weights such that
+U
+∑
+u=1 du = 1, then we obtain
+the following optimization problem of the MKL [32]:
+maximize
+MTr
+∑
+i=1
+βi −1
+2
+MTr
+∑
+i=1
+MTr
+∑
+j=1
+βiβjyiyj
+U
+∑
+u=1 duKu(si,sj)
+subject to
+MTr
+∑
+i=1
+βiyi = 0
+0 ≤βi ≤C,
+∀i = 1,2,...,M Tr.
+(22)
+In (22), the kernels with du = 0 are eliminated, and therefore
+MKL can be considered as a kernel selection method. In the
+experiments, SVM algorithms are implemented with different
+kernels and these kernels are combined under MKL.
+D. Online Learning Methods for Real-time Attack Detection
+In the smart grid, the measurements are observed in real-
+time where the samples are collected sequentially in time.
+In this scenario, we relax the distribution assumption of
+Section II.B, since the samples are observed in an arbitrary
+sequence [33]. Moreover, smart PMUs which employ learning
+algorithms, may be required to detect the attacks when the
+measurements are observed without processing the whole set
+of training samples. In order to solve these challenging prob-
+lems, we may use online versions of the learning algorithms
+given in the previous sections.
+In a general online learning setting, a sequence of training
+samples (or a single sample) is given to the learning algorithm
+at each observation or algorithm processing time. Then, the
+algorithm computes the learning model using only the given
+samples and predicts the labels. The learning model is updated
+with respect to the error of the algorithm which is computed
+using a loss function on the given samples. Therefore, the
+perceptron and Adaboost are convenient for online learning in
+this setting. For instance, an online perceptron is implemented
+by predicting the label yi of a single sample si at each
+time t, and updating the weight vector w using ∆w for the
+misclassiﬁed samples with yi ≠sign(f(si)) [34]. This simple
+approach is applied for the development of online MKL [34]
+and regression algorithms [35].
+E. Performance Analysis
+In smart grid networks, the major concern is not just the
+detection of attacked variables, but also that of the secure
+variables with high performance. In other words, we require
+the algorithms to predict the samples with high precision and
+recall performance in order to avoid false alarms. Therefore,
+we measure the true positives (tp), the true negatives (tn), the
+false positives (fp), and the false negatives (fn), which are
+deﬁned in Table I.
+In addition, the learning abilities and memorization proper-
+ties of the algorithms are measured by Precision (Prec), Recall
+(Rec) and Accuracy (Acc) values which are deﬁned as [13]
+Prec =
+tp
+tp+fp,
+Rec =
+tp
+tp+fn,
+Acc =
+tp+tn
+tp+tn+fp+fn.
+(23)
+
+6
+TABLE I: Deﬁnitions of performance measures
+Attacked
+Secure
+Classiﬁed as Attacked
+tp
+fp
+Classiﬁed as Secure
+fn
+tn
+Precision values give information about the prediction per-
+formance of the algorithms. On the other hand, Recall values
+measure the degree of attack retrieval. Finally, the total
+classiﬁcation performance of the algorithms is measured by
+Accuracy. For instance, if Prec = 1, then none of the secure
+measurements is misclassiﬁed as attacked. If Rec = 1, then
+none of the attacked measurements is misclassiﬁed as secure.
+If Acc = 1, then each measurement classiﬁed as attacked is
+actually exposed to an attack, and each measurement classiﬁed
+as secure is actually a secure measurement.
+IV. EXPERIMENTS
+The classiﬁcation algorithms are analyzed in IEEE 9-bus,
+57-bus and 118-bus test systems in the experiments. The
+measurement matrices H of the systems are obtained from
+the MATPOWER toolbox [36]. The operating points of the test
+systems provided in the MATPOWER case ﬁles are used in
+generating z. Training and test data are generated by repeating
+this process 50 times for each simulated point and dataset.
+In the experiments, we assume that the attacker has access
+to κ measurements which are randomly chosen to generate
+a κ-sparse attack vector a with Gaussian distributed nonzero
+elements with the same mean and variance as the entries of z
+[5], [13], [15]. We assume that concept drift [37] and dataset
+shift [38] do not occur. Therefore, we use G = N in the
+simulations following the results of Ozay et al. [5].
+We analyze the behavior of each algorithm on each system
+for both observable and unobservable attacks by generating
+attack vectors with different values of
+κ
+N
+∈[0,1]. More
+precisely, if κ ≥N −D + 1, then attack vectors that are not
+observable by SVE, i.e. unobservable attacks, are generated
+[5]. Otherwise, the generated attacks are observable.
+The LIBSVM [39] implementation is used for the SVM,
+and the ADMM [24] implementation is used for Sparse
+Logistic Regression (SLR). k values of the k-NN algorithm
+are optimized by searching k ∈{1,2,...,
+√
+M Tr} using leave-
+one-out cross-validation, where M Tr is the number of training
+samples. Both the linear and Gaussian kernels are used for the
+implementation of SVM. A grid search method [39], [40], [41]
+is employed to search the parameters of the SVM in an interval
+I = [Imin,Imax], where Imin and Imax are user deﬁned
+values. In order to follow linear paths in the search space, log
+values of parameters are considered in the grid search method
+[41]. Keerthi and Lin [41] analyzed the asymptotic properties
+of the SVM for I = [0,∞). In the experiments, Imin = −10 is
+chosen to compute a lower limit 2−10 of the parameter values
+following the theoretical results given in [39] and [41]. Since
+the classiﬁcation performance of the SVM does not change
+for parameter values that are greater than a threshold [41], we
+used Imax = 10 as employed in the experimental analyses in
+[41]. Therefore, the kernel width parameter σ of a Gaussian
+kernel is searched in the interval log(σ) ∈[−10,10] and the
+cost penalization parameter C of the SVM is searched in the
+interval log(C) ∈[−10,10]. The regularization parameter of
+the SLR is computed as
+λ = Ωλmax,
+(24)
+where λmax = ∥H˜z∥∞determines the critical value of λ above
+which the solution of the ADMM problem is 0 and Ωis
+searched for in the interval Ω∈[10−3,1] [5], [24], [42]. An
+optimal ˆλ is computed by analyzing the solution (or regu-
+larization) path of the LASSO type optimization algorithms
+using a given training dataset. As the sparsity of the systems
+that generate datasets increases, lower values are calculated for
+Ω[5], [24], [42]. The absolute and relative tolerances, which
+determine values of upper bounds on the Euclidean norms
+of primal and dual residuals, are chosen as 10−4 and 10−2,
+respectively [24]. The penalty parameter is initially selected as
+1 and dynamically updated at each iteration of the algorithm
+[24]. The maximum number of iterations is chosen as 104 [5],
+[24].
+In the experiments, we observe that the selection of toler-
+ance parameters does not affect the convergence rates if their
+relative values do not change. In addition, selection of the
+initial value of the penalty parameter also does not affect the
+convergence rate if relative values of tolerance parameters are
+ﬁxed [24]. For instance, similar convergence rates are observed
+when we chose 10−4 and 10−2, or 10−6 and 10−4, as tolerance
+parameters. ∥˜z −Hˆxb∥≤τ is computed in order to decide
+whether there is an attack using the SVE and assuming a chi-
+square test with 95% conﬁdence in the computation of τ [6],
+[13].
+A. Results for Supervised Learning Algorithms
+The performance of different algorithms is compared for
+the IEEE 57-bus system in Fig. 2. Accuracy values of the
+SVE and perceptron increase as
+κ
+N increases in Fig. 2.a and
+Fig. 2.b. Additionally, Recall values of the SVE increase
+linearly as κ
+N increases. Precision values of the perceptron are
+high and do not decrease, and Accuracy and Recall values
+increase, since fn values decrease and tn values increase.
+In Fig. 2.c, a phase transition around κ∗= N −D + 1, is
+observed for the performance of the SVM. Since the distance
+between measurement vectors of attacked and secure variables
+increases as
+κ
+N increases following (6), we observe that the
+Accuracy, Precision and Recall values of the k-NN increase
+in Fig. 2.d. Accuracy and Recall values of the k-NN and SLR
+are above 0.9 and do not change as
+κ
+N increases in Fig. 2.e.
+The class-based performance values of the algorithms are
+measured using class-wise performance indices, where Class-1
+and Class-2 denotes the class of attacked and secure variables,
+respectively. The class-wise performance indices are deﬁned
+as follows:
+Class −1 ∶
+Prec −1 =
+tp
+tp+fp,
+Rec −1 =
+tp
+tp + fn, (25)
+Class −2 ∶
+Prec −2 =
+tn
+tn+fn,
+Rec −2 =
+tn
+fp + tn. (26)
+
+7
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+SVE
+ 
+ 
+Accuracy
+Precision
+Recall
+(a) SVE.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Perceptron
+ 
+ 
+Accuracy
+Precision
+Recall
+(b) Perceptron.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM
+ 
+ 
+Accuracy
+Precision
+Recall
+(c) SVM with linear kernel.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+k-NN
+ 
+ 
+Accuracy
+Precision
+Recall
+(d) k-NN.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+SLR
+ 
+ 
+Accuracy
+Precision
+Recall
+(e) SLR.
+Fig. 2: Results for the IEEE 57-bus system. Accuracy values of
+the SVE and perceptron increase while Precision values of the
+k-NN and SLR increase as
+κ
+N increases. Both Accuracy and
+Precision values of the SVM increase and phase transitions
+occur.
+In Fig. 3.a, we observe that the Precision, Recall and
+Accuracy values of the SVE increase as κ
+N increases for Class-
+1. Note that the ﬁrst value of Acc-1 is observed at 0.008.
+In Fig. 3.b, Precision values for Class-2 decrease with the
+percentage of attacked variables, i.e. the number of secure
+variables that are incorrectly classiﬁed by the SVE increases as
+the number of attacked variables increases. Although the SVE
+may correctly detect the attacked variables as κ
+N increases, the
+secure variables are incorrectly labelled as attacked variables,
+and therefore, the SVE gives more false alarms than the other
+algorithms.
+Performance values for the perceptron are given in Fig.
+4. We observe that Precision values for Class-1 increase and
+Recall values do not change drastically for both of the classes
+as κ
+N increases. Moreover, we do not observe any performance
+increase for the Recall values of the secure class in the
+perceptron.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Prec−1
+Rec−1
+Acc−1
+(a) Performance values for Class-1.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Prec−2
+Rec−2
+Acc−2
+(b) Performance values for Class-2.
+Fig. 3: Experiments using the SVE for the IEEE 57-bus test
+system. Note that fp values increase as
+κ
+N increases.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Perceptron
+ 
+ 
+Prec−1
+Prec−2
+(a) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Perceptron
+ 
+ 
+Rec−1
+Rec−2
+(b) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Perceptron
+ 
+ 
+Prec−1
+Prec−2
+(c) Results for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Perceptron
+ 
+ 
+Rec−1
+Rec−2
+(d) Results for the IEEE 118-bus.
+Fig. 4: Performance analysis of the perceptron.
+In Fig. 5, the results for k-NN are shown. We observe
+that performance values for Class-1 increase and the values
+for Class-2 decrease as
+κ
+N increases since k-NN is sensitive
+to class-balance and sparsity of the data [43]. In addition,
+classiﬁcation hypotheses are computed by forming neigh-
+borhoods in Euclidean spaces, and the ℓ2 norm of vectors
+of attacked measurements increases as
+κ
+N increases in (6);
+therefore, decision boundaries of the hypotheses are biased
+towards Class-1.
+Fig. 6 depicts the results for the SLR, where the per-
+formance values for Class-2 (secure variables) increase as
+the system size increases. Moreover, we observe that the
+performance values for Class-2 do not decrease rapidly as
+κ
+N increases, compared to the other supervised algorithms. In
+addition, the performance values for Class-1 are higher than
+the values of the other algorithms, especially for lower
+κ
+N
+values. The reason is that the SLR can handle the variety in the
+sparsity of the data as
+κ
+N changes. This task is accomplished
+
+8
+0
+0.2
+0.4
+0.6
+0.8
+1
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+κ / N
+Performance
+k-NN
+ 
+ 
+Prec−1
+Prec−2
+(a) Prec. values for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+κ / N
+Performance
+k-NN
+ 
+ 
+Rec−1
+Rec−2
+(b) Rec. values for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0.75
+0.8
+0.85
+0.9
+0.95
+1
+κ / N
+Performance
+k-NN
+ 
+ 
+Prec−1
+Prec−2
+(c) Prec. values for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0.75
+0.8
+0.85
+0.9
+0.95
+1
+κ / N
+Performance
+k-NN
+ 
+ 
+Rec−1
+Rec−2
+(d) Rec. values for the IEEE 118-bus.
+Fig. 5: Since the k-NN is sensitive to class-balance and
+sparsity of the data, performance values for Class-1 increase
+and the values for Class-2 decrease as
+κ
+N increases. Note that
+the performance curves intersect at the critical values κ∗.
+by controlling and learning the sparsity of the solution in (18)
+using the training data in order to learn the sparse structure of
+the measurements deﬁned in the observation model (5).
+The results of the experiments for the SVM are shown in
+Fig. 7, where a phase transition for the performance values is
+observed. It is worth noting that the values of κ at which the
+phase transition occurs correspond to the minimum number
+of measurement variables, κ∗, that the attacker needs to
+compromise in order to construct unobservable attacks [7]. κ∗
+is depicted as a vertical dotted line in Fig. 7. For instance,
+κ∗= 10 and
+κ∗
+N
+= 0.56 for the IEEE 9-bus test system.
+The transitions are observed before the critical points when
+the linear kernel SVM is employed in the experiments for
+IEEE 57-bus and 118-bus systems. In addition, the phase
+transitions of performance values occur at the critical points
+when Gaussian kernels are used.
+B. Results for Semi-supervised Learning Algorithms
+We use the S3VM with default parameters as suggested
+in [44]. The results of the semi-supervised SVM are shown
+in Fig. 8. We do not observe sharp phase transitions in the
+semi-supervised SVM unlike the supervised SVM, since the
+information obtained from unlabeled data contributes to the
+performance values in the computation of the learning models.
+For instance, Precision values of Class-2 decrease sharply
+near the critical point for the supervised SVM in Fig. 7.
+However, the semi-supervised SVM employs the unlabeled
+samples during the computation of the learning model in (19),
+and partially solves this problem.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Prec−1
+Prec−2
+(a) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Rec−1
+Rec−2
+(b) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Prec−1
+Prec−2
+(c) Results for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+ 
+ 
+Rec−1
+Rec−2
+(d) Results for the IEEE 118-bus.
+Fig. 6: Experiments using the SLR. Note that the SLR can
+handle the variety in the sparsity of the data as
+κ
+N changes.
+C. Results for Decision and Feature Level Fusion Algorithms
+In this section, we analyze Adaboost and MKL. Decision
+stumps are used as weak classiﬁers in Adaboost [31]. Each
+decision stump is a single-level two-leaf binary decision tree
+which is used to construct a set of dichotomies consisting
+of binary labelings of samples [31]. The number of weak
+classiﬁers is selected using leave-one-out cross-validation in
+the training set. We use MKL with a linear and a Gaussian
+kernel with the default parameters suggested in the Simple
+MKL implementation [32]. The results given in Fig. 9 show
+that Recall values of MKL for Class-1 are less than the
+values of Adaboost. In addition, Precision values of MKL
+decrease faster than the values of Adaboost as
+κ
+N increases
+for Class-2. Therefore, the fn values of MKL are greater than
+the values of Adaboost, or in other words, the number of
+attacked measurements misclassiﬁed as secure by MKL is
+greater than that of Adaboost. This phenomenon is observed in
+the results for semi-supervised and supervised SVM given in
+the previous sections. However, there are no phase transitions
+of the performance values of MKL compared to the supervised
+SVM.
+D. Results for Online Learning Algorithms
+We consider four online learning algorithms, namely Online
+Perceptron (OP), Online Perceptron with Weighted Models
+(OPWM), Online SVM and Online SLR. Note that these algo-
+rithms are the online versions of the batch learning algorithms
+given in Section III-A and developed considering the online
+algorithm design approach given in Section III-D. The details
+of the implementations of the OP, OPWM, Online SVM and
+SLR are given in [34], [35] and [45].
+
+9
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 9−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(a) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 9−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(b) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 9−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(c) Gaussian SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 9−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(d) Gaussian SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 57−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(e) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 57−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(f) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 57−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(g) Gaussian SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 57−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(h) Gaussian SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 118−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(i) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Linear SVM for the IEEE 118−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(j) Linear SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 118−bus
+ 
+ 
+Prec−1
+Prec−2
+Critical Point
+(k) Gaussian SVM.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Gaussian SVM for the IEEE 118−bus
+ 
+ 
+Rec−1 and Rec−2
+Critical Point
+(l) Gaussian SVM.
+Fig. 7: Experiments using the SVM with linear and Gaussian kernels. Phase transitions of performance values occur at the
+critical point κ∗. See the text for more detailed explanation.
+When the OP is used, only the model w(t) computed using
+the last observed measurement at time t is considered for the
+classiﬁcation of the test samples. On the other hand, we con-
+sider an average of the models wave(t) = 1
+T
+T
+∑
+t=1 w(t) which is
+computed by minimizing margin errors in the OPWM. Results
+are given for the OP in Fig. 10. In the weighted models, we
+observe phase transitions of the performance values for Class-
+2 in Fig. 10.e-Fig. 10.h. However, the phase transitions occur
+before the critical values, and the values of the phase transition
+points decrease as the system size increases. Additionally, we
+do not observe sharp phase transitions in the OP.
+In the OP, if the label of a measurement s is not correctly
+labeled, then the measurement vector is added to a set of sup-
+porting measurements S that are used to update the hypotheses
+in the training process. However, the hypotheses are updated
+in the OPWM if a measurement s′ is not correctly labeled, and
+the vectors of s′ and s ∈S are linearly independent. Since the
+smallest number of linearly dependent measurements increases
+as
+κ
+N increases [5], [46], the size of S decreases and the bias
+is decreased towards Class-1. Therefore, false negative (fn)
+values decrease and false positive (fp) values increase [47]. As
+a result, we observe that Recall values of the OP are less than
+that of the OPWM for Class-1. The results of the Online SVM
+and Online SLR are provided in Fig. 10 for different IEEE test
+systems. We observe phase transitions of performance values
+in the Online SVM similar to the batch supervised SVM.
+Learning curves of online learning algorithms are given in
+Fig. 11 for both observable attacks generated with
+κ
+N = 0.33
+and unobservable attacks generated with
+κ
+N = 0.66. Since the
+cost function of each online learning algorithm is different,
+the learning performance is measured and depicted using
+accuracy (Acc) deﬁned in (23). In the results, performance
+values of the Online SVM and OPWM increase as the number
+of samples increases, since the algorithms employ margin
+learning approaches which provide better learning rates as the
+number of training samples increases [34], [45].
+Brieﬂy, we suggest using Online SLR for the scenarios in
+which the precision of the classiﬁcation of secure variables
+is important to avoid false alarms. On the other hand, if the
+classiﬁcation of attacked variables with high Precision and
+Recall values is an important task, we suggest using the Online
+Perceptron.
+
+10
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Linear Kernel
+ 
+ 
+Prec−1
+Prec−2
+(a) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Linear Kernel
+ 
+ 
+Rec−1
+Rec−2
+(b) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Linear Kernel
+ 
+ 
+Prec−1
+Prec−2
+(c) Results for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Linear Kernel
+ 
+ 
+Rec−1
+Rec−2
+(d) Results for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Gaussian Kernel
+ 
+ 
+Prec−1
+Prec−2
+(e) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Gaussian Kernel
+ 
+ 
+Rec−1
+Rec−2
+(f) Results for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Gaussian Kernel
+ 
+ 
+Prec−1
+Prec−2
+(g) Results for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Semi−supervised SVM with Gaussian Kernel
+ 
+ 
+Rec−1
+Rec−2
+(h) Results for the IEEE 118-bus.
+Fig. 8: Sharp phase transitions are not observed in the semi-supervised SVM unlike the supervised SVM, since the information
+obtained from unlabeled data contributes to the performance values in the computation of the learning models.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Adaboost
+ 
+ 
+Prec−1
+Prec−2
+(a) Adaboost for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Adaboost
+ 
+ 
+Rec−1
+Rec−2
+(b) Adaboost for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Adaboost
+ 
+ 
+Prec−1
+Prec−2
+(c) Adaboost for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Adaboost
+ 
+ 
+Rec−1
+Rec−2
+(d) Adaboost for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+MKL
+ 
+ 
+Prec−1
+Prec−2
+(e) MKL for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+MKL
+ 
+ 
+Rec−1
+Rec−2
+(f) MKL for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+MKL
+ 
+ 
+Prec−1
+Prec−2
+(g) MKL for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+MKL
+ 
+ 
+Rec−1
+Rec−2
+(h) MKL for the IEEE 118-bus.
+Fig. 9: Experiments using Adaboost and MKL. Note that the fn values of MKL are greater than the values of Adaboost, and
+there are no phase transitions of the performance values of MKL compared to the supervised SVM.
+
+11
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron
+ 
+ 
+Prec−1
+Prec−2
+(a) OP for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron
+ 
+ 
+Rec−1
+Rec−2
+(b) OP for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron
+ 
+ 
+Prec−1
+Prec−2
+(c) OP for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron
+ 
+ 
+Rec−1
+Rec−2
+(d) OP for the IEEE 118-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron with Weighted Models
+ 
+ 
+Prec−1
+Prec−2
+(e) OPWM for the IEEE 57-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron with Weighted Models
+ 
+ 
+Rec−1
+Rec−2
+(f) OPWM for the IEEE 57-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron with Weighted Models
+ 
+ 
+Prec−1
+Prec−2
+(g) OPWM for the IEEE 118-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Perceptron with Weighted Models
+ 
+ 
+Rec−1
+Rec−2
+(h) OPWM for the IEEE 118-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online SVM
+ 
+ 
+Prec−1
+Prec−2
+(i) Online SVM for the IEEE 57-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online SVM
+ 
+ 
+Rec−1
+Rec−2
+(j) Online SVM for the IEEE 57-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online SVM
+ 
+ 
+Prec−1
+Prec−2
+(k) Online SVM for the IEEE 118-bus.
+0
+0.5
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online SVM
+ 
+ 
+Rec−1
+Rec−2
+(l) Online SVM for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Sparse Logistic Regression
+ 
+ 
+Prec−1
+Prec−2
+(m) Online SLR for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Sparse Logistic Regression
+ 
+ 
+Rec−1
+Rec−2
+(n) Online SLR for the IEEE 57-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Sparse Logistic Regression
+ 
+ 
+Prec−1
+Prec−2
+(o) Online SLR for the IEEE 118-bus.
+0
+0.2
+0.4
+0.6
+0.8
+1
+0
+0.2
+0.4
+0.6
+0.8
+1
+κ / N
+Performance
+Online Sparse Logistic Regression
+ 
+ 
+Rec−1
+Rec−2
+(p) Online SLR for the IEEE 118-bus.
+Fig. 10: Experiments using the Online Perceptron (OP), Online Perceptron with Weighted Models (OPWM), Online SVM and
+SLR. Recall values of the OP are less than that of the OPWM for Class-1. Multiple phase transitions of performance values
+of the Online SVM are observed in the IEEE 118-bus system.
+V. SUMMARY AND CONCLUSION
+The attack detection problem has been reformulated as a
+machine learning problem and the performance of supervised,
+semi-supervised, classiﬁer and feature space fusion and online
+learning algorithms have been analyzed for different attack
+scenarios.
+In a supervised binary classiﬁcation problem, the attacked
+and secure measurements are labeled in two separate classes.
+In the experiments, we have observed that state of the art
+machine learning algorithms perform better than the well-
+known attack detection algorithms which employ a state vector
+estimation approach for the detection of both observable and
+unobservable attacks.
+We have observed that the perceptron is less sensitive and
+the k-NN is more sensitive to the system size than the other
+algorithms. In addition, the imbalanced data problem affects
+
+12
+0
+1000
+2000
+3000
+4000
+5000
+6000
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Number of Samples
+Performance
+Attacks generated with κ
+N =0.32895
+ 
+ 
+Online Perceptron
+OPWM
+Online SLR
+Online SVM
+(a) Observable attacks.
+0
+1000
+2000
+3000
+4000
+5000
+6000
+0.5
+0.6
+0.7
+0.8
+0.9
+1
+Number of Samples
+Performance
+Attacks generated with κ
+N =0.65789
+ 
+ 
+Online Perceptron
+OPWM
+Online SLR
+Online SVM
+(b) Unobservable attacks.
+Fig. 11: Learning curves of online learning algorithms.
+the performance of the k-NN. Therefore, k-NN may perform
+better in small sized systems and worse in large sized systems
+when compared to other algorithms. The SVM performs
+better than the other algorithms in large-scale systems. In the
+performance tests of the SVM, we observe a phase transition
+at κ∗, which is the minimum number of measurements that are
+required to be accessible by the attackers in order to construct
+unobservable attacks. Moreover, a large value of κ does not
+necessary imply high impact of data injection attacks. For
+example, if the attack vector a has small values in all elements,
+then the impact of a may still be limited. More important, if
+a is a vector with small values compared to the noise, then
+even machine learning-based approaches may fail.
+We observe two challenges of SVMs in their application to
+attack detection problems in smart grid. First, the performance
+of the SVM is affected by the selection of kernel types. For
+instance, we observe that the linear and Gaussian kernel SVM
+perform similarly in the IEEE 9-bus system. However, for the
+IEEE 57-bus system the Gaussian kernel SVM outperforms
+its linear counterparts. Moreover, the values of the phase
+transition points of the performance of the Gaussian kernel
+SVM coincide with the theoretically computed κ∗values. This
+implies that the feature vectors in F, which are computed
+using Gaussian kernels, are linearly separable for higher values
+of κ. Interestingly, the transition points miss κ∗in the IEEE
+118-bus system, which means that alternative kernels are
+needed for this system. Second, the SVM is sensitive to
+the sparsity of the systems. In order to solve this problem,
+sparse SVM [48] and kernel machines [49] can be employed.
+In this paper, we approached this problem using the SLR.
+However, obtaining an optimal regularization parameter, ˆλ, is
+computationally challenging [24].
+In order to use information extracted from test data in the
+computation of the learning models, semi-supervised methods
+have been employed in the proposed approach. In semi-
+supervised learning algorithms, we have used test data to-
+gether with training data in an optimization algorithm used
+to compute the learning model. The numerical results show
+that the semi-supervised learning methods are more robust to
+the degree of sparsity of the data than the supervised learning
+methods.
+We have employed Adaboost and MKL as decision and
+feature level fusion algorithms. Experimental results show that
+fusion methods provide learning models that are more robust
+to changes in the system size and data sparsity than the other
+methods. On the other hand, computational complexities of
+most of the classiﬁer and feature fusion methods are higher
+than that of the single classiﬁer and feature extraction methods.
+Finally, we have analyzed online learning methods for real-
+time attack detection problems. Since a sequence of training
+samples or just a single sample is processed at each time, the
+computational complexity of most of the online algorithms is
+less than the batch learning algorithms. In the experiments, we
+have observed that classiﬁcation performance of online learn-
+ing algorithms are comparable to that of the batch algorithms.
+In future work, we plan to ﬁrst apply the proposed approach
+and the methods to an attack classiﬁcation problem for decid-
+ing which of several possible attack types have occurred given
+that an attack have been detected. Then, we plan to consider
+the relationship between measurement noise and bias-variance
+properties of learning models for the development of attack
+detection and classiﬁcation algorithms. Additionally, we plan
+to expand our analyses for varying number of clusters G and
+cluster sizes Ng, ∀g = 1,2,... ,G, by relaxing the assumptions
+made in this work for attack detection in smart grid systems,
+e.g. when the samples are not independent and identically
+distributed and obtained from non-stationary distributions, in
+other words, concept drift [37] and dataset shift [38] occur.
+REFERENCES
+[1] C. Rudin, D. Waltz, R. Anderson, A. Boulanger, A. Salleb-Aouissi,
+M. Chow, H. Dutta, P. Gross, B. Huang, and S. Ierome, “Machine
+learning for the New York City power grid,” IEEE Trans. Pattern Anal.
+Mach. Intell., vol. 34, pp. 328–345, Feb. 2012.
+[2] R. N. Anderson, A. Boulanger, W. B. Powell, and W. Scott, “Adaptive
+stochastic control for the smart grid,” Proc. IEEE, vol. 99, pp. 1098–
+1115, Jun. 2011.
+[3] Z. Fadlullah, M. Fouda, N. Kato, X. Shen, and Y. Nozaki, “An early
+warning system against malicious activities for smart grid communica-
+tions,” IEEE Netw., vol. 25, pp. 50–55, Sep. 2011.
+[4] Y. Zhang, L. Wang, W. Sun, R. Green, and M. Alam, “Distributed
+intrusion detection system in a multi-layer network architecture of smart
+grids,” IEEE Trans. Smart Grid, vol. 2, pp. 796–808, Dec. 2011.
+[5] M. Ozay, I. Esnaola, F. T. Yarman Vural, S. R. Kulkarni, and H. V.
+Poor, “Sparse attack construction and state estimation in the smart
+grid: Centralized and distributed models,” IEEE J. Sel. Areas Commun.,
+vol. 31, pp. 1306–1318, Jul. 2013.
+[6] A. Abur and A. Exp´osito, Power System State Estimation: Theory and
+Implementation.
+New York: Marcel Dekker, 2004.
+[7] Y. Liu, P. Ning, and M. K. Reiter, “False data injection attacks against
+state estimation in electric power grids,” in Proc. 16th ACM Conf.
+Computer and Communications Security, Chicago, Illinois, Nov. 2009,
+pp. 21–32.
+[8] O. Kosut, L. Jia, R. J. Thomas, and L. Tong, “Malicious data attacks
+on the smart grid,” IEEE Trans. Smart Grid, vol. 2, pp. 645–658, Dec.
+2011.
+[9] E. Cotilla-Sanchez, P. Hines, C. Barrows, and S. Blumsack, “Comparing
+the topological and electrical structure of the North American electric
+power infrastructure,” IEEE Syst. J., vol. 6, pp. 616–626, Dec. 2012.
+[10] T. T. Kim and H. V. Poor, “Strategic protection against data injection
+attacks on power grids,” IEEE Trans. Smart Grid, vol. 2, no. 2, pp.
+326–333, Jun. 2011.
+[11] E. J. Cand`es and T. Tao, “Decoding by linear programming,” IEEE
+Trans. Inf. Theor., vol. 51, no. 12, pp. 4203–4215, Dec. 2005.
+[12] D. L. Donoho, “Compressed sensing,” IEEE Trans. Inf. Theor., vol. 52,
+no. 4, pp. 1289–1306, Apr. 2006.
+[13] M. Ozay, I. Esnaola, F. Yarman Vural, S. R. Kulkarni, and H. V. Poor,
+“Smarter security in the smart grid,” in Proc. 3rd IEEE Int. Conf. Smart
+Grid Communications, Tainan City, Nov. 2012, pp. 312–317.
+[14] L. Saitta, A. Giordana, and A. Cornujols, Phase Transitions in Machine
+Learning.
+New York: Cambridge University Press, 2011.
+
+13
+[15] M. Ozay, I. Esnaola, F. Yarman Vural, S. R. Kulkarni, and H. V.
+Poor, “Distributed models for sparse attack construction and state vector
+estimation in the smart grid,” in Proc. 3rd IEEE Int. Conf. Smart Grid
+Communications, Tainan City, Nov. 2012, pp. 306–311.
+[16] O. Bousquet, S. Boucheron, and G. Lugosi, “Introduction to statistical
+learning theory,” in Advanced Lectures on Machine Learning, O. Bous-
+quet, U. von Luxburg, and G. Rtsch, Eds.
+Berlin: Springer, 2004.
+[17] S. Kulkarni and G. Harman, An Elementary Introduction to Statistical
+Learning Theory.
+Hoboken, NJ: Wiley Publishing, 2011.
+[18] Q. Wang, S. R. Kulkarni, and S. Verd´u, “Divergence estimation for mul-
+tidimensional densities via k-nearest-neighbor distances,” IEEE Trans.
+Inf. Theor., vol. 55, pp. 2392–2405, May 2009.
+[19] S. Theodoridis and K. Koutroumbas, Pattern Recognition.
+Orlando,
+FL: Academic Press, 2006.
+[20] R. Duda, P. Hart, and D. Stork, Pattern Classiﬁcation.
+New York:
+Wiley Publishing, 2001.
+[21] I. Steinwart and A. Christmann, Support Vector Machines.
+New York:
+Springer Publishing Company, Incorporated, 2008.
+[22] S. Kulkarni and G. Harman, “Statistical learning theory: A tutorial,”
+Wiley Interdisciplinary Reviews: Computational Statistics, vol. 3, no. 6,
+pp. 543–556, 2011.
+[23] O. Chapelle, “Training a support vector machine in the primal,” Neural
+Comput., vol. 19, no. 5, pp. 1155–1178, 2007.
+[24] S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein, “Distributed
+optimization and statistical learning via the alternating direction method
+of multipliers,” Found. Trends Mach. Learn., vol. 3, no. 1, pp. 1–122,
+Jan. 2011.
+[25] O. Chapelle, B. Sch¨olkopf, and A. Zien, Eds., Semi-Supervised Learning.
+Cambridge, MA: The MIT Press, 2006.
+[26] T. Joachims, “Transductive inference for text classiﬁcation using support
+vector machines,” in Proc. 16th Int. Conf. Mach. Learn., Bled, Jun. 1999,
+pp. 200–209.
+[27] O. Chapelle, V. Sindhwani, and S. S. Keerthi, “Optimization techniques
+for semi-supervised support vector machines,” J. Mach. Learn. Res.,
+vol. 9, no. 6, pp. 203–233, 2008.
+[28] Y. Freund and R. E. Schapire, “A decision-theoretic generalization of
+on-line learning and an application to boosting,” J. Comput. Syst. Sci.,
+vol. 55, no. 1, pp. 119–139, 1997.
+[29] F. R. Bach, G. R. G. Lanckriet, and M. I. Jordan, “Multiple kernel
+learning, conic duality, and the SMO algorithm,” in Proc. 21st Int. Conf.
+Mach. Learn., Banff, AB, Jul. 2004, pp. 6–13.
+[30] L. I. Kuncheva, Combining Pattern Classiﬁers: Methods and Algorithms.
+Hoboken, NJ: Wiley-Interscience, 2004.
+[31] R. E. Schapire and Y. Freund, Boosting: Foundations and Algorithms.
+Cambridge, MA: The MIT Press, 2012.
+[32] A. Rakotomamonjy, F. Bach, S. Canu, and Y. Grandvalet, “SimpleMKL,”
+J. Mach. Learn. Res., vol. 9, pp. 2491–2521, 2008.
+[33] S. Kakade and A. Kalai, “From batch to transductive online learning,”
+in Advances in Neural Information Processing Systems, Y. Weiss,
+B. Sch¨olkopf, and J. Platt, Eds.
+Cambridge, MA: The MIT Press,
+2005, pp. 611–618.
+[34] F. Orabona, J. Keshet, and B. Caputo, “Bounded kernel-based online
+learning,” J. Mach. Learn. Res., vol. 10, pp. 2643–2666, 2009.
+[35] P. Carbonetto, M. Schmidt, and N. D. Freitas, “An interior-point stochas-
+tic approximation method and an l1-regularized delta rule,” in Advances
+in Neural Information Processing Systems, D. Koller, D. Schuurmans,
+Y. Bengio, and L. Bottou, Eds.
+Red Hook, NY: Curran Associates,
+Inc., 2008, pp. 233–240.
+[36] R. D. Zimmerman, C. E. Murillo-S´anchez, and R. J. Thomas, “MAT-
+POWER: Steady-state perations, planning, and analysis tools for power
+systems research and education,” IEEE Trans. Power Syst., vol. 26, pp.
+12–19, Feb. 2011.
+[37] P. L. Bartlett, S. Ben-David, and S. R. Kulkarni, “Learning changing
+concepts by exploiting the structure of change,” Mach. Learn., vol. 41,
+no. 2, pp. 153–174, 2000.
+[38] J. Quionero-Candela, M. Sugiyama, A. Schwaighofer, and N. D.
+Lawrence, Eds., Dataset Shift in Machine Learning.
+Cambridge, MA:
+The MIT Press, 2009.
+[39] C.-C. Chang and C.-J. Lin, “Libsvm: A library for support vector
+machines,” ACM Trans. Intell. Syst. Technol., vol. 2, no. 3, pp. 1–27,
+2011.
+[40] R.-E. Fan, K.-W. Chang, C.-J. Hsieh, X.-R. Wang, and C.-J. Lin,
+“Liblinear: A library for large linear classiﬁcation,” J. Mach. Learn.
+Res., vol. 9, pp. 1871–1874, 2008.
+[41] S. S. Keerthi and C.-J. Lin, “Asymptotic behaviors of support vector
+machines with Gaussian kernel,” Neural Comput., vol. 15, no. 7, pp.
+1667–1689, 2003.
+[42] K. Koh, S.-J. Kim, and S. Boyd, “An interior-point method for large-
+scale l1-regularized logistic regression,” J. Mach. Learn. Res., vol. 8,
+pp. 1519–1555, 2007.
+[43] L. Devroye, L. Gy¨orﬁ, and G. Lugosi, A Probabilistic Theory of Pattern
+Recognition.
+New York: Springer-Verlag, 1996.
+[44] T. Joachims, “Making large-scale support vector machine learning
+practical,” in Advances in Kernel Methods, B. Sch¨olkopf, C. J. C. Burges,
+and A. J. Smola, Eds. Cambridge, MA: The MIT Press, 1999, pp. 169–
+184.
+[45] F. Orabona, “DOGMA: A MATLAB toolbox for online learning,”
+2009. [Online]. Available: http://dogma.sourceforge.net
+[46] D. L. Donoho and M. Elad, “Optimally sparse representation in general
+(nonorthogonal) dictionaries via l1 minimization,” Proc. Nat. Acad. Sci.,
+vol. 100, no. 5, pp. 2197–2202, 2003.
+[47] K. P. Murphy, Machine Learning: A Probabilistic Perspective.
+Cam-
+bridge, MA: The MIT Press, 2012.
+[48] J. Bi, K. Bennett, M. Embrechts, C. Breneman, and M. Song, “Dimen-
+sionality reduction via sparse support vector machines,” J. Mach. Learn.
+Res., vol. 3, pp. 1229–1243, 2003.
+[49] M. Wu, B. Scholkopf, and G. Bakir, “A direct method for building sparse
+kernel learning algorithms,” J. Mach. Learn. Res., vol. 7, pp. 603–624,
+2006.

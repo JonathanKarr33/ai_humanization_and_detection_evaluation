@@ -1,0 +1,686 @@
+arXiv:1307.0471v3  [quant-ph]  10 Jul 2014
+Quantum support vector machine for big data classiﬁcation
+Patrick Rebentrost,1, ∗Masoud Mohseni,2 and Seth Lloyd3, †
+1Research Laboratory of Electronics, Massachusetts Institute of Technology, Cambridge, MA 02139
+2Google Research, Venice, CA 90291
+3Department of Mechanical Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139
+Supervised machine learning is the classiﬁcation of new data based on already classiﬁed training examples.
+In this work, we show that the support vector machine, an optimized binary classiﬁer, can be implemented on a
+quantum computer, with complexity logarithmic in the size of the vectors and the number of training examples.
+In cases when classical sampling algorithms require polynomial time, an exponential speed-up is obtained.
+At the core of this quantum big data algorithm is a non-sparse matrix exponentiation technique for efﬁciently
+performing a matrix inversion of the training data inner-product (kernel) matrix.
+Machine learning algorithms can be categorized along a
+spectrum of supervised and unsupervised learning [1–4]. In
+strictly unsupervised learning, the task is to ﬁnd structure such
+as clusters in unlabeled data. Supervised learning involves a
+training set of already classiﬁed data, from which inferences
+are made to classify new data. In both cases, recent “big data”
+applications exhibit a growing number of features and input
+data. A support vector machine (SVM) is a supervised ma-
+chine learning algorithm that classiﬁes vectors in a feature
+space into one of two sets, given training data from the sets
+[5]. It operates by constructing the optimal hyperplane di-
+viding the two sets, either in the original feature space or a
+higher-dimensional kernel space. The SVM can be formu-
+lated as a quadratic programming problem [6], which can be
+solved in time proportional to O(log(ǫ−1)poly(N, M)), with
+N the dimension of the feature space, M the number of train-
+ing vectors, and ǫ the accuracy. In a quantum setting, binary
+classiﬁcation was discussed in terms of Grover search in [7]
+and using the adiabatic algorithm in [8–11]. Quantum learn-
+ing was also discussed in [12, 13].
+In this paper, we show that a quantum support vector ma-
+chine can be implemented with O(log NM) run time in both
+training and classiﬁcation stages.
+The performance in N
+arises due to a fast quantum evaluation of inner products, dis-
+cussed in a general machine learning context by us in [14].
+For the performance in M, we re-express the SVM as an ap-
+proximate least-squares problem [15] that allows for a quan-
+tum solution with the matrix inversion algorithm [16, 17]. We
+employ a technique for the exponentiation of non-sparse ma-
+trices recently developed in [18]. This allows us to reveal ef-
+ﬁciently in quantum form the largest eigenvalues and corre-
+sponding eigenvectors of the training data overlap (kernel) and
+covariance matrices. We thus efﬁciently perform a low-rank
+approximation of these matrices (principal component analy-
+sis, PCA). PCA is a common task arising here and in other
+machine learning algorithms [19–21]. The error dependence
+in the training stage is O(poly(ǫ−1
+K , ǫ−1)), where ǫK is the
+smallest eigenvalue considered and ǫ is the accuracy. In cases
+when a low-rank approximation is appropriate, our quantum
+SVM operates on the full training set in logarithmic runtime.
+Support vector machine.−The task for the SVM is to clas-
+sify a vector into one of two classes, given M training data
+points of the form {(⃗xj, yj) : ⃗xj ∈
+RN, yj = ±1}j=1...M,
+where yj = 1 or −1 depending on the class to which ⃗xj
+belongs. For the classiﬁcation, the SVM ﬁnds a maximum-
+margin hyperplane with normal vector ⃗w that divides the two
+classes. The margin is given by two parallel hyperplanes that
+are separated by the maximum possible distance 2/|⃗w| with
+no data points inside the margin. Formally, these hyperplanes
+are constructed so that ⃗w · ⃗xj + b ≥1 for ⃗xj in the +1 class
+and that ⃗w·⃗xj +b ≤−1 for ⃗xj in the −1 class, where b/|⃗w| is
+the offset of the hyperplane. Thus, in the primal formulation,
+ﬁnding the optimal hyperplane consists of minimizing |⃗w|2/2
+subject to the inequality constraints yj(⃗w · ⃗xj + b) ≥1 for all
+j. The dual formulation [6] is maximizing over the Karush-
+Kuhn-Tucker multipliers ⃗α = (α1, · · · , αM)T the function:
+L(⃗α) =
+M
+X
+j=1
+yjαj −1
+2
+M
+X
+j,k=1
+αjKjkαk,
+(1)
+subject to the constraints PM
+j=1 αj = 0 and yjαj ≥0. The
+hyperplane parameters are recovered from ⃗w = PM
+j=1 αj⃗xj
+and b = yj −⃗w · ⃗xj (for those j where αj ̸= 0). Only a
+few of the αj are non-zero: these are the ones corresponding
+to the ⃗xj that lie on the two hyperplanes – the support vec-
+tors. We have introduced the kernel matrix, a central quantity
+for supervised machine learning problems [19, 21], Kjk =
+k(⃗xj, ⃗xk) = ⃗xj · ⃗xk, deﬁning the kernel function k(x, x′).
+More complicated non-linear kernels and soft margins will be
+studied below. Solving the dual form involves evaluating the
+M(M −1)/2 dot products ⃗xj · ⃗xk in the kernel matrix, and
+then ﬁnding the optimal αj values by quadratic programming,
+which takes O(M 3) in the non-sparse case [22]. As each dot
+product takes time O(N) to evaluate, the classical support
+vector algorithm takes time O(log(1/ǫ)M 2(N + M)) with
+accuracy ǫ. The result is a binary classiﬁer for new data ⃗x:
+y(⃗x) = sign
+
+
+M
+X
+j=1
+αjk(⃗xj, ⃗x) + b
+
+.
+(2)
+Quantum machine learning with the kernel matrix.−In the
+quantum setting, assume that oracles for the training data that
+return quantum vectors |⃗xj⟩= 1/|⃗xj| PN
+k=1(⃗xj)k|k⟩, the
+norms |⃗xj|, and the labels yj are given. The quantum ma-
+chine learning performance is relative to these oracles and
+
+2
+can be considered a lower bound for the true complexity
+[23]. One way of efﬁciently constructing these states is via
+quantum RAM, which uses O(MN) hardware resources but
+only O(log MN) operations to access them, see [14, 24].
+Using the inner product evaluation of [14] to prepare the
+kernel matrix, we can achieve a run time for the SVM of
+O(log(1/ǫ)M 3 +M 2 log N/ǫ). Classically, the inner product
+evaluation is O(ǫ−2poly(N)) by sampling when the compo-
+nents of the ⃗xj are distributed unevenly, for example when a
+Fourier transform is part of the post-processing step [23].
+The kernel matrix plays a crucial role in the dual formu-
+lation Eq. (1) and the least-squares reformulation discussed
+in the next section.
+At this point we can discuss an efﬁ-
+cient quantum method for direct preparation and exponenti-
+ation of the normalized kernel matrix ˆK = K/trK. For the
+preparation, ﬁrst call the training data oracles with the state
+1/
+√
+M PM
+i=1 |i⟩. This prepares in quantum parallel the state
+|χ⟩= 1/
+p
+Nχ
+PM
+i=1 |⃗xi||i⟩|⃗xi⟩, with Nχ = PM
+i=1 |⃗xi|2, in
+O(log NM) run time. If we discard the training set register,
+we obtain the desired kernel matrix as a quantum density ma-
+trix. This can be seen from the partial trace tr2{|χ⟩⟨χ|} =
+1
+Nχ
+PM
+i,j=1⟨⃗xj|⃗xi⟩|⃗xi||⃗xj||i⟩⟨j| =
+K
+trK . See the appendix A
+for an independent estimation of the trace of K.
+For quantum mechanically computing a matrix inverse such
+as ˆK−1 one needs to be able to enact e−i ˆ
+K∆t efﬁciently.
+However, the kernel matrix ˆK is not sparse for the applica-
+tion of the techniques in [25, 26]. For the exponentiation of
+non-sparse symmetric or Hermitian matrices a strategy was
+developed by us in [18]. We adapt it to the present prob-
+lem. Adopting a density matrix description to extend the space
+of possible transformations gives, for some quantum state ρ,
+e−i ˆ
+K∆t ρ ei ˆ
+K∆t = e−iL ˆ
+K∆t(ρ), The super-operator notation
+LK(ρ) = [K, ρ] was deﬁned. Applying the algorithm of [18]
+obtains:
+e−iL ˆ
+K∆t(ρ) ≈tr1{e−iS∆t ˆK ⊗ρeiS∆t}
+(3)
+= ρ −i∆t[ ˆK, ρ] + O(∆t2).
+Here, S = PM
+m,n=1 |m⟩⟨n| ⊗|n⟩⟨m| is the swap matrix of
+dimension M 2 × M 2. Eq. (3) is the operation that is im-
+plemented on the quantum computer performing the machine
+learning. For the time slice ∆t, it consists of the preparation
+of an environment state ˆK (see above) and the application of
+the global swap operator to the combined system/environment
+state followed by discarding the environmental degrees of
+freedom. This shows that enacting e−i ˆ
+K∆t is possible with
+error O(∆t2). The efﬁcient preparation and exponentiation of
+the training data kernel matrix, which appears in many ma-
+chine learning problems [19, 21], potentially enables a wide
+range of supervised quantum machine learning algorithms.
+We now discuss a complete quantum big data algorithm.
+Quantum least-squares support vector machine.−A key
+idea of this work is to employ the least-squares reformulation
+of the support vector machine developed in [15] that circum-
+vents the quadratic programming and obtains the parameters
+from the solution of a linear equation system. The central sim-
+pliﬁcation is to introduce slack variables ej and replace the in-
+equality constraints with equality constraints (using y2
+j = 1):
+yj(⃗w · ⃗xj + b) ≥1 →(⃗w · ⃗xj + b) = yj −yjej.
+(4)
+In addition to the constraints, the implied Lagrange function
+contains a penalty term γ/2 PM
+j=1 e2
+j, where user-speciﬁed γ
+determines the relative weight of training error and SVM ob-
+jective. Taking partial derivatives of the Lagrange function
+and eliminating the variables ⃗u and ej leads to a least-squares
+approximation of the problem:
+F
+ b
+⃗α
+
+≡
+ 0
+⃗1T
+⃗1 K + γ−1
+1
+  b
+⃗α
+
+=
+ 0
+⃗y
+
+.
+(5)
+Here, Kij = ⃗xT
+i · ⃗xj is again the symmetric kernel matrix,
+⃗y = (y1, · · · , yM)T , and ⃗1 = (1, · · · , 1)T . The matrix F is
+(M + 1) × (M + 1) dimensional. The additional row and
+column with the ⃗1 arise because of a non-zero offset b. The
+αj take on the role as distances from the optimal margin and
+usually are not sparse. The SVM parameters are determined
+schematically by
+ b, ⃗αT T = F −1  0, ⃗yTT . As with the
+quadratic programming formulation, the classical complexity
+of the least-squares support vector machine is O(M 3) [22].
+For the quantum support vector machine, the task is to gen-
+erate a quantum state |b, ⃗α⟩describing the hyperplane with the
+matrix inversion algorithm [16] and then classify a state |⃗x⟩.
+We solve the normalized ˆF|b, ⃗α⟩= |⃗y⟩, where ˆF = F/trF
+with ||F|| ≤1. The classiﬁer will be determined by the suc-
+cess probability of a swap test between |b, ⃗α⟩and |⃗x⟩. For ap-
+plication of the quantum matrix inversion algorithm ˆF needs
+to be exponentiated efﬁciently. The matrix ˆF is schemati-
+cally separated as ˆF = (J + K + γ−1
+1)/trF, with J =
+ 0 ⃗1T
+⃗1
+0
+
+, and the Lie product formula allows for e−i ˆ
+F ∆t =
+e−i∆t1/trFe−iJ∆t/trFe−iK∆t/trF + O(∆t2). The matrix J is
+straightforward [25] (“star” graph). The two nonzero eigen-
+values of J are λstar
+±
+= ±
+√
+M and the corresponding eigen-
+states are |λstar
+± ⟩=
+1
+√
+2
+
+|0⟩±
+1
+√
+M
+PM
+k=1 |k⟩
+
+. The matrix
+γ−1
+1 is trivial. For K/trK, proceed according to Eq. (3) by
+rescaling time by a factor trK
+trF = O(1) appropriately. This
+e−i ˆ
+F ∆t is employed conditionally in phase estimation.
+The right hand side |⃗y⟩can be formally expanded into
+eigenstates |uj⟩of ˆF with corresponding eigenvalues λj,
+|˜y⟩= PM+1
+j=1 ⟨uj|˜y⟩|uj⟩. With a register for storing an ap-
+proximation of the eigenvalues (initialized to |0⟩), phase esti-
+mation generates a state which is close to the ideal state stor-
+ing the respective eigenvalue:
+|˜y⟩|0⟩→
+M+1
+X
+j=1
+⟨uj|˜y⟩|uj⟩|λj⟩→
+M+1
+X
+j=1
+⟨uj|˜y⟩
+λj
+|uj⟩.
+(6)
+The second step inverts the eigenvalue and is obtained as in
+[16] by performing a controlled rotation and uncomputing the
+
+3
+eigenvalue register. In the basis of training set labels, the ex-
+pansion coefﬁcients of the new state are the desired support
+vector machine parameters: (C = b2 + PM
+k=1 α2
+k)
+|b, ⃗α⟩=
+1
+√
+C
+ 
+b|0⟩+
+M
+X
+k=1
+αk|k⟩
+!
+.
+(7)
+Classiﬁcation.−We have now trained the quantum SVM
+and would like to classify a query state |⃗x⟩. From the state
+|b, ⃗α⟩in Eq. (7), construct by calling the training-data oracle:
+|˜u⟩=
+1
+√N˜u
+ 
+b|0⟩|0⟩+
+M
+X
+k=1
+αk|⃗xk||k⟩|⃗xk⟩
+!
+,
+(8)
+with N˜u = b2 + PM
+k=1 α2
+k|⃗xk|2. In addition, construct the
+query state:
+|˜x⟩=
+1
+√N˜x
+ 
+|0⟩|0⟩+
+M
+X
+k=1
+|⃗x||k⟩|⃗x⟩
+!
+.
+(9)
+with N˜x = M|⃗x|2 + 1. For the classiﬁcation, we perform
+a swap test.
+Using an ancilla, construct the state |ψ⟩=
+1
+√
+2(|0⟩|˜u⟩+ |1⟩|˜x⟩) and measure the ancilla in the state |φ⟩=
+1
+√
+2(|0⟩−|1⟩). The measurement has the success probability
+P = |⟨ψ|φ⟩|2 =
+1
+2(1 −⟨˜u|˜x⟩). The inner product is given
+by ⟨˜u|˜x⟩=
+1
+√N˜xN˜
+u
+
+b + PM
+k=1 αk|⃗xk||⃗x|⟨⃗xk|⃗x⟩
+
+, which is
+O(1) in the usual case when the α are not sparse. P can be
+obtained to accuracy ǫ by iterating O(P(1 −P)/ǫ2) times. If
+P < 1/2 we classify |⃗x⟩as +1, otherwise −1.
+Kernel matrix approximation and error analysis.−We now
+show that quantum matrix inversion essentially performs a
+kernel matrix principal component analysis and give a run
+time/error analysis of the quantum algorithm. The matrix un-
+der consideration, ˆF = F/trF, contains the kernel matrix
+ˆKγ = Kγ/trKγ and an additional row and column due to the
+offset parameter b. In case the offset is negligible, the problem
+reduces to matrix inversion of the kernel matrix ˆKγ only. For
+any ﬁnite γ, ˆKγ is positive deﬁnite, and thus invertible. The
+positive eigenvalues of ˆF are dominated by the eigenvalues
+of ˆKγ. In addition, ˆF has one additional negative eigenvalue
+which is involved in determining the offset parameter b. The
+maximum absolute eigenvalue of ˆF is no greater than 1 and
+the minimum absolute eigenvalue is ≤O(1/M). The mini-
+mum eigenvalue arises e.g. from the possibility of having a
+training example that has (almost) zero overlap with the other
+training examples. Because of the normalization the eigen-
+value will be O(1/M) and as a result the condition number κ
+(largest eigenvalue divided by smallest eigenvalue) is O(M)
+in this case. To resolve such an eigenvalue would require ex-
+ponential runtime [16]. We deﬁne a constant ǫK such that
+only the eigenvalues in the interval ǫK ≤|λj| ≤1 are taken
+into account, essentially deﬁning an effective condition num-
+ber κeﬀ= 1/ǫK. Then, the ﬁltering procedure described in
+[16] is employed in the phase estimation using this κeﬀ. An
+ancilla register is attached to the quantum state and appropri-
+ately deﬁned ﬁltering functions discard eigenvalues below ǫK
+when multiplying the inverse 1/λj for each eigenstate in Eq.
+(6). The desired outcome is obtained by post-selecting the
+ancilla register.
+The legitimacy of this eigenvalue ﬁltering can be ra-
+tionalized by a principal component analysis (PCA) argu-
+ment. Deﬁne the N × M (standardized) data matrix X =
+(⃗x1, · · · , ⃗xM).
+The M × M kernel matrix is given by
+K = XTX.
+The N × N covariance matrix is given by
+Σ = XXT = PM
+m=1 ⃗xm⃗xT
+m. Often data sets are effectively
+described by a few unknown factors (principal components),
+which admit a low-rank approximation for Σ. This amounts to
+ﬁnding the eigenvectors ⃗vi of Σ with the largest eigenvalues
+λi. The matrices XXT and XT X have the same non-zero
+eigenvalues. Keeping the large eigenvalues and correspond-
+ing eigenvectors of the kernel matrix thus retains the principal
+components of the covariance matrix, i.e. the most important
+features of the data. See Appendices B and C for further dis-
+cussion of the low-rank approximation. Regarding the cutoff
+ǫK, O(1) eigenvalues of K/trK exist for example in the case
+of well-separated clusters with O(M) vectors in them. A sim-
+ple artiﬁcial example is K =
+12×2 ⊗(⃗1⃗1T )M/2×M/2. Note
+that ﬁnding the principal components of the kernel matrix is
+performed in quantum parallel by phase estimation and the
+ﬁltering procedure.
+We continue with a discussion of the run time of the quan-
+tum algorithm. The interval ∆t can be written as ∆t = t0/T ,
+where T is the number of time steps in the phase estimation
+and t0 is the total evolution time determining the error of the
+phase estimation [16]. The swap matrix used in Eq. (3) is 1-
+sparse and e−iS∆t is efﬁciently simulable in negligible time
+˜O(log(M)∆t) [26]. The ˜O notation suppresses more slowly
+growing factors, such as a log∗M factor [16, 26]. For the
+phase estimation, the propagator e−iL ˆ
+F ∆t is enacted with er-
+ror O(∆t2|| ˆF||2), see Eq. (3). With the spectral norm for a
+matrix A, ||A|| = max|⃗v|=1 |A⃗v|, we have || ˆF|| = O(1). Tak-
+ing powers of this propagator, e−iL ˆ
+F τ∆t for τ = 0, · · · , T −1,
+leads to an error of maximally ǫ = O(T ∆t2) = O(t2
+0/T ).
+Thus, the run time is T = O(t2
+0/ǫ). Taking into account
+the preparation of the kernel matrix in O(log MN), the run
+time is thus O(t2
+0ǫ−1 log MN). The relative error of λ−1 by
+phase estimation is given by O(1/(t0λ)) ≤O(1/(t0ǫK)) for
+λ ≥ǫK [16]. If t0 is taken O(κeﬀ/ǫ) = O(1/(ǫKǫ)) this
+error is O(ǫ). The run time is thus ˜O(ǫ−2
+K ǫ−3 log MN). Re-
+peating the algorithm for O(κeﬀ) times to achieve a constant
+success probability of the post-selection step obtains a ﬁnal
+run time of O(κ3
+eﬀǫ−3 log MN). To summarize, we ﬁnd a
+quantum support vector machine that scales as O(log MN),
+which implies a quantum advantage in situations where clas-
+sically O(polyM) training examples and O(N) samples for
+the inner product are required.
+Nonlinear support vector machines.−One of the most
+powerful uses of support vector machines is to perform non-
+linear classiﬁcation [5]. Perform a nonlinear mapping ⃗φ(⃗xj)
+into a higher-dimensional vector space. Thus, the kernel func-
+
+4
+tion becomes a nonlinear function in ⃗x:
+k(⃗xj, ⃗xk) = ⃗φ(⃗xj) · ⃗φ(⃗xk).
+(10)
+For example, k(⃗xj, ⃗xk) = (⃗xj · ⃗xk)d. Now perform the SVM
+classiﬁcation in the higher-dimensional space. The separating
+hyperplanes in the higher-dimensional space now correspond
+to separating nonlinear surfaces in the original space.
+The ability of quantum computers to manipulate high-
+dimensional vectors affords a natural quantum algorithm for
+polynomial kernel machines. Simply map each vector |⃗xj⟩
+into the d-times tensor product |φ(⃗xj)⟩≡|⃗xj⟩⊗. . . ⊗|⃗xj⟩
+and use the feature that ⟨φ(⃗xj)|φ(⃗xk)⟩= ⟨⃗xj|⃗xk⟩d. Arbitrary
+polynomial kernels can be constructed using this trick. The
+optimization using a nonlinear, polynomial kernel in the orig-
+inal space now becomes a linear hyperplane optimization in
+the d-times tensor product space. Considering only the com-
+plexity in the vector space dimension, the nonlinear d-level
+polynomial quantum kernel algorithm to accuracy ǫ then runs
+in time O(d log N/ǫ). Note that, in contrast to classical kernel
+machines, the exponential quantum advantage in evaluating
+inner products allows quantum kernel machines to perform
+the kernel evaluation directly in the higher dimensional space.
+Conclusion.−In this work, we have shown that an im-
+portant classiﬁer in machine learning, the support vector ma-
+chine, can be implemented quantum mechanically with algo-
+rithmic complexity logarithmic in feature size and the number
+of training data, thus providing one example of a quantum
+“big data” algorithm. A least-squares formulation of the sup-
+port vector machine allows the use of phase estimation and
+the quantum matrix inversion algorithm. The speed of the
+quantum algorithm is maximized when the training data ker-
+nel matrix is dominated by a relatively small number of prin-
+cipal components. We note that there exist several heuristic
+sampling algorithms for the SVM [27] and, more generally,
+for ﬁnding eigenvalues/vectors of low-rank matrices [28, 29].
+Information-theoretic arguments show that classically ﬁnding
+a low-rank matrix approximation is lower-bounded by Ω(M)
+in the absence of prior knowledge [30], suggesting a simi-
+lar lower bound for the least-squares SVM. Aside from the
+speed-up, another timely beneﬁt of quantum machine learning
+is data privacy [14]. The quantum algorithm never requires the
+explicit O(MN) representation of all the features of each of
+the training examples, but generates the necessary data struc-
+ture, the kernel matrix of inner products, in quantum parallel.
+Once the kernel matrix is generated, the individual features of
+the training data are fully hidden from the user. In summary,
+the quantum support vector machine is an efﬁcient implemen-
+tation of an important machine learning algorithm. It also pro-
+vides advantages in terms of data privacy and could be used
+as a component in a larger quantum neural network. Recently,
+quantum machine learning was discussed in [31, 32].
+This work was supported by DARPA, NSF, ENI, Google-
+NASA Quantum Artiﬁcial Intelligence Laboratory, and Jef-
+frey Epstein. The authors acknowledge helpful discussions
+with Scott Aaronson and Nan Ding.
+∗rebentr@mit.edu
+† slloyd@mit.edu
+[1] D. Mackay, Information Theory, Inference and Learning Algo-
+rithms (Cambridge University Press, 2003).
+[2] E. Alpaydin, Introduction to Machine Learning (Adaptive Com-
+putation and Machine Learning) (MIT Press, 2004).
+[3] C. M. Bishop, Pattern Recognition and Machine Learning
+(Springer, 2007).
+[4] K. P. Murphy, Machine Learning: A Probabilistic Perspective
+(MIT Press, 2012).
+[5] C. Cortes and V. Vapnik, Mach. Learn. 20, 273 (1995).
+[6] S. Boyd and L. Vandenberghe, Convex Optimization (Cam-
+bridge University Press, 2004).
+[7] D. Anguita, S. Ridella, F. Rivieccion, and R. Zunino, Neural
+Networks 16, 763 (2003).
+[8] H. Neven,
+V. Denchev,
+G. Rose,
+and W. Macready,
+arXiv:quant-ph/0811.0416 (2008).
+[9] H. Neven,
+V. Denchev,
+G. Rose,
+and W. Macready,
+arXiv:0912.0779 (2009).
+[10] K. Pudenz and D. Lidar, Quant. Inf. Proc. 12, 2027 (2013).
+[11] V. S. Denchev, N. Ding, S. V. N. Vishwanathan, and H. Neven,
+arXiv:1205.1148 (2012).
+[12] M. Sasaki and A. Carlini, Phys. Rev. A 66, 022303 (2002).
+[13] R. A. Servedio and S. J. Gortler, SIAM J. Comput. 33, 1067
+(2004).
+[14] S. Lloyd, M. Mohseni,
+and P. Rebentrost, arXiv:1307.0411
+(2013).
+[15] J. Suykens and J. Vandewalle, Neural Process. Lett. 9, 293
+(1999).
+[16] A. Harrow, A. Hassidim, and S. Lloyd, Phys. Rev. Lett. 103,
+150502 (2009).
+[17] N. Wiebe, D. Braun, and S. Lloyd, Phys. Rev. Lett. 109, 050505
+(2012).
+[18] S. Lloyd, M. Mohseni,
+and P. Rebentrost, arXiv:1307.0401
+(2013).
+[19] K.-R. M¨uller, S. Mika, G. R¨atsch, K. Tsuda, and B. Sch¨olkopf,
+IEEE T. Neural Networ. 12, 181 (2001).
+[20] L. Hoegaerts, J. Suykens, J. Vandewalle, and B. D. Moor, in
+Proceedings of International Joint Conference on Neural Net-
+works (2004).
+[21] T.
+Hofmann,
+B.
+Sch¨olkopf,
+and
+A.
+J.
+Smola,
+Ann. Stat. 36, 1171 (2008).
+[22] The exponent 3 can be improved considerably: D. Coppersmith
+and S. Winograd, J. Symb. Comp. 9, 251 (1990).
+[23] S. Aaronson, arXiv:0910.4698 (2009).
+[24] V. Giovannetti, S. Lloyd, and L. Maccone, Phys. Rev. Lett. 100,
+160501 (2008).
+[25] A. Childs, Comm. Math. Phys. 294, 581 (2010).
+[26] D.
+Berry,
+G.
+Ahokas,
+R.
+Cleve,
+and
+B.
+Sanders,
+Comm. Math. Phys. 270, 359 (2007).
+[27] S. Shalev-Shwartz, Y. Singer,
+and N. Srebro, in Proceed-
+ings of the 24th International Conference on Machine Learning
+(2007).
+[28] E. Liberty, F. Woolfe, P.-G. Martinsson, V. Rokhlin,
+and
+M. Tygert, Proc. Natl. Acad. Sci. USA 104, 20167 (2007).
+[29] P. Drineas, R. Kannan, and M. W. Mahoney, SIAM J. Comput.
+36, 158 (2006).
+[30] Z. Bar-Yossef, in Proc. 35th Annual ACM Symp. on Theory of
+Computing (2003).
+[31] N. Wiebe, A. Kapoor, and K. Svore, arXiv:1401.2142 (2014).
+[32] G. D. Paparo, V. Dunjko, A. Makmal, M. A. Martin-Delgado,
+
+5
+and H. J. Briegel, arXiv:1401.4997 (2014).
+[33] C. Ding and X. He, in Proceedings of the 21st International
+Conference on Machine learning (2004).
+APPENDIX A: ESTIMATING THE TRACE OF THE
+KERNEL MATRIX
+The trace of the kernel matrix can be efﬁciently evalu-
+ated, similar to [14].
+Generate the Hamiltonian Htr
+=
+PM
+j=1 |⃗xj||j⟩⟨j| ⊗σx from the quantum access to the
+norms due to the training-data oracle. Applying e−iHtrt to
+the state |ψ⟩= 1/
+√
+M PM
+j=1 |j⟩|0⟩results in |ψ(t)⟩=
+1/
+√
+M PM
+j=1 (cos(|⃗xj|t)|j⟩|0⟩−i sin(|⃗xj|t)|j⟩|1⟩). Choose
+t such that |⃗xj|t ≪1, for all j, and measure the ancilla in the
+|1⟩state. This succeeds with probability 1/M PM
+j=1 |⃗xj|2t2,
+which allows the estimation of the trace of K, PM
+j=1 |⃗xj|2.
+APPENDIX B: LOW-RANK APPROXIMATION
+To investigate the kernel matrix low-rank approximation,
+ﬁrst set b = 0 and K
+= 0.
+From γ−1I⃗α = ⃗y and
+⃗w = P
+m αm⃗xm, the normal vector is then simply ⃗w =
+γ P
+m ym⃗xm with consequently a sub-optimally small mar-
+gin 2/|⃗w|. Now assume a rank-one approximation for the
+kernel matrix, K ≈λ1⃗u1⃗uT
+1 . Note that the vector ⃗u1 is re-
+lated to the ﬁrst principal component ⃗v1 (ﬁrst eigenvector of
+the covariance matrix Σ = XXT) by ⃗u1 = XT⃗v1/√λ1 =
+1/√λ1(⃗xT
+1 ⃗v1, · · · , ⃗xT
+M⃗v1)T [33], i.e. its elements are the in-
+ner products of the training vectors with ⃗v1. This low-rank ap-
+proximation for K gives (K+γ−1I)−1 = γ(I−c⃗u1⃗uT
+1 ), with
+c = γλ1/(1 + γλ1), using the Sherman-Morrison formula.
+This leads to ⃗w = γ P
+m(ym −c′⃗u1,m)⃗xm, with c′ = c⃗uT
+1 ⃗y,
+which corrects each ym by taking into account the respective
+projection of the training example on the ﬁrst principal com-
+ponent. Thus it is shown that in the low-rank approximation
+all training examples nevertheless are contributing to the solu-
+tion. That is in contrast to stochastic gradient approaches [27],
+which only sample a small subset of the training examples.
+APPENDIX C: ERROR OF QUANTUM LOW-RANK
+APPROXIMATION
+Our quantum speed-up holds in the case when the data is
+in a low-rank situation, i.e. the kernel matrix has a few O(1)
+eigenvalues and many O(1/M) eigenvalues, all of them ini-
+tially unknown. The quantum algorithm only takes into ac-
+count the O(1) eigenvalues, which incurres an error E. This
+error is given by the norm of the difference between the
+low-rank matrix K and its quantum approximation Kq, i.e.
+E = ||K−Kq||F , using the Frobenius/Hilbert-Schmidt norm.
+This error is given by E =
+qP
+λi=O(1/M) λ2
+i , where λi are
+the eigenvalues of K. Since by assumption we have O(M)
+small eigenvalues, this error is E = O(1/
+√
+M).

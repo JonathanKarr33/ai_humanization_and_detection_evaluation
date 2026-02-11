@@ -1,0 +1,5044 @@
+Draft version March 31, 2014
+Preprint typeset using LATEX style emulateapj v. 12/16/11
+REDMAPPER I: ALGORITHM AND SDSS DR8 CATALOG
+E. S. Rykoff1, E. Rozo1, M. T. Busha2,3, C. E. Cunha3, A. Finoguenov4, A. Evrard5,6,7, J. Hao8, B. P. Koester5,
+A. Leauthaud9, B. Nord8, M. Pierre10, R. Reddick1,3, T. Sadibekova10, E. S. Sheldon11, R. H. Wechsler1,3
+Draft version March 31, 2014
+ABSTRACT
+We describe redMaPPer, a new red-sequence cluster ﬁnder speciﬁcally designed to make optimal
+use of ongoing and near-future large photometric surveys.
+The algorithm has multiple attractive
+features: (1) It can iteratively self-train the red-sequence model based on a minimal spectroscopic
+training sample, an important feature for high redshift surveys; (2) It can handle complex masks
+with varying depth; (3) It produces cluster-appropriate random points to enable large-scale structure
+studies; (4) All clusters are assigned a full redshift probability distribution P(z); (5) Similarly, clusters
+can have multiple candidate central galaxies, each with corresponding centering probabilities; (6)
+The algorithm is parallel and numerically eﬃcient: it can run a Dark Energy Survey-like catalog in
+∼500 CPU hours; (7) The algorithm exhibits excellent photometric redshift performance, the richness
+estimates are tightly correlated with external mass proxies, and the completeness and purity of the
+corresponding catalogs is superb. We apply the redMaPPer algorithm to ∼10,000 deg2 of SDSS DR8
+data, and present the resulting catalog of ∼25,000 clusters over the redshift range z ∈[0.08,0.55].
+The redMaPPer photometric redshifts are nearly Gaussian, with a scatter σz ≈0.006 at z ≈0.1,
+increasing to σz ≈0.02 at z ≈0.5 due to increased photometric noise near the survey limit. The
+median value for |∆z|/(1 + z) for the full sample is 0.006. The incidence of projection eﬀects is low
+(≤5%). Detailed performance comparisons of the redMaPPer DR8 cluster catalog to X-ray and SZ
+catalogs are presented in a companion paper.
+Keywords: galaxies: clusters
+1. INTRODUCTION
+Over the past several years, galaxy clusters have been
+recognized as powerful cosmological probes (e.g., Henry
+et al. 2009; Vikhlinin et al. 2009; Mantz et al. 2010; Rozo
+et al. 2010; Clerc et al. 2012; Benson et al. 2013; Has-
+selﬁeld et al. 2013). Galaxy clusters are one of the key
+probes of Dark Energy for ongoing and upcoming photo-
+metric surveys such as the Dark Energy Survey (DES:
+The DES Collaboration 2005), Pan-STARRS (Kaiser
+et al. 2002), the Hyper-Suprime Camera (HSC)12, and
+the Large Synoptic Survey Telescope (LSST: LSST Dark
+Energy Science Collaboration 2012).
+Because galaxies are obviously clustered on the sky,
+rich galaxy clusters have been detected as far back as the
+1 SLAC National Accelerator Laboratory, Menlo Park, CA
+94025.
+2 Institute for Theoretical Physics, University of Z¨urich, 8057
+Z¨urich, Switzerland.
+3 Kavli Institute for Particle Astrophysics and Cosmology,
+Stanford University, Palo Alto, CA 94305.
+4 Department of Physics, University of Helsinki, FI-00014
+Helsinki, Finland.
+5 Physics Department, University of Michigan, Ann Arbor, MI
+48109.
+6 Astronomy Department, University of Michigan, Ann Arbor,
+MI 48109.
+7 Michigan Center for Theoretical Physics, Ann Arbor, MI
+48109.
+8 Center for Particle Astrophysics, Fermi National Accelerator
+Laboratory, Batavia, IL 60510.
+9 Kavli Institute for the Physics and Mathematics of the Uni-
+verse, University of Tokyo, Kashiwa 277-8583, Japan.
+10 Service d’Astrophysique, CEA Saclay, F-91191 Gif sur
+Yvette Cedex, France.
+11 Brookhaven National Laboratory, Upton, NY 11973.
+12 http://www.naoj.org/Projects/HSC/HSCProject.html
+1800’s (Biviano 2000), with the ﬁrst large catalogs gen-
+erated from galaxy overdensities on photographic plates
+created 50 years ago (e.g., Abell 1958; Zwicky et al. 1968;
+Abell et al. 1989). More recently, the advent of multi-
+band data has led to a proliferation of optical cluster
+ﬁnding algorithms. These algorithms use various tech-
+niques for measuring clustering in angular position plus
+color/redshift space, ranging from simple matched-ﬁlters
+to more complicated Voronoi tesselations. These clus-
+ter ﬁnders can be divided into roughly two classes, those
+based on photometric redshifts (e.g., Kepner et al. 1999;
+van Breukelen & Clewley 2009; Milkeraitis et al. 2010;
+Durret et al. 2011; Szabo et al. 2011; Soares-Santos et al.
+2011; Wen et al. 2012), and those utilizing the cluster red-
+sequence (e.g., Annis et al. 1999; Gladders & Yee 2000;
+Koester et al. 2007a; Gladders et al. 2007; Gal et al.
+2009; Thanjavur et al. 2009; Hao et al. 2010; Murphy
+et al. 2012). However, relatively few of these optical cat-
+alogs have been utilized for cosmological parameter con-
+straints (e.g., Rozo et al. 2007, 2010; Mana et al. 2013).
+Given the above landscape, it is a fair question to ask
+whether the world really needs yet another photometric
+cluster ﬁnding algorithm. As we describe below, we be-
+lieve that the answer to this question is yes. In particular,
+there are a variety of important features that any reason-
+able optical cluster ﬁnder must have in order to properly
+exploit the photometric data that will become available
+with ongoing or near-future photometric surveys such as
+the DES or LSST.
+What must we require of current photometric cluster
+ﬁnders? The key features are as follows.
+1. The algorithm must be able to smoothly detect
+galaxy clusters in a consistent way across a braod
+arXiv:1303.3562v2  [astro-ph.CO]  27 Mar 2014
+
+2
+Rykoff et al.
+redshift range. This can be a challenge for photo-
+metric redshift (“photo-z”) and red-sequence based
+algorithms alike.
+For photometric redshift based
+algorithms, one must be cautious because biases
+and scatter in reported photo-zs increase at fainter
+magnitudes where spectroscopic training and vali-
+dation samples can be highly incomplete. For red-
+sequence based cluster ﬁnders, one must confront
+the fact that the 4000 ˚A break characteristic of
+the early-type galaxy spectra moves across ﬁlters.
+While g −r is an ideal color for cluster detection
+at low redshift, one should rely primarily on r −i
+at itermediate redshifts, and i −z at higher red-
+shifts (and we note that this will also aﬀect photo-
+z-based ﬁnders).
+By z ≈1, near-infrared (NIR)
+photometry is required.
+Being able to smoothly
+transition from one color to the next — or better
+yet, to always use all available photometric data —
+is paramount.
+2. To the extent possible, the algorithm should self-
+train to the available data.
+For instance, algo-
+rithms reliant on a priori parameterizations of the
+red sequence could easily result in systematic biases
+if the a priori parameterization diﬀers from reality.
+Note that this also impacts photo-z-based cluster
+ﬁnders, since there can be unknown and diﬃcult
+to calibrate biases in the photometric redshifts of
+cluster galaxies.
+3. The algorithm should be numerically eﬃcient, ca-
+pable of running on extremely arge data sets within
+reasonable timeframes with modest computational
+resources.
+4. The algorithm must be able to properly account for
+complex survey masks, including varying depth.
+5. The algorithm must allow the construction of
+proper cluster-random points that adequately char-
+acterize the eﬀective survey volume for cluster de-
+tection in order to enable large scale structure stud-
+ies. In particular, it is worth emphasizing that be-
+cause galaxy clusters are extended objects on the
+sky, the galaxy mask used to construct the cluster
+catalog is not the appropriate mask characterizing
+the angular and redshift selection of galaxy clusters
+for any particular cluster ﬁnder.
+6. The algorithm should produce a full P(z) distri-
+bution for every cluster. Similarly, given that the
+center of a galaxy cluster can be observationally
+uncertain, there should be a corresponding center-
+ing distribution in the plane of the sky P(ˆn). Note
+that if one adopts the prior that a galaxy resides at
+the center of a galaxy cluster, then the probability
+P(ˆn) collapses to the probability that any given
+cluster galaxy is the correct cluster center.
+Our
+expectation is that just as P(z) allows one to ade-
+quately recover the redshift distribution of galaxy
+clusters in a statistical sense, so too will centering
+probabilities for cluster galaxies allow one to statis-
+tically recover the angular distribution of clusters
+in the sky, a point that is of critical importance for
+large-scale structure studies.
+7. In order to maximize the cosmological utility of
+the derived cluster samples, the richness estima-
+tors should be fully optimized for the purpose of
+minimizing the scatter in the richness–mass rela-
+tion.
+The
+red-sequence
+Matched-ﬁlter
+Probabilistic
+Percolation (redMaPPer) cluster ﬁnding algorithm is
+our solution to the above list of must-haves. Concerning
+the last point in particular, over the past several years
+we have empirically explored what works and what does
+not work in estimating cluster richness (Rozo et al. 2009,
+2011; Rykoﬀet al. 2012, henceforth R12). For instance,
+we have demonstrated that estimating membership
+probabilities for every galaxy is very eﬀective, while
+using hard color cuts to derive cluster membership can
+lead to large biases. We have fully optimized the optical
+detection radii, as well as the luminosity cuts employed
+when counting galaxies.
+We have also investigated
+whether total galaxy counts or total cluster luminosity
+is a better mass proxy, and whether or not trying to
+add blue galaxies into richness estimates results in
+improvements. All of these lessons have gone into the
+creation of the redMaPPer cluster ﬁnder.
+There, is however, one feature of redMaPPer that rep-
+resents more of a personal bias as opposed to an em-
+pirically driven choice, namely, the fact that redMaPPer
+is a red-sequence cluster ﬁnder. Indeed, operationally,
+redMaPPer can be easily adapted to work in photo-z-
+space rather than working directly in color-space. How-
+ever, we are wary of reliance on photometric redshifts,
+which become increasingly diﬃcult to characterize for
+faint galaxies due to a lack of spectroscopic training and
+validation samples. Furthermore, cluster galaxies are a
+very particular population, and photo-z estimates tai-
+lored for clusters should be derived separately from the
+total galaxy population. Though there have been some
+studies comparing diﬀerent cluster ﬁnders (e.g., Goto
+et al. 2002; Bahcall et al. 2003; Lopes et al. 2004, Paper
+II), we have not seen any conclusive evidence for photo-
+z-based algorithms outperforming red-sequence meth-
+ods or vice-versa.
+Here, we have opted to rely on a
+red-sequence method when developing redMaPPer. Of
+course, at high enough redshift, as the red-sequence be-
+gins to disappear, it is obvious that photometric redshift
+methods must necessarily perform better (e.g., Eisen-
+hardt et al. 2008; Brodwin et al. 2011).
+We do not,
+however, expect this to be a problem for near-future
+large photometric surveys. Note that while it is true that
+redMaPPer also relies on spectroscopic training samples,
+an important advantage of our novel red-sequence mod-
+eling alogirhtm is that we do not require a locally rep-
+resentative training sample: our spectroscopic training
+galaxies can be the brightest cluster galaxies at all red-
+shifts, with no degradation in the performance of our
+photometric redshift estimates.
+The redMaPPer algorithm is designed to handle an
+arbitrary photometric galaxy catalog, with an arbitrary
+number of photometric bands (≥3), and will perform
+well provided the photometric bands span the 4000 ˚A
+break over the redshift range of interest. It is thus well
+suited to current surveys such as the Sloan Digital Sky
+Survey (SDSS: York et al. 2000) for low and moderate
+redshift clusters (z ∈[0.05,0.55]), as well as upcoming
+
+redMaPPer I: Algorithm and DR8 Catalog
+3
+surveys such as DES for low and high redshift clusters
+(z < 1). As a case study, in this paper we present the
+redMaPPer catalog as run on 10,400 deg2 of photometric
+data from the Eighth Data Release (DR8: Aihara et al.
+2011) of the SDSS. We will make the full DR8 redMaPPer
+catalog available after this paper is accepted for publica-
+tion.
+The layout of this paper is as follows. In Section 2, we
+describe the SDSS data used for this work, followed in
+Section 3 with an overall outline of the redMaPPer clus-
+ter ﬁnder. In Section 4 we describe the multi-color rich-
+ness estimator λ, which is an update of the single-color
+richness estimator used in R12. In Section 5 we describe
+our strategy for dealing with stellar masks and regions
+of limited depth in the survey. In Section 6, we describe
+the self-training of the red sequence parametrization used
+to detect clusters, as well as measure their photometric
+redshifts, which is described in Section 7. In Section 8
+we describe our new probabilistic cluster centering al-
+gorithm.
+Finally, in Section 9 we put all these pieces
+together into the redMaPPer cluster ﬁnder. The result-
+ing SDSS DR8 redMaPPer cluster catalog is described
+in Section 10. Next, in Section 11, we describe a new,
+more accurate method of using the survey data to esti-
+mate the purity and completeness of the cluster catalog,
+and in Section 12 we describe how these methods can
+be applied to generate a cluster detection mask over the
+full sky. A summary is presented in Section 13. In the
+appendices we present several systematic checks, includ-
+ing Appendix B which contains an estimate of the mini-
+mum number of training spectra required for an accurate
+red-sequence calibration. A full detailed comparison of
+redMaPPer and other large photometric survey catalogs
+to X-ray cluster catalogs is presented in a companion
+paper (Paper II: Rozo & Rykoﬀ2014). When necessary,
+distances are estimated assuming a ﬂat ΛCDM model
+with Ωm = 0.27, and h = 1.0 Mpc, i.e., all quoted dis-
+tances are in h−1 Mpc.
+2. DATA
+As discussed above, the redMaPPer algorithm is de-
+signed to handle an arbitrary photometric galaxy cat-
+alog, with an arbitrary number of photometric bands
+(≥3). Of course, the quality of the output depends on
+the quality of the photometry. As a case study, in this
+paper we run redMaPPer on SDSS DR8 data, due to its
+large area and uniform coverage.
+2.1. SDSS DR8 Photometry
+The input galaxy catalog for this work is derived from
+SDSS DR8 data (Aihara et al. 2011). This data release
+includes more than 14,000 deg2 of drift-scan imaging in
+the Northern and Southern Galactic caps. The survey
+edge used is the same as that used for Baryon Acous-
+tic Oscillation Survey (BOSS) target selection (Daw-
+son et al. 2013), which reduces the total area to ≈
+10,500 deg2 with high-quality observations and a well-
+deﬁned contiguous footprint.
+Similarly, bad ﬁeld and
+bright star masks are based on those used for BOSS.
+The BOSS bright star mask is based on the Tycho
+catalog (Høg et al. 2000). However, this catalog is in-
+complete at the bright end.
+Cross-matching Tycho to
+the Yale Bright Star Catalog (Hoﬄeit & Jaschek 1991),
+covering 9000 of the brightest stars in the sky (mostly
+visible to the naked eye), we have found an extra 70
+stars — including very bright stars such as Arcturus and
+Regulus — that obviously impacted galaxy photometry
+and detection. We have also found that very large, bright
+galaxies such as M33 cause signiﬁcant problems for pho-
+tometry in the area, including many spurious sources
+marked as galaxies. To handle these issues, we have visu-
+ally inspected and masked obviously bad regions around
+63 objects brighter than V < 10 from the New Gen-
+eral Catalogue (NGC: Sinnott 1988) that are in the DR8
+footprint, as well as the bright stars mentioned above. In
+total, an additional 36 deg2 (∼0.3% of the total area) is
+removed by our combined bright star and galaxy mask.
+After accounting for all the masked regions, the input
+galaxy catalog covers 10,400 deg2.
+As discussed in R12, the careful selection of a clean in-
+put galaxy catalog is required for proper cluster ﬁnding
+and richness estimation. Our input catalog cuts are sim-
+ilar to those from Sheldon et al. (2012) used for BOSS
+target selection, with some modiﬁcations. First, we se-
+lect galaxies as classiﬁed by the default SDSS star/galaxy
+separator.
+We further limit our catalog to i < 21.0,
+approximately the 10σ limiting magnitude for the sur-
+vey.13 We then ﬁlter all objects with any of the following
+ﬂags set in the g, r, or i bands: SATUR CENTER, BRIGHT,
+TOO MANY PEAKS, and (NOT BLENDED OR NODEBLEND). Un-
+like the BOSS target selection, we have chosen to
+keep objects ﬂagged with SATURATED, NOTCHECKED, and
+PEAKCENTER.
+Particular care has to be made in avoiding over-
+aggressive ﬂag cuts because of the way that the SDSS
+photo pipeline handles dense regions such as cluster
+cores. In these cases, the central galaxy and many satel-
+lites may be originally blended into one object and then
+deblended. However, if there is a problem with one part
+of the parent object — such as a cosmic ray hit that is not
+properly interpolated — then this bad ﬂag is propagated
+to all the children. We have found that removing objects
+marked with SATURATED, NOTCHECKED, and PEAKCENTER
+often mask out cluster centers, while truly saturated ob-
+jects such as improperly classiﬁed stars are also rejected
+via the SATUR CENTER ﬂag cut.
+Overall, by including
+these objects we increase the number of galaxies in the
+input catalog by less than 2%, and our tests have shown
+no signiﬁcant eﬀect on the richness measurements except
+for a few clusters for which the cores were inadvertently
+masked out when galaxies with the above ﬂags were re-
+moved. In total, there are 56.5 million galaxies in the
+input catalog.
+In this work, we use CMODEL MAG as our total magni-
+tude in the i band, and MODEL MAG for u, g, r, i, and
+z when computing colors.
+We limit our input catalog
+to galaxies that have mi < 21.0, approximately the 10σ
+limit for galaxy detection such that the characteristic
+magnitude error for our faintest objects is ∼0.1. The
+DR8 ¨ubercalibration procedure yields magnitude unifor-
+mity on the order of 1% in griz and 2% in u.
+The
+resulting color scatter introduced by the photometry is
+signiﬁcantly narrower than the width of the cluster red
+sequence. All magnitudes and colors are corrected for
+13 Although we note that the limiting magnitude is not precisely
+constant over the survey.
+
+4
+Rykoff et al.
+Galactic extinction using the dust maps and reddening
+law of Schlegel et al. (SFD: 1998).
+2.2. Spectroscopic Catalog
+Although our cluster ﬁnder uses only photometric
+data, we require spectroscopic data to calibrate the red
+sequence and to validate our photometric redshifts. For
+this purpose we use the SDSS DR9 spectroscopic cata-
+log (Ahn et al. 2012). This spectroscopic catalog has over
+1.3 million galaxy spectra, including over 500,000 Lumi-
+nous Red Galaxies (LRGs) at z ∼0.5 from the CMASS
+sample. As detailed below, we only use ≈20% of the
+available data in our training, and use the remaining data
+set to validate our photometric redshifts.
+3. OUTLINE OF THE CLUSTER FINDER
+The redMaPPer algorithm ﬁnds optical clusters via
+the red sequence technique. More speciﬁcally, it is built
+around the optimized richness estimator λ developed in
+R09 and R12. The algorithm is divided into two stages:
+a calibration stage, where we empirically calibrate the
+properties of the red sequence as a function of redshift;
+and a cluster-ﬁnding stage, where we utilize our cali-
+brated model to identify galaxy clusters and measure
+their richness. The algorithm is iterative. First, an ini-
+tial rough color calibration is used to identify clusters.
+These clusters are then used to better calibrate the red
+sequence, which enables a new cluster ﬁnding run (see
+also Blackburne & Kochanek 2012, for a similar approach
+within the context of cluster ﬁnding with spectroscopic
+data sets). These two calibration/cluster ﬁnding stages
+are iterated several times before a ﬁnal cluster ﬁnding
+run is made.
+The calibration itself is also an iterative procedure de-
+scribed in detail in Section 6.
+We start with a set of
+“training clusters” that have a red central galaxy with
+a spectroscopic redshift to calibrate the red sequence
+model. As we show in Appendix B, our minimal training
+requirements for unbiased cluster richness and photomet-
+ric redshift estimation are ≈40 clusters per redshift bin
+of width ±0.025. In the case of SDSS DR8, the spectro-
+scopic availability greatly surpasses this requirement by
+many orders of magnitude. However, for upcoming sur-
+veys such as DES probing much higher redshifts, this will
+no longer be the case, and we have developed redMaPPer
+with these limitations in mind.
+For the present work on DR8, we construct our sam-
+ple of training clusters from red spectroscopic galaxies.
+These red galaxies are used as “seeds” to look for sig-
+niﬁcant overdensities of galaxies of the same color. The
+signiﬁcant overdensities thus become our training clus-
+ters that are used to ﬁt a full linear red-sequence model
+(including zero-point, tilt, and scatter) to the sample
+of all high-probability cluster members with a luminos-
+ity L ≥0.2L∗.
+This luminosity threshold is optimal
+for richness measurements (R12). In this way we eﬀec-
+tively transfer the “seed” spectroscopic redshift to all
+high probability cluster members, which enables a much
+more accurate measurement of the red sequence. This is
+especially true for fainter magnitudes where there is very
+limited spectroscopic coverage. Note that because the al-
+gorithm utilizes all colors simultaneously, the “scatter” is
+characterized not by a single number but by a covariance
+matrix.
+Given a red-sequence model, the cluster ﬁnding pro-
+ceeds as follows (see Section 9 for details). First, we con-
+sider all photometric galaxies as candidate cluster centers
+(thereby assuming the center of a cluster is located at a
+galaxy position). We use our red-sequence model to cal-
+culate a photometric redshift for each galaxy (zred; see
+Section 7.1), and evaluate the goodness of ﬁt of our red
+galaxy template. Galaxies that are not a reasonable ﬁt
+to the red galaxy template at any redshift are not consid-
+ered as possible central galaxies for the purpose of cluster
+ranking. We note that as long as a cluster has at least
+one galaxy that is a reasonable ﬁt to the template, that
+cluster will be considered in the ﬁrst step of the cluster-
+ﬁnding stage. We then use the zred value of the candidate
+central galaxy as an initial guess for the cluster redshift.
+Based on this redshift, we compute the cluster richness λ
+and its corresponding likelihood using a multi-color gen-
+eralization of the method of R12 (see Section 4). When
+a signiﬁcant number of red-sequence galaxies (≥3) is
+detected within a 500 h−1 kpc aperture, we re-estimate
+the cluster redshift by performing a simultaneous ﬁt of
+all the high probability cluster members to the red se-
+quence model. This procedure is iterated until conver-
+gence is achieved between member selection and cluster
+photometric redshift (zλ; see Section 7.2). The resulting
+list of candidate cluster centers is then rank-ordered ac-
+cording to likelihood. Starting with the highest ranked
+cluster we measure the richness and membership prob-
+abilities. These probabilities are then used to mask out
+member galaxies for lower-ranked clusters in a process
+we term “percolation” (see Section 9.3). In this way we
+prevent double-counting of galaxy clusters.
+4. RICHNESS ESTIMATOR λ
+The redMaPPer richness estimator, λ, is a multi-color
+extension of the richness estimator developed in R09 and
+R12, which we now denote λcol to indicate that it is a
+single-color richness. Here we review how we calculate λ
+and highlight the diﬀerences relative to R12.
+Let x be a vector describing the observable properties
+of a galaxy (e.g., multiple galaxy colors, i-band mag-
+nitude, and position).
+We model the projected distri-
+bution within and around clusters as a sum S(x) =
+λu(x|λ)+b(x) where λ is the number of cluster galaxies,
+u(x|λ) is the density proﬁle of the cluster normalized to
+unity, and b(x) is the density of background (i.e., non-
+member) galaxies. The probability that a galaxy found
+near a cluster is actually a cluster member is simply
+pmem = p(x) =
+λu(x|λ)
+λu(x|λ) + b(x).
+(1)
+We note that in Section 9.3, the deﬁnition of the mem-
+bership probability will be modiﬁed to allow for proper
+percolation of the cluster ﬁnder. This modiﬁcation will
+only impact clusters that are close to each other along
+the line of sight and at comparable redshifts. Regardless,
+the total number of cluster galaxies λ must satisfy the
+constraint equation
+λ =
+X
+p(x|λ) =
+X
+R<Rc(λ)
+λu(x|λ)
+λu(x|λ) + b(x).
+(2)
+
+redMaPPer I: Algorithm and DR8 Catalog
+5
+The corresponding statistical uncertainty in λ is given by
+Var(λ) =
+X
+p(x|λ) [1 −p(x|λ)] .
+(3)
+In principle, these sums should extend over all galaxies.
+In practice, one needs to deﬁne a cutoﬀradius Rc and a
+luminosity cut Lcut. In R12 and Rozo et al. (2011) we
+showed that the scatter in the mass–richness relation is
+expected to be minimized when Lcut = 0.2L∗, while the
+optical radial cut scales with richness via
+Rc(λ) = R0(λ/100.0)β.
+(4)
+where R0 = 1.0 h−1 Mpc and β = 0.2. We adopt these
+parameters in redMaPPer.
+To determine the cluster richness of a galaxy cluster,
+note that λ is the only unknown in Eqns. 2 and 4. There-
+fore, we can numerically solve Eqn. 2 for λ using a zero-
+ﬁnding algorithm.
+The solution to Eqn. 2 deﬁnes λ,
+and naturally produces a cluster radius estimate Rc via
+Eqn. 4. We emphasize this cluster radius is not a proxy
+for any sort of standard overdensity radius such as R500c
+or R200m.14
+As in R12, we consider three observable properties
+of galaxies for our ﬁlter function u(x):
+R, the pro-
+jected distance from the cluster center; mi, the galaxy
+i-band magnitude, and a color variable.
+Ideally, our
+color variable would be the full color vector (e.g., c =
+{u −g,g −r, r −i,i −z} in the case of SDSS data). How-
+ever, practical considerations forced us to reduce this in-
+formation to a single χ2 value which gives the goodness
+of ﬁt of our red-sequence template. In doing so, we eﬀec-
+tively compress the information contained in the multi-
+dimensional color vector into a single number that mea-
+sures the “distance” in color space between the galaxy of
+interest and our red sequence model. This is described
+in more detail below.
+We adopt a separable ﬁlter function
+u(x) = [2πRΣ(R)]φ(mi)ρν(χ2),
+(5)
+where Σ(R) is the two dimensional cluster galaxy density
+proﬁle, φ(m) is the cluster luminosity function (expressed
+in apparent magnitudes), and ρν(χ2) is the χ2 distribu-
+tion with ν degrees of freedom. The pre-factor 2πR in
+front of Σ(R) accounts for the fact that given Σ(R), the
+radial probability density distribution is 2πRΣ(R). We
+summarize below the ﬁlters used in redMaPPer.
+4.1. The χ2 Filter
+Assume we have a multicolor red sequence model for
+which we have ⟨c|z,mi⟩, the mean color of the red se-
+quence galaxies for any given redshift z and i-band mag-
+nitude mi. Furthermore, assume we have a correspond-
+ing covariance matrix Cint(z) to describe the intrinsic
+scatter and correlations of galaxy colors about the mean.
+When comparing a given galaxy with color vector c to
+the model color, with the assumption of Gaussian errors
+the distribution of galaxies will be represented by a χ2
+distribution:
+χ2(z) = (c −⟨c|z,mi⟩) (Cint(z) + Cerr)−1 (c −⟨c|z,mi⟩)
+(6)
+14 R500c (R200m) is the radius enclosing an overdensity of 500
+(200) times the critical (mean) density of the Universe.
+where c is the color vector of the galaxy under consider-
+ation, mi is the observed galaxy magnitude, ⟨c|z,mi⟩is
+the model color, and Cint(z) is the corresponding covari-
+ance matrix, which itself depends on redshift. The ma-
+trix Cerr describes the photometric error of the galaxy
+under consideration.
+For red sequence cluster members, χ2 will be dis-
+tributed according to the χ2 distribution with ν degrees
+of freedom,
+ρν(χ2) = (χ2)(ν/2−1)e−χ2/2
+2ν/2Γ(ν/2)
+,
+(7)
+where ν is the number of colors employed when estimat-
+ing χ2. Note that for ν = 1 the χ2 ﬁlter does not reduce
+to the single color ﬁlter of R12.
+This is because our
+distance measurement χ2 does not distinguish between
+galaxies that are too red from galaxies that are too blue,
+so there is some loss of information when moving from
+color-space to χ2. While a full ν-dimensional Gaussian
+color ﬁlter would work better than our χ2 ﬁlter — and
+would exactly reduce to the single color λcol from R12
+when ν = 1 — the problem of background estimation for
+such a ﬁlter is much more diﬃcult. In particular, in the
+case of DR8, it requires one to estimate the galaxy den-
+sity in a ﬁve dimensional space: {mi,u−g,g−r,r−i,i−z}.
+We found these background estimates to be very noisy, so
+we compressed the color information to a single variable
+χ2. In this way, at any given redshift the background
+depends only on mi and χ2.
+4.2. The Radial and Luminosity Filters
+For the radial ﬁlter, we follow R09 and R12 and adopt
+a projected NFW proﬁle (Navarro et al. 1995), which
+is a good description of the dark matter proﬁle in N-
+body simulations. In addition, it has been found to be
+a good description of the radial distribution of cluster
+galaxies (Lin & Mohr 2004; Hansen et al. 2005; Popesso
+et al. 2007). In R12 it was shown that in order to mini-
+mize the scatter in the mass–richness relation the NFW
+ﬁlter works as well or better than other possible radial
+proﬁles. Therefore, we refer readers to Section 3.1 of R12
+for details on the form of the radial ﬁlter.
+For the luminosity ﬁlter, we similarly follow R09 and
+R12 and adopt a Schechter function (e.g., Hansen et al.
+2009), written as
+φ(mi) ∝10−0.4(mi−m∗)(α+1) exp
+
+−10−0.4(mi−m∗)
+.
+(8)
+In an update from R12, we have set α = 1.0 indepen-
+dent of redshift, which provides a better description of
+the data. The characteristic magnitude, m∗, is the same
+as used in R12, calculated for a k-corrected passively
+evolving stellar population (Koester et al. 2007b).
+In
+the redshift range 0.05 < z < 0.7, appropriate for DR8,
+m∗(z) is well approximated (δ < 0.02 mag) by the fol-
+lowing polynomials:
+m∗(z) =
+
+
+
+
+
+
+
+22.44 + 3.36 ln(z) + 0.273 ln(z)2
+if z ≤0.5,
+−0.0618 ln(z)3 −0.0227 ln(z)4
+22.94 + 3.08 ln(z) −11.22 ln(z)2
+if z > 0.5.
+−27.11 ln(z)3 −18.02 ln(z)4
+For each cluster, m∗is taken at the appropriate redshift
+
+6
+Rykoff et al.
+and the luminosity ﬁlter is normalized to unity at the ap-
+propriate magnitude cutoﬀ. As with R12, this is taken to
+be 0.2L∗, or m∗+1.75 mag. Although in the current ver-
+sion of redMaPPer both α and m∗are ﬁxed as described
+above, in future releases we will replace these parame-
+ters with those directly measured from calibration clus-
+ters. We emphasize, however, that modest changes to
+the shape of the luminosity ﬁlter result in insigniﬁcant
+changes to the recovered richness.
+Of course, changes
+to the magnitude limit above which one counts galaxies
+has an obvious systematic impact on the richness as one
+moves up and down the luminosity function, although we
+have found these modest shifts no not signifcantly impact
+the mass–richness scatter (see R12).
+4.3. Background Estimation
+As in R12, we assume that the background density15
+is uniform, such that b(x|z) = 2πR¯Σg(mi,χ2|z) where
+¯Σg(mi,χ2|z) is the galaxy density as a function of galaxy
+i-band magnitude and χ2, where χ2 is evaluated using
+the red sequence model at redshift z. In this way, the
+eﬀective background for every cluster is diﬀerent and
+depends on the cluster redshift.
+Note that since clus-
+ters reside in overdense regions, this mean background is
+likely an underestimate of the true background, but the
+incurred bias is small (see R12 and Rozo et al. 2011), and
+is irrelevant for cosmological purposes, as it is completely
+degenerate with the amplitude of the richness–mass rela-
+tion. Variability of the background (which is expected)
+is more problematic, and can lead to catastrophic projec-
+tions. These are expected to be small (Rozo et al. 2011),
+and will be addressed in a future paper (Rozo et al., in
+preparation).
+To calculate the mean galaxy density, we ﬁrst calcu-
+late the χ2 value for all galaxies in a grid of redshifts
+with spacing 0.02. For computation purposes, we only
+calculate the χ2 for galaxies that are brighter than 0.1L∗
+at a given redshift bin. This implies that the magnitude
+range being sampled is diﬀerent for each redshift bin. At
+each redshift we bin the full galaxy catalog in χ2 and
+magnitude using a cloud-in-cells (CIC) algorithm (e.g.,
+Hockney & Eastwood 1981), and divide by the survey
+area. For our cells, we use χ2 ∈[0,20] with a bin size of
+0.5, and i ∈[12,mlim] with a bin size of 0.2. The χ2 < 20
+cut can be justiﬁed by the fact that the sum total of
+cluster membership probability in the redMaPPer cata-
+log for galaxies with χ2 ∈[15,20] is only 0.7%. That is,
+our χ2 < 20 cut impacts our results at well below the 1%
+level. The ﬁnal galaxy number density is normalized by
+the width of each color and magnitude bin. To evaluate
+the background at an arbitrary redshift, we linearly in-
+terpolate between the backgrounds computed along our
+redshift grid. As noted in R12, because the background
+is measured per square degree, the average number of
+background galaxies as a function of χ2, magnitude, and
+redshift is automatically accounted for as the angular size
+of the clusters changes with redshift.
+5. HANDLING MASKED REGIONS AND LIMITED
+DEPTH
+15 We use the term “background” to mean all unassociated
+galaxies, including objects behind and in front of the cluster.
+In an ideal world, our survey would have uniform
+depth, be deep enough to reach 0.2L∗at all redshifts of
+interest, and there would be no missing and/or masked
+regions, e.g., due to bright stars. Most previous optical
+cluster ﬁnders make this simple assumption16. Here, we
+describe how we can properly correct for these eﬀects.
+Our approach is conceptually straightforward. Given a
+cluster model and a geometric and magnitude mask, we
+can eﬀectively calculate the fraction of cluster galaxies
+that we expect to be masked out. This correction factor
+is then applied to the “raw” richness to compensate for
+the masked region. In practice, this correction can be
+self-consistently incorporated into the richness estima-
+tion, as described below. Our method is simple to im-
+plement with any geometric mask, including those that
+describe variations in depth. However, we do not take
+into account masks that contain one or more missing
+bands.
+5.1. The Correction Term
+Looking back at Eqn. 2, we have:
+1 =
+X
+i
+u(xi)
+λu(xi) + b(xi),
+(9)
+where xi describes the radial position, color (via χ2),
+and luminosity (via mi) of each galaxy. This formula-
+tion works if we can see all galaxies, but in reality we
+cannot. Let us then pixelize all observable space x into
+inﬁnitesimal pixels, and let Ni be the number of galax-
+ies in pixel i. Most pixels have Ni = 0, but a few have
+Ni = 1. Thus, the sum over all galaxies can be re-written
+in terms of a sum over all pixels via:
+1 =
+X
+i
+Ni
+u(xi)
+λu(xi) + b(xi).
+(10)
+In the case of masking, we can only observe the galaxies
+that are inside the mask, so we can split this sum into:
+1 =
+X
+in
+Ni
+u(xi)
+λu(xi) + b(xi) +
+X
+out
+Ni
+u(xi)
+λu(xi) + b(xi). (11)
+The “in” term is the raw λ that we usually compute,
+and can be replaced by the standard sum over all ob-
+served galaxies. The “out” term is now a correction to
+the standard expression, call it C,
+C =
+X
+out
+Ni
+u(xi)
+λu(xi) + b(xi).
+(12)
+In terms of C, Eqn. 2 can be rewritten as
+1 −C =
+X
+gals
+u(x)
+λu(x) + b(x).
+(13)
+Now, while C is unknown (we cannot see the masked
+region), we can compute its expected value for a cluster
+of richness λ. Using the fact that
+⟨Ni⟩= [λu(xi) + b(xi)]∆xi,
+(14)
+16 An exception is 3DMF (Milkeraitis et al. 2010), for which they
+calculate the fractional area masked for each cluster
+
+redMaPPer I: Algorithm and DR8 Catalog
+7
+we see that the expectation value of C is given by
+⟨C|λ⟩=
+Z
+out
+dx u(x).
+(15)
+In the above equation, we have made explicit the fact
+that C depends on λ, both via the cutoﬀradius used
+in the sum over galaxies, and because the radial ﬁlter
+depends on λ. Thus, in the presence of missing data, our
+richness estimate is given by the solution to
+1 −⟨C|λ⟩=
+X
+gals
+u(x)
+λu(x) + b(x).
+(16)
+Note, however, that because C is a unknown, there
+must also be additional measurement error associated
+with this unknown correction.
+To calculate the vari-
+ance of C, we note that Var(Ni) = ⟨Ni⟩.
+To com-
+pute Cov(Ni,Nj) = ⟨NiNj⟩−⟨Ni⟩⟨Nj⟩, we ﬁrst com-
+pute ⟨NiNj⟩. For inﬁnitesimal pixels, NiNj = 1 implies
+that either both pixels i and j contain cluster galaxies, or
+that one pixel contains a cluster galaxy while the other
+pixel contains a background galaxy, or that both pixels
+contain a background galaxy. Consequently,
+P(NiNj = 1) = ∆x2[λ(λ−1)uiuj +λ(uibj +ujbi)+bibj].
+(17)
+Since ⟨NiNj⟩= P(NiNj = 1), subtracting oﬀ⟨Ni⟩⟨Nj⟩
+we arrive at
+Cov(Ni,Nj) = −∆x2uiuj
+(18)
+for i ̸= j. Putting it all together, we arrive at
+Var(C) =
+X
+i
+⟨Ni⟩pi −
+X
+i
+X
+j̸=i
+Cov(Ni,Nj)pipj
+(19)
+=
+Z
+out
+dx u(x)p(x) −
+Z
+out
+dx u(x)p(x)
+2
+.(20)
+To propagate the error in C into the error in λ, we set
+σλ = dλ
+dC
+
+λ(⟨C⟩)
+σC,
+(21)
+where σC = [Var(C)]1/2. The derivative of λ with re-
+spect to C is evaluated numerically about the expecta-
+tion value of ⟨C|λ⟩, where λ is the solution to Eqn. 16.
+For future reference, it will be useful to deﬁne the
+“scale factor”
+S(z) =
+1
+1 −⟨C|z⟩
+(22)
+for the case in which the only source of masking is due to
+limited depth. With this deﬁnition, a cluster with rich-
+ness λ has a total of λ/S(z) galaxies above the limiting
+magnitude of the survey.
+In addition, it is useful to calculate the fraction of the
+eﬀective cluster area that is masked solely by geometrical
+factors such as bright stars, bad ﬁelds, and survey edges.
+This is complementary to S(z) deﬁned above in that it
+contains all the masking except the magnitude limit. The
+cluster mask fraction is then
+fmask =
+R
+out dx u(x)
+R
+dx u(x) .
+(23)
+This quantity is very useful because clusters that are
+strongly aﬀected by edges are more likely to be catas-
+trophically miscentered, and to have poor richness esti-
+mates. Consequently, when deﬁning our cluster catalog
+we will apply a cut in fmask.
+5.2. Evaluating the Mask Correction
+Evaluation of the mask correction and its associated
+error on λ can be diﬃcult. Fortunately, this problem is
+well suited to Monte Carlo integration. First, deﬁne the
+selection function S(x), so that S(x) = 1 if the galaxy
+is in a region where it is detected, and S(x) = 0 if the
+position x is masked out. Then, for any function f(x),
+Z
+out
+dx f(x) =
+Z
+cluster
+[1 −S(x)]f(x)dx,
+(24)
+where the integral on the right hand side is over the full
+cluster region, i.e., R ∈[0,R(λ)], L ≥Lmin, and over all
+colors.
+Applying this to Eqn. 15 we ﬁnd
+⟨C⟩=
+Z
+cluster
+[1 −S(x)]u(x)dx.
+(25)
+Since u(x) is the probability distribution for x, we can
+evaluate the above integral using Monte Carlo integra-
+tion by randomly sampling N sets of model galaxy pa-
+rameters from the u(x) ﬁlter function, and then comput-
+ing the sample mean of the function 1 −S(x). That is,
+⟨C⟩is simply the fraction of random draws that fall in the
+masked region. Similarly, we can evaluate the integrals
+deﬁning Var(C) via
+Var(C) = 1
+λ
+1
+N
+X
+out
+p(xi) −
+"
+1
+λ
+1
+N
+X
+out
+p(xi)
+#2
+,
+(26)
+where N is again the total number of random draws.
+For simplicity, we have replaced the 1 −S(x) terms with
+a summation over all galaxies that are outside the de-
+tectable region due to the mask, as these are the only
+galaxies that contribute to the summand.
+One of the slowest part of this process is drawing ran-
+dom realizations of xi. However, these random draws
+do not need to be independent from cluster to cluster.
+In practice, we generate a template distribution of 5000
+galaxies, and scale the radius and magnitude to the ap-
+propriate values for each galaxy cluster. We ﬁnd that
+this number of galaxies gives accurate results for the re-
+covered richnesses and richness errors, except for galaxy
+clusters that are largely masked out. Consequently, our
+ﬁnal cluster selection criteria includes the requirement
+that the cluster mask fraction, fmask, is less than 20%.
+In Appendix E we demonstrate with DR8 data that given
+our ﬁlter function this formalism accurately corrects for
+masked regions and limited depth.
+6. CALIBRATION OF THE RED SEQUENCE
+6.1. Outline
+Suppose we have a complete sample of red galaxies
+with spectroscopic redshifts down to the limiting mag-
+nitude of the survey. One can then directly ﬁt a red-
+sequence model to these galaxies to calibrate the color
+as a function of redshift for these galaxies. The question
+
+8
+Rykoff et al.
+then becomes: how does one get a sample of red spectro-
+scopic galaxies? Note that in order to calibrate the tilt
+of the red sequence, it is important to include a signif-
+icant number of less luminous galaxies, which are more
+diﬃcult to come by.
+Our solution is to simply use the cluster members
+themselves. If we know the spectroscopic redshift of a
+cluster, then all the cluster members can be tagged with
+the spectroscopic redshift of their central galaxy, lever-
+aging one spectroscopic redshift into many. Of course,
+from photometric data one can only identify likely clus-
+ter members, so the ﬁt of the red-sequence model must
+account for contamination by non-cluster members.
+In order to ﬁt the red-sequence model, all that is re-
+quired is a sample of galaxy clusters with known spec-
+troscopic redshifts. As discussed in Section 3, we only
+require a limited set of these training clusters.
+These
+training clusters can be derived from external X-ray and
+SZ catalogs, or from spectroscopic follow-up of likely cen-
+trals in dense regions by running redMaPPer with an
+ad-hoc red-sequence model.
+In the speciﬁc case of SDSS DR8, we construct this
+training cluster sample based on existing spectroscopic
+galaxy samples.
+Each spectroscopic galaxy is used as
+a “seed” around which we look for galaxy clusters by
+identifying nearby overdensities of galaxies with the same
+color as the seed galaxy. The details of these steps are
+described below. We emphasize that our calibration is
+performed using only 2,000 deg2 of SDSS data. As we
+show in Appendix B, we show that while we have the
+full wealth of SDSS spectroscopic data at our disposal,
+an equivalent red-sequence model may be derived from
+only 400 central galaxies from z ∈[0.05,0.6].
+6.2. Selecting Seed Galaxies and the Initial Color
+Model
+The initial calibration of the red sequence relies on
+spectroscopic “seed” galaxies. This may simply be a set
+of training clusters with spectroscopy (see Appendix B),
+or in the case of DR8, a broad spectroscopic sample that
+contains a suﬃcient number of red galaxies in galaxy
+clusters. For SDSS spectroscopy, the ﬁrst step is to iden-
+tify the subsample of spectroscopic galaxies that are red.
+This is achieved by using a single color that samples the
+4000˚A break for early type galaxies. With SDSS data, we
+use g −r for z < 0.35, and r −i for z > 0.35. Because we
+wish to have a relatively clean selection of red-sequence
+galaxies as our seeds, we approach the problem of select-
+ing these galaxies in several steps. We emphasize that
+some of these steps are only necessary for cutting the
+full list of SDSS spectra to an appropriate red galaxy
+sample.
+Step 1: Perform an approximate red galaxy selection.
+To make this selection, we bin the galaxies in redshift
+bins of width ±0.025. We then use the error-corrected
+Gaussian Mixture Method (Hao et al. 2009) to estimate
+the mean and intrinsic width σint(z) of the red-sequence
+galaxies. Those galaxies within 2σ of the expected mean
+for red galaxies are considered approximately red.
+Step 2: Use this approximate red galaxy selection to
+measure the mean color of the red galaxies as a function
+of redshift. Given our approximate red galaxy sample,
+we reﬁne our initial estimate of the mean color–redshift
+relation by minimizing the function
+s =
+X
+i
+|ci −ec(zi)|
+(27)
+where ec(z) is our model for the color as a function of
+redshift. The function ec(z) is deﬁned via spline interpo-
+lation, and the value of the spline nodes are the param-
+eters with respect to which s is minimized. The spline
+nodes are placed on a redshift grid with spacing of 0.1.
+Our use of ec(z) indicates that this is our early calibration
+model, which is distinct from the full model color ⟨c|z⟩
+that is derived at the end of the calibration procedure.
+In deﬁning the function s, we rely on the sum of abso-
+lute values rather than the sum of the squares to make
+the resulting minimization more robust to gross outliers.
+The function s is minimized using the downhill-simplex
+method of Nelder & Mead (1965) as implemented in the
+IDL AMOEBA function.
+Step 3: Use the mean color–redshift relation to esti-
+mate the width of the color–redshift relation.
+We can
+now improve upon our initial estimate of the width of
+the color–redshift relation by minimizing the function
+s =
+X
+i
+||ci −ec(zi)| −MAD| ,
+(28)
+where eσint(z) = 1.4826 × MAD, where MAD is the me-
+dian absolute deviation of the sample about the median,
+and the factor of 1.4826 relates the MAD to the stan-
+dard deviation for a Gaussian distribution. The value
+MAD is again deﬁned via spline interpolation, with the
+free parameters being the values of the function at the
+nodes.
+Step 4: Generate a ﬁnal sample of seed galaxies. Fi-
+nally, with the full red spectroscopic galaxy model in
+hand (ec(z), eσint(z)), we can cleanly select our seed sam-
+ple. We select all galaxies within 2eσint(z) of the model
+color at the spectroscopic redshift of the galaxy, using
+g −r at z < 0.35 and r −i at z > 0.35.
+In Figure 1 we show the ﬁnal seed spectroscopic galaxy
+selection for the g −r and r −i colors. The large red
+points show the median colors at the node positions, and
+the dashed red lines show the cubic spline interpolation.
+Note that the single-color selection leaves a small number
+of outliers in the complementary color. In addition to the
+seed galaxies, we will make use of our red spectroscopic
+galaxy color model in the following section.
+6.3. Single Color Member Selection
+Having selected our seed galaxies and calibrated a
+rough initial color–redshift relation, we now proceed to
+ﬁnd likely cluster members around each of our seed galax-
+ies. For this ﬁrst iteration we rely on single-color based
+membership. Speciﬁcally, in R12 we demonstrated that
+for moderately rich (λ ≳20) clusters, one can reliably es-
+timate the red sequence directly from the data as follows.
+First, we select all galaxies within a color window around
+the seed galaxy. Next, we ﬁt for the amplitude and tilt
+of the red-sequence of that galaxy cluster directly from
+the galaxy data. However, in extending this algorithm
+to high redshift, we found that large photometric errors
+can introduce an unacceptable amount of noise in the
+initial color-box selection of galaxies. Therefore, rather
+than drawing a color box around the color of the central
+
+redMaPPer I: Algorithm and DR8 Catalog
+9
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+g-r
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+z
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+r-i
+Figure 1. Sample of red spectroscopic galaxies selected for train-
+ing in 2000 deg2 of DR8. Top panel shows g −r color and bottom
+panel r −i color. The red galaxy selection is done in g −r (r −i)
+at z < 0.35 (z > 0.35), selecting all galaxies within 2eσint(z) of the
+spectroscopic redshift of the galaxy. Note that this selection leaves
+a small number of outliers in the complementary color, as well as a
+small number of large outliers with anomalously large photometric
+errors.
+galaxy for the initial ﬁt, we draw the color box around
+the model color ec(z) calibrated in the previous section.
+In detail, we:
+1. Take a red galaxy of known spectroscopic redshift
+(the “seed”).
+2. Select all galaxies within 500 h−1 kpc of the spec-
+troscopic galaxy, as well as 2σ of the model color
+determined in Section 6.2. For the model color, we
+use g −r at z ≤0.35 and r −i at z ≥0.35. The
+width σ of the color box is set to 0.05 and 0.03 re-
+spectively, which we expect to be the approximate
+red sequence width (e.g., R12).
+3. Fit the red sequence (slope and intercept) of these
+galaxies.
+4. Measure the single-color λcol using the method of
+R12 and a ﬁxed aperture of 500 h−1 kpc.
+5. For all overdensities with λcol > 10, take the galax-
+ies with non-zero pmem and assign them the spec-
+troscopic redshift of the initial seed galaxy. In prac-
+tice, we limit our analysis to those galaxies with
+pmem > 0.7.
+At this point, we have leveraged the spectroscopic seed
+galaxies to generate a set of red galaxies as faint as 0.2L∗
+over the redshift range of interest. Although not all of
+these galaxies are true cluster members, we have an es-
+timate pmem of the probability that each such galaxy
+is indeed a red sequence cluster member, as in Eqn. 1.
+Consequently, we can model the contamination of non-
+red-sequence galaxies in our sample, as shown below.
+We emphasize that it is essential that we leverage our
+spectroscopic redshifts to fainter magnitudes to properly
+16
+17
+18
+19
+20
+mi
+0
+100
+200
+300
+400
+500
+Red Spec. Gals
+Sum(pmem>0.7)
+Figure 2.
+Magnitude distribution of the red spectroscopic seed
+galaxies (black histogram) and photometrically selected cluster
+galaxies with pmem > 0.7 (red dashed histogram) in the redshift
+slice z ∈[0.24,0.26].
+The “cluster member” histogram weights
+each galaxy by its membership probability. The gain in the train-
+ing sample of faint red-sequence galaxies through our photometric
+selection is of critical importance for an accurate calibration of the
+red-sequence as a function of redshift, particularly at the faint end.
+model the red sequence.
+In the case of DR8, our ini-
+tial seed galaxy sample is comprised of 42,000 galax-
+ies associated with λ > 5 clusters, almost all of which
+are preferentially bright. By contrast, our ﬁnal calibra-
+tion sample (see Section 6.5) is comprised of over 600,000
+red-sequence galaxies that extend to much fainter mag-
+nitudes.
+This is illustrated in Figure 2.
+The magni-
+tude distribution of our seed galaxies in the redshift
+slice z ∈[0.24,0.26] (solid black histogram) is contrasted
+with the membership-weighted magnitude distribution of
+our ﬁnal photometrically selected training sample (red
+dashed histogram). We see that the gain in the eﬀective
+number of red sequence training galaxies is enormous,
+allowing for an accurate calibration of the red-sequence
+(amplitude, tilt, and scatter) as a function of redshift.
+We have explicitly veriﬁed that modest changes to the
+cuts applied in this section do not impact our ﬁnal cali-
+bration of the red-sequence resulting from the subsequent
+analysis described in the next section.
+6.4. Modeling The Red Sequence
+Given a list of galaxies with multidimensional color
+(c), redshift (z, taken to be the cluster redshift), and
+membership probability (pmem), we can now proceed to
+calibrate the full red sequence model. Our model is well
+motivated by observations of galaxy clusters, in that the
+red sequence at any given redshift in a given color can
+be described by a simple linear relation between color
+and i-band magnitude mi with intrinsic scatter σint. For
+example, Figure 3 shows the composite red sequence at
+z = 0.25 for both g −r and r −i colors, for all galaxies
+selected in the ﬁnal calibration iteration with pmem > 0.9.
+Our red-sequence model we is deﬁned in terms of
+smoothly evolving functions of redshift characterizing the
+amplitude and slope of the mean color–redshift relation,
+and the corresponding covariance matrices.
+We have
+opted to use a cubic spline interpolation to parameterize
+
+10
+Rykoff et al.
+ 
+ 
+ 
+ 
+ 
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+g-r
+16
+17
+18
+19
+20
+mi
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+r-i
+Figure 3.
+Composite red sequence at 0.25 < z < 0.26 for color-
+selected galaxies with pmem > 0.9. A linear model (red dashed line)
+with roughly constant intrinsic scatter is a good representation
+of the red sequence in both g −r and r −i.
+We note that the
+pmem > 0.9 cut is employed for illustration purposes only.
+these functions. Given the large number of colors (four
+for SDSS), and broad redshift range, our model neces-
+sarily contains a large number of free parameters. For
+instance, in our SDSS DR8 implementation, we required
+a total of 118 parameters to fully characterize the red-
+sequence model. In principle, we would like to ﬁt the full
+red sequence model simultaneously. However, to make
+the problem more tractable we ﬁt the red sequence pa-
+rameters governing the mean relation and the diagonal
+elements of the covariance matrix one color at a time.
+Once these terms are in place, we ﬁt the oﬀ-diagonal
+terms of the covariance matrix.
+We are also cautious
+that our model does not have too many free parameters
+given the training data such that over-ﬁtting becomes
+possible. As shown in Appendix B, this can be a prob-
+lem in the case of very sparse training data.
+An additional complication comes from the fact that
+our selection of red sequence galaxies is not entirely clean.
+Our ﬁt of the red sequence must take into account the
+background density of non-member galaxies, as described
+below. In addition, we also have to contend with blue
+cluster galaxies that are not taken into account by a
+global background term. These blue galaxies will tend
+to have two eﬀects. First, as the blue fraction increases
+at lower luminosities, they will tend to steepen the ap-
+parent red sequence tilt. Second, the blend of red and
+blue galaxies will tend to broaden the apparent intrinsic
+width of the red sequence.
+In order to deal with both of these eﬀects of blue cluster
+galaxies, we have taken a pragmatic approach.
+When
+ﬁtting the red sequence for a given color, we ﬁrst perform
+a sharp color cut to concentrate on the core of the red
+galaxy distribution.
+Naively, this cut would introduce
+biases in the recovered red-sequence model, leading to
+under-estimates of the scatter. We avoid this diﬃculty
+by explicitly modeling such a color cut into our likelihood
+function.
+All that remains is to specify the color cut.
+Here, we apply a color cut of 1.5σ about the median
+color of the high probability member galaxies, where σ
+is the median absolute deviation of the color about the
+median.
+6.4.1. Measuring the Model Mean and Color Scatter
+As noted above, we begin by measuring the model color
+⟨c|mi,z⟩as a function of galaxy magnitude mi and cluster
+redshift z for each color, one at a time. The ﬁrst step
+in this process is to deﬁne the pivot point f
+mi(z) used to
+calibrate the amplitude and tilt of the mean red sequence
+relation at redshift z. We write
+⟨c|z,mi⟩= ¯c(z) + ¯s(z)[mi −f
+mi(z)],
+(29)
+We wish to select a pivot point that is characteristic
+of most cluster members. To do so, starting from our
+full members list, we apply a pmem > 0.7 cut. Using this
+sub-sample, we minimize the cost function E where
+E =
+X
+|mi −f
+mi(z)|
+(30)
+where f
+mi(z) is deﬁned via spline interpolation, and the
+model parameters are the value of f
+mi(z) at the nodes.
+Having deﬁned our pivot point as a function of red-
+shift, we turn to calibrating the amplitude and slope of
+the mean relation, i.e., ¯c(z) and ¯s(z) in Eqn. 29.
+As
+a ﬁrst step, we do a rough estimate of the amplitude
+and scatter, which we will use to isolate the core of the
+color distribution of member galaxies. These rough es-
+timates for the amplitude and scatter are denoted ec(z)
+and eσ(z), and are obtained by selecting galaxies with
+pmem > 0.7, and then ﬁtting for these functions as was
+done in Section 6.2. Speciﬁcally, the functions are spline
+interpolated, with model parameters being the value of
+these functions at the nodes.
+The best ﬁt parameters
+are found by minimizing Eqn. 27, and eσ(z) is deﬁned
+by minimizing Eqn. 28. The primary diﬀerence between
+these new color estimates and scatter relative to those
+derived in Section 6.2 is that these parameters are now
+appropriate to the full red sequence rather than simply
+the (brightest) spectroscopic galaxies.
+We now turn to measuring the actual model parame-
+ters deﬁning the amplitude ¯c(z), slope ¯s(z), and scatter
+Cint
+ii (z). As before, we use a cubic spline interpolation to
+parameterize these smoothly evolving functions of red-
+shift. For DR8, we have chosen to use a node spacing of
+0.05 for ¯c(z), 0.1 for ¯s(z), and 0.15 for Cint
+jj (z). We have
+found that a relatively tight spacing is required for ¯c(z),
+as this function can change relatively rapidly at ﬁlter
+transitions. Fortunately, ¯c(z) is the most robust param-
+eter, and thus is amenable to smaller node spacings. The
+slope and scatter are not expected to vary as rapidly, and
+are also noisier to estimate, so we have chosen wider node
+spacings. Overall, the calibration is not very sensitive to
+the node spacings chosen provided there are suﬃcient
+calibration galaxies (though see Appendix B).
+Starting from the photometrically selected galaxy
+training set from the previous section, we ﬁrst apply a
+color cut |c −ec(z)| < 1.5eσ(z), which ensures that the
+red-sequence parameters are based on the core of the red
+galaxy distribution, and are therefore less likely to be bi-
+ased by blue galaxies. In our model, the probability that
+a red-sequence cluster galaxy has a color c is given by a
+
+redMaPPer I: Algorithm and DR8 Catalog
+11
+truncated Gaussian distribution,
+G(c) =
+1
+√
+2πσe−(c−⟨c|z,mi⟩)2/2σ2
+erf
+
+1.5eσ(z)
+√
+2σ
+
+,
+(31)
+where the expectation value ⟨c|mi,z⟩is deﬁned in terms
+of our model functions ¯c(z) and ¯s(z) as per Eqn. 29, and
+the scatter σ is the sum in quadrature of the intrinsic
+scatter and the photometric error of the galaxy,
+σ =
+q
+σ2 + σ2
+int(z),
+(32)
+where σint(z) =
+q
+Cint
+jj is the intrinsic scatter of the red
+sequence. The ‘erf’ term in the denominator accounts for
+the fact that G(c) is truncated at ec(z) ± eσ(z), under the
+approximation ¯c(z) = ec(z). This approximation is only
+used in the overall normalization of the distribution.
+The total probability distribution for all of our calibra-
+tion galaxies must account for the fact that some of our
+galaxies are in fact background galaxies, so the full color
+distribution is given by
+P(c) = pmemG(c) + (1 −pmem)b(c,mi),
+(33)
+where b(c,mi) is the distribution in color and magnitude
+of galaxies about random points. The shape of the back-
+ground function is obtained by binning all galaxies in
+color and magnitude bins and using a CIC algorithm as
+in Section 4.3.
+In the end, our task is to calculate the set of ¯c(z), ¯s(z),
+and Cint
+jj (z) values at the given cubic spline nodes that
+maximizes the total likelihood given by
+ln L =
+X
+i
+ln Pi.
+(34)
+As above, we accomplish this maximization by making
+use of the downhill-simplex method. The maximum like-
+lihood point deﬁnes the model functions ¯c(z), ¯s(z), and
+Cint
+jj (z). We emphasize that the likelihood is explicitly
+truncated as the data is, so that the recovered scatter is
+unbiased relative to the full population of cluster mem-
+ber galaxies, as we have conﬁrmed with simple mock red
+sequences and blue clouds.
+In Figure 4 we show the color evolution of red sequence
+galaxies with pmem > 0.9 for the g −r and r −i colors
+in DR8. The red points indicate the ¯c(z) values at the
+spline node positions, and the long-dashed lines are the
+smooth interpolation.
+The short-dashed lines indicate
+the 3σint range. Note that the colors in the ﬁgure are
+not corrected for red sequence tilt. We caution that the
+intrinsic width of the red sequence can be wider than
+naively indicated by the pmem > 0.9 galaxies, since high
+probability galaxies must reside closer to the average red-
+sequence model.
+6.4.2. Measuring Cint
+jk (z)
+With the intercept and slope of the red sequence in
+hand, as well as the diagonal elements of the covariance
+matrix, we now estimate the oﬀ-diagonal elements of the
+covariance matrix, Cint
+jk (z). Once again, we use a cubic
+spline interpolation, with the same 0.15 node spacing as
+used for Cint
+jj (z).
+ 
+ 
+ 
+ 
+ 
+ 
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+g-r
+ 
+ 
+ 
+ 
+ 
+ 
+z
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+r-i
+Figure 4.
+Color as a function of redshift for the sample of red-
+sequence galaxies with pmem > 0.9. The red points indicate the
+¯c(z) values at the spline node positions, and the long-dashed lines
+are the spline interpolation. The short-dashed red lines indicate the
+3σint range. Note that the colors in the ﬁgure are not corrected
+for red sequence tilt. The cyan dash-dotted line shows the color
+model for the bright spectroscopic sample from Figure 1, which
+tend to be brighter and redder than the full population. We caution
+that the intrinsic width of the red sequence can be wider than the
+pmem > 0.9 sub-population of galaxies in this illustration suggests,
+since high probability membership requires the galaxy to fall close
+to the expected average color. Conversely, the larger number of
+outliers in g −r above reﬂects the fact that the photometric errors
+in g −r at high redshift are larger than the intrinsic width of the
+red sequence.
+In order to make the calculation tractable, to constrain
+the oﬀ-diagonal elements of the covariance matrix we
+consider the problem piecewise, tackling two colors at
+a time. Each individual piece of the covariance matrix
+constrained in this way will be positive-deﬁnite and thus
+a valid covariance matrix. Unfortunately, due to noise in
+the estimation of the parameters, this method does not
+guarantee that the total covariance matrix, Cint(z), will
+also be positive-deﬁnite.
+To ensure that Cint(z) is positive-deﬁnite, we constrain
+the parameters for pairs of colors in a speciﬁc priority or-
+der, ensuring that the best constrained colors have prece-
+dence.
+In the case of DR8 data in the redshift range
+z ∈[0.05,0.6], these are g−r and r−i. Then, at each step
+in the downhill-simplex estimation described below we do
+not allow any terms in Cint
+jk (z) that result in a minimum
+eigenvalue in the total covariance matrix Cint(z) that is
+less than 0.012. In this way, the ﬁrst color pair to be
+constrained (g −r,r −i) is essentially free, while the ﬁnal
+(and noisiest) color pair to be constrained (u−g,i−z) will
+not result in a non-invertable covariance matrix Cint(z).
+To perform the pairwise constraints on the oﬀ-diagonal
+elements, let us consider the residuals in two colors xj
+and xk. We start with Eqn. 29,
+x = c −⟨c|mi,z⟩= (¯c(z) + ¯s(z)[mi −f
+mi(z)]).
+(35)
+The probability distribution function is again a Gaussian,
+though this time we explicitly leave the covariance matrix
+in the equation:
+G(x) =
+1
+√
+2π|C|1/2 exp
+
+−1
+2xC−1x
+
+,
+(36)
+
+12
+Rykoff et al.
+where x = {xj,xk} is the vector of residuals, and the
+total covariance matrix C is
+C = Cint(z) + Cerr(z).
+(37)
+Here Cint(z) and Cerr(z) are the covariance matrices
+characterizing the intrinsic scatter and photometric error
+respectively. The intrinsic scatter is simply
+Cint =
+
+σ2
+int,j
+rσint,jσint,k
+rσint,jσint,k
+σ2
+int,k
+
+,
+(38)
+where σj and σk are known from the previous section,
+and r is the only unknown.
+The covariance matrix
+Cerr(z) is derived from the photometric error in each
+band. Given two colors cj = mα−mβ and ck = mγ −mδ,
+the covariance matrix characterizing the photometric er-
+ror is given by
+Cerr(z) =
+ σ2
+α + σ2
+β
+η
+η
+σ2
+γ + σ2
+δ
+
+,
+(39)
+and
+η =
+−σ2
+β
+if γ = β
+0
+otherwise.
+(40)
+Here, we are assuming that neighboring colors are of the
+form cαβ and cγδ, i.e., that the “shared” magnitude is
+mβ = mγ. The covariance between photometric errors
+arises precisely because, for example, the neighboring col-
+ors g−r and r−i are both derived from the same r-band
+magnitude.
+The color distribution function of the full galaxy pop-
+ulation is again given by Eqn. 33, noting that now the
+background term b(cj,ck,mi) is given by a three dimen-
+sional binning in two colors and i-band magnitude. In
+addition, we implement a prior on r with 0 mean and
+width 0.45 for each of the nodes. We ﬁnd that this prior
+reduces the noise in the parameter constraints, which
+is especially important at high redshift where the pho-
+tometric errors dominate and the covariance matrix is
+largely unconstrained. At the same time, this prior al-
+lows high correlations (r ∼0.9) if strongly favored by the
+data. Our total likelihood is now given by:
+ln L =
+X
+i
+ln Pi −
+X
+n
+(rn/0.45)2
+2
+,
+(41)
+where P
+n is a sum over all the nodes, and rn is the cor-
+relation coeﬃcient at that node.
+That is, the prior is
+placed at each of the nodes. Maximization of the likeli-
+hood function deﬁnes the ﬁnal values for the correlation
+coeﬃcients that characterize the intrinsic scatter covari-
+ance matrix.
+6.5. Iterating The Red-Sequence Model
+We emphasize that the estimation of the red sequence
+parameters in the previous section depends on the mem-
+bership probabilities (pmem) of the red sequence galaxies.
+Of course, the membership probabilities themselves de-
+pend on the red sequence model. In order to obtain a red
+sequence model that is consistent with the membership
+probabilities, we take an iterative approach.
+After we calibrate the red sequence parameters based
+on single color membership probabilities, we run the clus-
+ter ﬁnder on the training data, as described in Section 9.
+During these calibration runs we restrict ourselves to
+ﬁnding clusters associated with our seed galaxies so that
+we can aﬃrmatively associate a spectroscopic redshift
+with each cluster. We note that our cluster ﬁnder starts
+with the photometric redshift estimate (zred) of each clus-
+ter galaxy, so spectroscopic galaxies whose colors are in-
+compatible with the red-sequence at the spectroscopic
+redshift never result in galaxy clusters. Thus, our train-
+ing sample at this point results in robust clusters with
+spectroscopic redshifts. Further, failures in the photoz of
+the galaxies for red-sequence galaxies are rare (see Fig-
+ure 7), so any such failures simply slightly reduce the
+sample of training clusters, without otherwise adversely
+aﬀecting our training sample. The resulting cluster cat-
+alog includes cluster member lists and new membership
+probability estimates pmem based on the full color model.
+With these in hand we can re-estimate the red sequence
+model as described in Section 6.4.
+As we iterate, the largest shifts in the model occur be-
+tween the ﬁrst and second iteration, reﬂecting the shift
+from estimating membership probabilities based on a sin-
+gle color, and estimating membership probabilities with
+the full multi-color data. Figure 6.5 shows the red se-
+quence parameters (¯c(z), ¯s(z), and σint
+j ) for each of the
+ﬁrst 3 iterations of our red sequence calibration. For il-
+lustration, only the ﬁgures for the g −r color are shown.
+The color at the reference magnitude f
+mi(z) and slopes
+characterizing the average color of red sequence galaxies
+converge quickly, and is generally well measured, except
+for u −g at high redshift, where the large photometric
+errors in u make our model estimates noisy. The scatter
+model, on the other hand, converges slowly, particularly
+at high redshift, where the intrinsic scatter is often sub-
+dominant to photometric errors. As we now show, how-
+ever, by the third iteration our model is well converged.
+We deﬁne convergence of the red sequence model in
+terms of the relevant quantity for our purposes, i.e., the
+cluster richness λ. That is, we require that cluster rich-
+ness estimates be insensitive to further iterations. To this
+end, we have run the calibration through ten iterations.
+Given the red sequence model for each of these ten iter-
+ations, we estimate the photometric redshift and cluster
+richness of a standard set of galaxy clusters while ﬁxing
+the central galaxy of these systems. Let then λi and zi
+denote the richness and redshift estimates from iteration
+i. We bin the clusters in narrow redshift slices (±0.01),
+and we calculate: 1- the median ratio λi/λ3, and 2- the
+median oﬀset (λi−λ3)/σ3, where σ3 is the error estimate
+in the richness as estimated from iteration 3.
+In Figure 6 we show the results of these iteration checks
+for the ﬁrst 6 iterations in the DR8 training region. Even
+for the ﬁrst iteration, for which pmem was estimated using
+a single color, the bias is always < 10% (though at the
+lowest redshift that shift is ∼1σ). However, after the
+third iteration, the biases are always < 1% at low redshift
+and < 5% at high redshift. The bottom panel shows that
+after the third iteration the biases are < 0.1σ. Thus, we
+rely on the output of our third iteration for our ﬁnal
+cluster catalog.
+7. PHOTOMETRIC REDSHIFT ESTIMATION
+At the end of our calibration we have a complete red
+sequence model as a function of redshift.
+Note, how-
+ever, that in order to estimate the richness of a photo-
+
+redMaPPer I: Algorithm and DR8 Catalog
+13
+ 
+ 
+ 
+ 
+ 
+ 
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8
+cg-r
+3rd Iteration
+2nd Iteration
+1st Iteration
+ 
+ 
+ 
+ 
+ 
+ 
+-0.10
+-0.08
+-0.06
+-0.04
+-0.02
+0.00
+0.02
+sg-r
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+z
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14
+0.16
+σg-r
+Figure 5.
+Top: Average color, ¯c(z) for g −r, at the pivot mag-
+nitude f
+mi(z), for the ﬁrst (red dotted line), second (blue dashed
+line), and third (magenta solid line) iterations of the calibration as
+a function of redshift. Middle: As for top, with red sequence slope
+¯s(z). Bottom: As for top, with intrinsic scatter σint
+j
+=
+q
+Cint
+jj .
+ 
+ 
+ 
+ 
+ 
+ 
+0.90
+0.95
+1.00
+1.05
+1.10
+<λi / λ3>
+λ1
+λ2
+λ4
+λ5
+λ6
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+z
+-0.5
+0.0
+0.5
+1.0
+< (λi - λ3 ) / σ3 >
+Figure 6.
+Top: Average richness bias as a function of redshift
+for the ﬁrst six iterations of the red-sequence model for the DR8
+training region, as compared to λ3, the richness computed in the
+third iteration. Even for the ﬁrst iteration, the bias is < 10% at all
+redshifts. After the third iteration, the biases are always < 1% at
+low redshift and < 5% at high redshift. Bottom: Error normalized
+average deviation relative to the baseline. After the third iteration
+the bias is always < 0.1σ.
+metric cluster we need to know the cluster redshift. If
+we have some initial, reasonably accurate redshift guess
+zinit for each cluster, we can estimate the cluster richness
+and determine the high probability cluster members. We
+then simultaneously ﬁt our red sequence model to all high
+probability cluster members to derive an improved red-
+shift estimate, and iterate this procedure through con-
+vergence. We now describe this full procedure in detail,
+including the construction of our initial cluster redshift
+guess zinit.
+7.1. Redshift Initialization: zred
+For the full SDSS DR8 survey, we have multiple photo-
+metric redshifts based on large training sets (e.g., Csabai
+et al. 2007; Sheldon et al. 2012). However, these methods
+have certain limitations. First, they require training sets
+that span a broad range of magnitudes, which although
+abundant at z ≲0.5 for SDSS data, will be much sparser
+at higher redshifts for large surveys such as DES. Second,
+these methods — in particular p(z) methods such as that
+of Sheldon et al. (2012) — are very good at estimating
+the ensemble of redshifts for a broad class of galaxies.
+However, our needs are much more speciﬁc: we wish to
+have a good initial single-value estimate of the redshift
+of the central galaxy of galaxy clusters to initialize our
+cluster photometric redshift estimation procedure.
+To
+that end, we have developed our own photometric red-
+shift estimator zred which is speciﬁcally designed to work
+on red sequence galaxies.
+Given a red-sequence galaxy at redshift z with i-band
+magnitude mi, color vector c, and photometric error
+Cerr(z), the probability distribution of its color is simply
+P(c) ∝exp
+
+−1
+2χ2
+
+(42)
+where χ2 is given by Eqn. 6, i.e.,
+χ2 = (c −⟨c|z,mi⟩) (Cint(z) + Cerr(z))−1 (c −⟨c|z,mi⟩) .
+(43)
+The corresponding log-likelihood is therefore simply
+ln L = −0.5χ2. In practice, we also include an additional
+volume prior that accounts for the fact that there is more
+volume at higher redshifts. Assuming that the luminosity
+function does not evolve over the redshift uncertainties,
+the probability that a galaxy of a given luminosity is at
+redshift z is
+P0(z) ∝dV
+dz = (1 + z)2D2
+A(z)cH−1(z),
+(44)
+which leads us to the likelihood
+ln Lred = −χ2
+2 + ln
+
+dV
+dz
+ .
+(45)
+The redshift estimator zred is that which maximizes the
+above likelihood. We use the “red” subscript to indicate
+that the redshift estimator assumes a red sequence galaxy
+model. We maximize the likelihood along a redshift grid
+with δz = 0.005, and then use parabolic interpolation
+to ﬁnd the correct maximum. This search is restricted
+to galaxies with mi < m∗(z) + 2.5, since galaxies fainter
+than this fall well below the luminosity threshold used to
+deﬁne cluster richness (recall m∗(z) is deﬁned in Sec. 4.2).
+The error estimate for zred is estimated as the standard
+deviation of the redshift over its posterior, i.e.
+σ2
+zred =
+
+z2
+−⟨z⟩2
+(46)
+where
+⟨zn⟩=
+R
+dz Lred(z)zn
+R
+dz Lred(z) .
+(47)
+
+14
+Rykoff et al.
+We could, of course, store the posterior of the redshift
+distribution, but we have chosen not to do so since the
+only use of zred in the redMaPPer algorithm is that of
+providing an initial redshift estimates for galaxy clusters.
+The top-left panel of Figure 7 shows zred for DR8 clus-
+ter training galaxies with pmem ≥0.9 versus the spectro-
+scopic redshift of the corresponding central galaxy zCG.
+We see that zred performs very well, with low bias and
+scatter, and very few gross outliers. The “ﬂare-up” of
+the points around zCG ∼0.35 is due to the 4000 ˚A break
+moving from the g −r to the r −i color.
+The performance of zred is better illustrated in the
+bottom-left panel of the same ﬁgure. The black triangles
+show the mean oﬀset zred −zCG in redshift bins, the blue
+dashed line shows the average error in zred as estimated
+above, while the red-dashed line shows the observed rms
+of the redshift oﬀset in each of the redshift bins. The
+magenta dotted line shows the fraction of 4σ outliers.
+It is clear from the ﬁgure that our errors are somewhat
+overestimated, and that there is a small redshift bias in
+zred.
+We correct for the deﬁciencies revealed in the left panel
+of Figure 7 by applying an afterburner. Speciﬁcally, for
+the above cluster sample we deﬁne the mean redshift
+oﬀset as a function of redshift,
+dz(z) =
+
+(z0
+red −zCG)|zCG
+
+(48)
+where z0
+red is the original, uncorrected redshift estimate
+deﬁned above. That is, dz(z) is the curve traced by the
+black triangles in the bottom-left panel of Fig. 7. We
+deﬁne a corrected zred redshift, as the solution to the
+equation
+zred = z0
+red + dz(zred)
+(49)
+In practice, the above treatment is slightly simpliﬁed,
+since our correction afterburner allows for the redshift
+bias to be a function of magnitude. For details, we refer
+the reader to Appendix A.1.
+In the right panel of Figure 7 we show the corrected
+value of zred as a function of zCG after applying our after-
+burner, again for a sample of galaxies with pmem > 0.9.
+The notation is the same as for the left panel. The bi-
+ases are improved at high redshift, although there are
+still some residual issues at z ∼0.4 where zred is biased
+by ∼0.3σ.
+The reason the biases are not completely
+removed is due to the asymmetric and non-Gaussian na-
+ture of the scatter at the ﬁlter transition. We also note
+that the afterburner removes residual biases observed as
+a function of mi (not shown). The overall small bias and
+scatter in zred allows us to use this photometric redshift
+estimate as a good initial guess with which to initialize
+our photometric cluster redshift estimator.
+7.2. Cluster Redshift Estimation: zλ
+Our approach to computing the cluster photometric
+redshift zλ is essentially an iterative extension of zred.
+Speciﬁcally, given a central galaxy candidate, we:
+1. Start with a cluster redshift zλ,i, where i indexes
+the iteration. In the ﬁrst iteration, we set zλ,0 =
+zred.
+2. Calculate the richness λ around the candidate cen-
+tral galaxy setting zcluster = zλ,i, and get the asso-
+ciated set of membership probabilities pmem.
+3. Select high membership-probability galaxies to es-
+timate a new redshift zλ,i+1 by maximizing the like-
+lihood function given by Eqn. 51 below.
+4. Repeat from step 2 until convergence, such that
+|zλ,i+1 −zλ,i| < 0.0002.
+All that remains then is the deﬁnition of a suitable
+likelihood function. To begin with, let us assume that we
+have a sample of known cluster member galaxies. Then,
+the log-likelihood of the observed colors for these galaxies
+would be
+ln L =
+X
+−χ2
+i
+2 −ln |C|
+2
+.
+(50)
+In Eqn. 43 we take into account the log of the deter-
+minant of the covariance matrix, ln |C|. We have found
+that, unlike the case of zred, including this term improves
+the performance of zλ when the intrinsic scatter is vary-
+ing rapidly. This makes sense, given that when utilizing
+multiple galaxies, one can directly probe the scatter in
+the red sequence, which is an observable that is inacces-
+sible when estimating single-galaxy photo-zs.
+Of course, in practice, we do not have a list of known
+members, but rather a list of likely members with mem-
+bership probabilities. One might be inclined to adopt a
+sharp cut pmem ≥pmin in order to deﬁne a likelihood that
+can be used to estimate the cluster redshift. However, we
+ﬁnd that a sharp cut in pmem leads to numerical instabil-
+ities in the iterative process because galaxies can scatter
+in and out of the sample in the course of the iteration.
+To overcome this problem, we adopt instead a soft cut,
+and deﬁne a new likelihood
+ln L =
+X
+−w
+
+χ2 + ln |C|
+
+2
+,
+(51)
+where each galaxy contributes a weight w that smoothly
+varies from w = 1 at pmem = 1 to w = 0 at pmem = 0.
+The assignment of these weights is somewhat ad-hoc.
+We assume w(pmem) follows a Fermi-Dirac distribution.
+The transition from w = 0 to w = 1 occurs at p70, which
+is the probability threshold that accounts for 70% of the
+total richness, i.e.,
+0.7λ =
+X
+pmem≥p70
+pmem.
+(52)
+The advantage of deﬁning the probability threshold in
+this way — as opposed to a redshift independent thresh-
+old pcut — is that p70 varies with cluster redshift in such
+a way that one always uses the same fraction of clus-
+ter galaxies when estimating redshifts. Were we to take
+a constant pmem cut, the number of galaxies contribu-
+tion to zλ would decrease with increasing redshifts, since
+galaxy pmem values decrease as the photometry becomes
+noisier. The width of the distribution is set to 0.04, which
+we found is suﬃcient to regularize the iterative process.
+Thus, our galaxy weights are deﬁned via
+w(pmem) =
+1
+exp [(p70 −pmem)/0.04] + 1.
+(53)
+In Figure 8 we illustrate how the iterative process in
+our redshift estimate works. Fundamentally, each loop
+in the iteration takes a zin value for the redshift, and
+produces a redshift zout, and we wish to ﬁnd the stable
+
+redMaPPer I: Algorithm and DR8 Catalog
+15
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zred (uncorrected)
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zCG
+-0.02
+0.00
+0.02
+0.04
+zred - zCG or σ
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zred
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zCG
+-0.02
+0.00
+0.02
+0.04
+zred - zCG or σ
+Figure 7.
+Left, top: Uncorrected photometric redshift zred for cluster member galaxies in DR8 with pmem > 0.9, as a function of the
+central galaxy spectroscopic redshift zCG. Left, bottom: The black triangles show the mean redshift oﬀset zred −zCG in several redshift
+bins. The red long-dash line is the rms of these oﬀsets, while the blue short-dash line is the average estimated redshift error. The dotted
+magenta line is the fraction of 4σ outliers as a function of redshift. Right, top: Corrected photometric redshift zred, using 49, for cluster
+member galaxies in DR8, as in left panel. Right, bottom: Bias, scatter, and outlier fraction, as in left panel, now for the corrected redshift.
+point where zout = zin. In the ﬁgure, we show zout(zin)
+for three sample clusters. For the two typical clusters
+denoted with red short-dashed lines, this function is well
+behaved, and we quickly achieve convergence. However,
+there are also ∼1% −2% of clusters that have conver-
+gence curves like the blue long-dashed line. These ap-
+pear to be projection eﬀects between multiple nearby
+structures.
+As detailed in Section 9.3, redMaPPer of-
+ten fragments these clusters along the line-of-sight, as it
+should. However, which cluster is “dominant” and which
+is a satellite depends on the initial photometric redshift
+estimate (zλ,0).
+Given an estimate for zλ, we can also map out the
+posterior P(ztrue|zλ). Deﬁning χ2
+norm via
+χ2
+norm =
+X
+w[χ2 + ln |C|] −min
+X
+w[χ2 + ln |C|]
+
+,
+(54)
+we adopt the posterior
+P(ztrue|zλ) =
+exp(−χ2
+norm/2) |dV/dz|
+R
+dχ2norm exp(−χ2norm/2) |dV/dz|
+(55)
+where dV/dz is the comoving volume per unit redshift.
+The above expression deﬁnes our estimate of the redshift
+probability distribution of each cluster. In addition, we
+ﬁt this distribution with a Gaussian to estimate the red-
+shift error σzλ.
+Finally, in order to ensure that zλ is unbiased, we apply
+an afterburner correction, much in the same way as was
+done for zred, only now we demand that the redshift be
+unbiased in the sense that ⟨ztrue|zλ⟩= zλ. We relegate
+the details to Appendix A.2.
+In the top panel in Figure 9 we compare our photo-
+metric redshift estimates to the spectroscopic redshift of
+the central galaxy (where available) for all clusters in
+0.16
+0.18
+0.20
+0.22
+0.24
+zin
+-0.02
+-0.01
+0.00
+0.01
+0.02
+zout - zin
+Figure 8.
+The redshift diﬀerence zout −zin for one loop of our
+iterative photometric redshift estimator, as a function of the input
+redshift zin. Two typical, well behaved clusters are shown with red
+short-dashed lines. However, ∼1−2% of clusters have convergence
+curves like the blue long-dashed line. These appear to be projection
+eﬀects between multiple nearby structures.
+DR8 with λ/S(z) > 20 (i.e., every cluster must have 20
+galaxy detections). The bottom panel shows the residu-
+als (red triangles), as well as the rms of the distribution
+(red long-dashed line) and average estimated error σzλ
+(blue short-dashed line). There are small biases that are
+nevertheless detected with high conﬁdence. We do not
+yet fully understand the origin of these biases, but in-
+tend to return to this problem in a future paper. We see
+too that there is a feature at 0.35 ≲z ≲0.45, both in
+the bias and scatter, reﬂecting the additional diﬃculties
+
+16
+Rykoff et al.
+ 
+ 
+ 
+ 
+ 
+ 
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zCG
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zλ
+-0.02
+-0.01
+0.00
+0.01
+0.02
+0.03
+0.04
+zCG-zλ or σ
+Figure 9.
+Top:
+zλ vs.
+spectroscopic redshift of the assigned
+cluster central galaxy (CG) for redMaPPer clusters in DR8 with
+λ/S(z) > 20. Bottom: Red triangles show the mean oﬀset zλ −
+zCG in various redshift bins.
+The blue short-dashed line shows
+the average redshift error on zλ, while the red long-dashed line
+shows the measured rms of the redshift oﬀset distribution.
+The
+vast majority of outliers are due to errors in cluster centering, i.e.,
+the oﬀset zλ −zCG is large not because zλ is incorrect, but rather
+because the chosen central galaxy is not actually a cluster member.
+introduced by the fact that the 4000˚A break goes from
+being sampled by g −r to r −i. This is also the red-
+shift range where we start running into the limit of the
+DR8 photometry, which further aggravates these failures.
+Indeed, these features are greatly reduced when redMaP-
+Per is run on deeper data (e.g., SDSS Stripe 82 coadds,
+Annis et al. 2011, not shown).
+One interesting thing to note about the top panel in
+Figure 9 is that the “large” (∆z ∼0.1) redshift oﬀsets in
+this plot do not reﬂect errors in the cluster redshift esti-
+mates, but rather cluster miscentering. That is, when we
+compare zλ to the redshift of the central galaxy, large oﬀ-
+sets are primarily due to our selection of a central galaxy
+that is not, in fact, a cluster member. To demonstrate
+this, we have created a “clean” sample of clusters where
+we demand that there be at least two spectroscopic clus-
+ter members with pmem > 0.8 within 1000 km s−1 of the
+spectroscopic redshift of central galaxy, thereby ensur-
+ing that the central galaxy is in fact a cluster member.
+Of the 13,178 redMaPPer clusters in DR8 with spectro-
+scopic redshifts, 1,829 (or 14%) meet this criterion. The
+corresponding comparison of zλ to zCG in this case is
+shown in Figure 10. We see that this photometric red-
+shift plot is very clean. The few outliers left (≲0.2%) are
+likely multiple systems in projection. In particular, the
+obvious outlier cluster at zλ ≈0.22 correpsonds to the
+cluster represented by the blue long-dashed line shown
+in Figure 8.
+We can get a better sense of the fraction of gross red-
+shift outliers from Figure 11, where we show the fraction
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zλ
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zCG
+Figure 10.
+zCG vs. zλ as in Figure 9, but demanding that the
+cluster contain at least two cluster members with pmem ≥0.8
+with spectroscopic redshifts within 1000 km/s of the redshift of
+the assigned central galaxy.
+This removes clusters centered on
+non-cluster-member galaxies. Of the 13,178 redMaPPer clusters in
+DR8 with spectroscopic redshifts, 1,829 (or 14%) meet this crite-
+rion. The few remaining outliers (≲0.2%) appear to be redshifts
+failures from multiple systems in projection.
+of 3σ, 4σ, and 5σ outliers. A cluster is considered an Nσ
+outlier if |zλ −zCG| ≥Nσzλ. To estimate the fraction of
+outliers as a function of redshift, for each redshift z we
+collect all clusters with redshift zλ ∈[z−0.025,z+0.025],
+and directly measure the fraction of Nσ outliers.
+By
+moving the window [z −0.025,z + 0.025] we recover the
+outlier fraction as a function of redshift.
+We see that
+≈1% of our galaxy clusters are 4σ redshift outliers.
+We note that the outlier fraction is considerably larger
+than expected if the errors were simply Gaussian. We
+emphasize that this fraction is measured using the full
+cluster sample, not the cleaned version used to produce
+Figure 10.
+Finally, in Figure 12 we test whether the redMaPPer
+estimates for the cluster redshift probability distribu-
+tions P(ztrue|zλ) are accurate. First, we select all clus-
+ters with spectroscopic central galaxies to create a “true”
+N(zCG), shown with a black solid histogram. We note
+that this is not representative of the full cluster popu-
+lation due to uneven spectroscopic sampling. We com-
+pare this to two estimates of N(z) using the same set
+of clusters. First, we bin clusters using the central val-
+ues of zλ, shown with the red-dashed histogram. Second,
+we integrate P P(ztrue|zλ) over the appropriate redshift
+bins, shown with a yellow band (including the expected
+measurement errors and Poisson sampling, ±1σ). The
+red-dashed histrogram is obviously not a good ﬁt to the
+spectroscopic redshift distribution. In particular, there
+is an artiﬁcial peak near the ﬁlter transition at z = 0.35.
+This is properly smoothed out by our probability distri-
+bution estimate (yellow band), which is a good ﬁt to the
+spectroscopic data (χ2/dof = 45.0/40).
+8. CLUSTER CENTERING
+The issue of galaxy cluster centering is very impor-
+tant for constraining cosmology with photometric sur-
+veys. In particular, miscentered clusters are a leading
+
+redMaPPer I: Algorithm and DR8 Catalog
+17
+Figure 11.
+Fraction of redshift outliers, as a function of photo-
+metric cluster redshift.
+A cluster is said to be an Nσ outlier if
+|zλ −zCG| ≥Nσzλ. We show the fraction of 3σ, 4σ, and 5σ out-
+liers, as labelled. These are computed using the full redMaPPer
+cluster sample, with no additional spectroscopic requirements on
+member galaxies (unlike in Fig. 10).
+Figure 12. Comparison of the true and predicted N(z) distribu-
+tion for redMaPPer DR8 clusters with central galaxies with spec-
+troscopic redshifts and λ/S > 20. We note that this is not repre-
+sentative of the full cluster population due to uneven spectroscopic
+sampling.
+The black solid histogram shows the “true” N(zCG).
+The red-dashed histogram shows the results of binning the central
+values of zλ for the same clusters, leading to obvious biases. The
+yellow band (±1σ errors) shows the results of summing the cluster
+P(z) values, and provides a good ﬁt to the data.
+source of systematic error in stacked weak-lensing mass
+estimates (e.g., Johnston et al. 2007; Mandelbaum et al.
+2008; Rozo et al. 2010), as well as mean velocity disper-
+sions (e.g., Becker et al. 2007). In addition, the cluster
+richness estimates themselves depend on the choice of
+center (Lopes et al. 2006).
+Thus, a well-characterized
+centering model is essential for precision cosmology.
+We assume every galaxy cluster halo has a bright, dom-
+inant galaxy residing at its center (e.g., Matthews et al.
+1964; Oemler 1976; Schombert 1986; von der Linden et al.
+2007, 2012; Menanteau et al. 2013; Mahdavi et al. 2013;
+Song et al. 2012b; Stott et al. 2012, see also paper II). In
+our current implementation, we also assume that the cen-
+tral galaxy is red, which is the case for the vast majority
+of massive clusters. The exceptions are strong cool-core
+clusters such as Abell 1835 (Allen 1995), where there
+is enough star formation for the broadband color of the
+central galaxy to no longer be consistent with that of a
+red sequence galaxy (e.g., McNamara et al. 2006). Al-
+though blue central galaxies are more common (although
+still rare) at the group scale (e.g., George et al. 2011;
+More et al. 2011; George et al. 2012; Tinker et al. 2012),
+the redMaPPer clusters are much more massive than the
+scale at which this is an issue.
+Miscentering of galaxy clusters wherein the central
+galaxy is undergoing strong star formation is a known
+failure of the redMaPPer centering algorithm (see Sec-
+tion 8.4 and Paper II). Simply removing the requirement
+that central galaxies be consistent with the red sequence
+— i.e. relying solely on luminosity and proximity — can
+ﬁx some of these clusters, but at the expense of miscen-
+tering ∼10% of the clusters on foreground galaxies17.
+Likewise, our tests have shown that both galaxy cen-
+troids and luminosity weighted galaxy centroids result in
+worse centering properties than the algorithm currently
+implemented below (e.g., see also George et al. 2012).
+Thus, centering on red galaxies is, as far as we can tell,
+the “least bad” option. In its current implementation,
+the centering success rate is ≈85% (see Paper II). We
+intend to continue working on improving our centering
+model for future data releases, as this is currently the
+dominant source of systematic failures in the redMaP-
+Per cluster catalog.
+8.1. Basic Framework
+We introduce a fundamentally new way of thinking
+about identifying the central galaxy of a cluster: rather
+than specifying a unique cluster center, redMaPPer esti-
+mates the probability that a given galaxy is the central
+galaxy of the cluster. Some clusters have well deﬁned
+cluster centers, exhibiting a single galaxy with a center-
+ing probability Pcen ≈1, whereas others can have two or
+more reasonable central candidates, with the most likely
+center having Pcen ≈50%. We note that these centering
+probabilities are the angular-position equivalent of the
+standard photo-z distributions P(z). That is, just as a
+cluster has an uncertain redshift position characterized
+by a redshift probability distribution, so too does the
+cluster have an uncertain angular position on the sky,
+characterized by the probability of any given galaxy of
+being the correct cluster center. The importance of this
+new way of treating cluster centering is that it opens up
+the possibility of a statistical treatment of cluster cen-
+tering akin to the statistical treatment of photometric
+redshifts, allowing us to improve our estimates of the
+cluster richness functions and cluster correlation func-
+tions. A detailed description of this framework will be
+presented and tested in a future work.
+The key insight that allows us to estimate centering
+probabilities is that there are three diﬀerent types of
+galaxies in a cluster: a central galaxy (“CG”), satellite
+17 We note that foreground galaxies are much more likely to be
+confused as centrals than background galaxies because they tend
+to be brighter in apparent magnitude
+
+18
+Rykoff et al.
+galaxies, and unassociated foreground and background
+galaxies.
+Let x be an observable vector for a galaxy,
+e.g., color (via zred), luminosity (mi), and position of
+each galaxy. We deﬁne ucen, usat, and ufg as the distri-
+bution of x for central, satellite, and background galaxies
+respectively. The ucen and usat ﬁlters are assumed to de-
+pend on cluster redshift and richness, while ufg depends
+only on cluster redshift (via zred). We use the subscript
+“fg” as we expect foreground galaxies will be more likely
+to be misidentiﬁed as CGs. Given a galaxy with observ-
+able x, the probability that it is the central galaxy of a
+cluster is
+pcen(x|λ,zλ) = pfree
+ucen
+ucen + λsatusat + ufg
+,
+(56)
+where pfree is the probability that a galaxy has not been
+partially masked by a higher ranked cluster (as described
+in Section 9.3; typically pfree ≈1), and λsat = λ−1 is the
+total number of satellite galaxies. This formula can be
+thought of as the simple deﬁnition of probabilities, or it
+can be interpreted as a Bayesian classiﬁcation algorithm.
+Note, however, that the probability pcen is not the same
+thing as the probability Pcen that the galaxy is the unique
+central galaxy of the cluster. By assumption, there can
+be only one central galaxy, so if galaxy i is the central
+galaxy, then every other galaxy j ̸= i must not be a
+central. Consequently, the probability that galaxy i be
+the central galaxy of a cluster is
+Pcen ∝pcen(xi)
+Y
+j̸=i
+(1 −pcen(xj)).
+(57)
+The proportionality constant is set by the condition that
+there is just one central galaxy in the cluster,
+1 =
+X
+i
+Pcen(xi).
+(58)
+In addition to the central galaxy probability, we can
+also calculate the probability that a cluster is centered
+on a satellite galaxy, given by
+Psat = (1 −Pcen)
+λsatusat
+λsatusat + ufg
+(59)
+All that remains for us to be able to estimate centering
+probabilities is the deﬁnition of the ﬁlters ucen, usat, and
+ufg.
+8.2. Centering Filters
+With the basic formalism laid out, we need to specify
+the observable x and the corresponding ﬁlters. There are
+three observables that we use to select the CG: the galaxy
+i-band magnitude mi; the red-sequence photometric red-
+shift zred of the galaxy; and a weight w that characterizes
+the local cluster galaxy density around the proposed cen-
+tral galaxy. We also explored replacing our photometric
+redshift zred with χ2, the “distance” in color space to the
+red sequence. However, we have found empirically that
+zred works better for estimating central probabilities, in
+that small amounts of star formation and/or small color
+errors due to deblending have a much smaller impact on
+zred than they do on χ2. We consider each of the ﬁlters
+in turn.
+8.2.1. Luminosity Filter: φcen
+The magnitude of the CG is correlated with both rich-
+ness and redshift, so we deﬁne the CG magnitude ﬁlter
+φcen(mi| ¯mi,σm) =
+1
+√
+2πσm
+exp
+
+−(mi −¯mi)2
+2σ2m
+
+, (60)
+where in principle both ¯mi and σm depend on richness
+and redshift. In practice, we expect σm to be roughly
+redshift independent, whereas ¯mi obviously depends on
+redshift. We assume that ¯mi traces m∗(z), so that the
+full richness and redshift dependent parameterization of
+¯mi is
+¯mi(zλ,λ) = m∗(zλ) + ∆0 + ∆1 ln
+ λ
+λp
+
+,
+(61)
+where ∆0 and ∆1 are redshift independent constants, and
+λp is the median richness of the sample. Our algorithm
+for ﬁtting for ∆0 and ∆1 is detailed below.
+8.2.2. Photometric Redshift Filter: Gcen(zred)
+For the photometric redshift ﬁlter, we use the red-
+sequence photometric redshift zred for each galaxy in the
+ﬁeld. We model this as a Gaussian function, with the
+form:
+Gcen(zred|zλ) =
+1
+√
+2πσzred
+exp
+−(zred −zλ)2
+2σ2zred
+
+.
+(62)
+As the error in the single galaxy photometric redshift
+dominates that from the cluster photometric redshift, we
+have set the scatter in Gcen(zred) to that of the individ-
+ual galaxy. In addition to the photometric redshift ﬁlter,
+we employ a hard cut such χ2(zred) < 100 (with 4 de-
+grees of freedom). Investigations of DR8 spectroscopic
+galaxies have shown that galaxies with χ2 > 100 are all
+catastrophic outliers in zred, which is not surprising con-
+sidering the bad ﬁt to the red-sequence template.
+By
+allowing galaxies with χ2 < 100, we allow some ﬂexibil-
+ity for galaxies that have slightly oﬀset colors to still be
+considered as central galaxies. This is especially an issue
+for SDSS DR8 for bright, nearby central galaxies that
+may have color shifts caused by deblending problems.
+8.2.3. Local Galaxy Density Filter: fcen(w)
+The motivation behind the local galaxy density ﬁlter is
+to deﬁne an observable w that is a pseudo-gravitational
+potential connecting each galaxy to every other cluster
+member. The weight w assigned to a given central can-
+didate is
+w = ln
+P(pmem(xi)Li[r2
+i + r2
+c]−1/2)
+Rc(λ)−1 P(pmem(xi)Li)
+
+,
+(63)
+where the sum is over all galaxies within the scale radius
+Rc(λ) around the candidate central, rc = 50 h−1kpc is a
+core radius used to soften the 1/r dependence, Li is each
+galaxy’s i-band luminosity, and pmem are the usual λ
+membership probabilities. The denominator is chosen to
+make the argument of the natural log dimensionless, and
+to remove the obvious dependence of the numerator of w
+on the total number of terms in the sum. Normalized in
+this fashion, we expect that w does not scale with cluster
+richness nor redshift.
+
+redMaPPer I: Algorithm and DR8 Catalog
+19
+We assume that for central galaxies, w follows a log-
+normal distribution fcen(w),
+fcen(w) =
+1
+√
+2πσw
+exp
+
+−(ln(w) −¯wcen)2
+2σ2w
+
+.
+(64)
+As noted above, we expect ¯wcen to be richness and red-
+shift independent. On the other hand, σw will certainly
+depend on richness. The noise in w should scale with
+raw galaxy counts (λ/S)1/2, where S(z) is the redshift-
+dependent factor that relates the raw-galaxy counts to a
+richness estimate when the survey is not suﬃciently deep
+to reach 0.2L∗at the redshift of the cluster (see Eqn. 22).
+For Poisson noise, we set
+σw = σw,cen
+ λ
+Sλp
+−1/2
+(65)
+where σw,cen is a constant that we ﬁt for. As above, the
+pivot point λp should be chosen to match the median
+richness of the sample.
+With these deﬁnitions, the product
+ucen = φcen(mi|zλ,λ)Gcen(zred)fcen(w|zλ,λ)
+(66)
+is the ﬁlter characterizing the distribution of central
+galaxies.
+8.2.4. Satellite Filter: usat
+Satellite galaxies on the red sequence can be described
+by a ﬁlter function analogous to Eqn. 66. Therefore, we
+have
+usat = φsat(mi|λ,m∗)Gsat(zred)fsat(w|zλ,λ),
+(67)
+where fsat(w) is deﬁned in the same way as Eqn. 64, ex-
+cept with parameters appropriate for the satellite galax-
+ies, ¯wsat and σw,sat. The satellite luminosity function,
+φsat, is a Schechter function as described in Eqn. 8. The
+redshift ﬁlter Gsat(zred) is identical to Gcen(zred).
+8.2.5. Foreground Filter: ufg
+The foreground ﬁlter is deﬁned as the expected number
+of unassociated galaxies within the cluster radius Rc(λ),
+ufg = ¯Σg,z(mi,zred)ffg(w)πR2
+c
+d2
+A
+,
+(68)
+where ¯Σg,z is the background density per deg2 per mi per
+zred, calculated in a similar fashion as the red sequence
+background described in Section 4.3.
+In addition, the
+area subtended by the cluster in Mpc2 must be converted
+to deg2 via the angular diameter distance dA, with dA
+measured in Mpc/ deg. Finally, the ffg ﬁlter describes
+the local galaxy density ﬁlter from Eqn. 64, with param-
+eters appropriate for random points ( ¯wfg and σw,fg) as
+described below.
+8.3. Implementation
+Implementing this formalism requires that we calculate
+the parameters that describe the ﬁlters for central galax-
+ies, satellite galaxies, and foreground/background galax-
+ies. Of course, calibrating these parameters depends on
+having a training sample to start with. As usual, we ap-
+proach this problem in an iterative fashion, where the
+centering model is constrained at the same time as the
+redMaPPer red-sequence model. In the ﬁrst iteration, we
+generate a catalog with roughly correct centering, and
+use this to provide an initial calibration of the ﬁlters. In
+subsequent iterations we make use of the centering ﬁl-
+ters and use the output to recalibrate. This procedure is
+iterated until convergence.
+8.3.1. First Iteration and Initial Filter Calibration
+First, we implement a rough centering algorithm: for
+every cluster, we simply select the brightest high proba-
+bility (pmem > 0.8) member galaxy as the central galaxy
+of the cluster.
+In this fashion, we obtain a full train-
+ing catalog with a set of central galaxies that should be
+roughly correct.
+We now use this ﬁrst iteration of a central galaxy (CG)
+catalog to determine the ﬁlter parameters that we will
+use in subsequent iterations. Note that because the ini-
+tial CG catalog contains some miscenterings, when cali-
+brating the CG ﬁlters it is important to account for this
+contamination.
+If a cluster is improperly centered on a satellite galaxy,
+it is most often centered on the brightest satellite. Con-
+sequently, the luminosity distribution of satellites which
+are mistaken as central is not simply a Schechter func-
+tion (φsat). Rather, the luminosity distribution of satel-
+lite galaxies in the CG catalog is given by φ1(mi|λ,m∗),
+the magnitude distribution of the brightest satellite in
+clusters of richness λ. The expected magnitude and zred
+distribution of the galaxies in our CG catalog is
+ρ(mi,zred|z) =Pcenφcen(mi)G(zred|z)
++ Psatφ1(mi)G(zred|z)
++ (1 −Pcen −Psat)¯Σg,z
+πR2
+c
+d2
+A
+,
+(69)
+where Pcen is the probability that the galaxy in question
+is the central galaxy, as in Eqn. 57, and Psat is the proba-
+bility that the cluster is centered on the brightest satellite
+galaxy. The redshift, z, is the spectroscopic redshift of
+the “seed” galaxy used in the training step.
+Our primary goal is to constrain the parameters ∆0,
+∆1, and σm. However, we also have the parameters Pcen
+and Psat, which are unknown in the ﬁrst iteration. For
+these parameters, we have found that setting them in the
+ﬁrst iteration at any reasonable initial estimate (Pcen ∈
+[0.7,0.9]; Psat ∈[0.05,0.2]) has no marked eﬀect on the
+ﬁnal calibration of the ﬁlter parameters. Therefore, for
+simplicity we set Pcen = 0.9 and Psat = 0.05 for each
+individual cluster in this ﬁrst iteration.
+Before we can continue, we must estimate the param-
+eters for φ1(mi|λ,m∗). This is modeled as a Gaussian
+distribution with central value
+¯msat = m∗(z) + cφ1 + sφ1 ln(λ/λp),
+(70)
+where m∗(z) is obtained from Eqn. 4.2 and λp is the
+median richness of the sample. The width of the distri-
+bution is similarly modeled as
+σsat = cσ,φ1 + sσ,φ1 ln(λ/λp).
+(71)
+The central value must scale with richness because as
+we sample more galaxies from the luminosity function,
+
+20
+Rykoff et al.
+we are more likely to ﬁnd a very bright galaxy. In or-
+der to obtain these parameters, we run a simple Monte
+Carlo with the luminosity function parameters from Sec-
+tion 4.2. For α = −1.0 with λp = 30, we ﬁnd that cφi =
+−0.95, sφi = −0.32, cσ,φ1 = 0.40, and sσ,φ1 = −0.09.
+We note that these parameters depend only on α and
+λp, and thus do not need to be updated in subsequent
+iterations.
+Finally, in order to constrain the parameters ∆0, ∆1,
+and σm, we deﬁne our likelihood based on Eqn. 69
+ln L =
+X
+i
+ln ρ(mi,zred|z).
+(72)
+By maximizing this likelihood with respect to ∆0 and
+∆1 we can use our training clusters to estimate the ucen
+ﬁlter parameters.
+8.3.2. Calibrating the w Filters
+We now turn to calibrating the w ﬁlters. We begin by
+calibrating the foreground and satellite ﬁlters, ffg(w) and
+fsat(w). For these purposes we assume that all satellites
+follow the same spatial proﬁle independent of brightness.
+Both ffg(w) and fsat(w) can be calibrated in a Monte
+Carlo fashion.
+We note that foreground galaxies will
+uniformly sample the cluster area πR2
+c(λ), and thus to
+evaluate ffg(w) we draw random points uniformly within
+the disc of every training cluster, and compute the cor-
+responding ffg(w) parameters, ¯wfg and σw,fg.
+The satellite ﬁlter fsat(w) is computed in a similar fash-
+ion. First, for every training cluster we randomly select
+a cluster member with a probability p that is propor-
+tional to the membership probability. For this randomly
+selected member we compute w at the location of that
+satellite. After computing w for all the training clusters,
+we compute the corresponding fsat(w) parameters, ¯wsat
+and σw,sat.
+We can now turn our attention to the distribution
+fcen(w). Consider now the distribution f(w) for all cen-
+tral galaxies. This total distribution is then
+f(w) = Pcenfcen(w)+Psatfsat(w)+(1−Pcen−Psat)ffg(w).
+(73)
+The only unknowns in this equation are the mean ¯wcen
+and rms σw,cen for the central ﬁlter, so we write the like-
+lihood
+ln L( ¯wcen,σw,cen) =
+X
+i
+ln f(w),
+(74)
+where the sum is over all training clusters.
+We then
+maximize this likelihood to ﬁnd ¯wcen and rms σw,cen.
+In Figure 13 we show the central, satellite, and fore-
+ground f(w) ﬁlters for the ﬁnal training iteration.
+It
+is clear that there is some power here to diﬀerentiate
+between central galaxies and satellites and foregrounds,
+but it is far from perfect. In particular, satellites are only
+slightly less well connected than central galaxies.
+8.3.3. Subsequent Iterations
+As noted above, in our ﬁrst iteration our catalog of
+CG galaxies is constructed using a simple centering algo-
+rithm: i.e., select the brightest high-probability member
+as the cluster center. In subsequent iterations of the clus-
+ter ﬁnder calibration we use the probabilistic centering
+algorithm described in Section 8.1. After application of
+-1.5
+-1.0
+-0.5
+0.0
+0.5
+1.0
+ln(w)
+0
+100
+200
+300
+400
+N
+fcen
+fsat
+ffg
+Figure 13.
+Histograms of w parameter for central (black solid),
+satellite (red long-dashed), and foreground/random (blue short-
+dashed) galaxies. It is clear that there is some power here to dif-
+ferentiate between central galaxies and satellites and foregrounds,
+but it is not perfect. However, there is some advantage in being
+able to reject a bright galaxy with a low local density as a likely
+interloper that does not ﬁt the central galaxy model.
+our centering algorithm we have the important advantage
+that each cluster now comes tagged with Pcen and Psat.
+Therefore, we can now repeat the calibrations from Sec-
+tions 8.3.1 and 8.3.2 while using the correct Pcen and Psat
+for each individual galaxy. In this way we continuously
+improve our centering model with multiple iterations of
+the cluster ﬁnding algorithm.
+8.4. A Note on Blue Central Galaxies
+At the beginning of this section, we noted that central
+galaxies undergoing strong star formation pose a partic-
+ular problem for the redMaPPer centering algorithm. In
+Figure 14 we show an SDSS image of Abell 1835, a well-
+known strong cool-core cluster with star formation in the
+central galaxy. The true center is denoted with a red cir-
+cle, while the top two candidate redMaPPer centers are
+circled in blue. As expected, when the color of the cen-
+tral galaxy is far from the red sequence, our centering
+algorithm instead chooses one of the bright red satellites
+as a possible center.
+However, we emphasize that the
+cluster will not be missing, it will simply be miscentered.
+We have also made use of SDSS spectra to get an initial
+estimate on the rate of bad centers due to galaxies that do
+not agree with our color model (both very blue and very
+red). We have taken every cluster with a spectroscopic
+central, and a second brighter spectroscopic galaxy that
+is within r < Rλ and |zCG −zspec| < 1.5σv, where σv
+is the expected velocity dispersion based on the cluster
+richness (Rozo et al., in prep). If this galaxy is not in
+the top 5 members list for the cluster, it is considered a
+possible catastrophic center. In all, 4.6% of the clusters
+ﬁt this category. Visual inspection of the richest clusters
+shows that the majority of these galaxies are in the out-
+skirts of the cluster and are not centrals, conﬁrming that
+the redMaPPer centering algorithm is not simply taking
+the brightest member as the center. Alternatively, we
+can look at the subset of these galaxies that are not in
+the members list and thus were not considered as candi-
+date centrals at all. Only 0.7% of clusters contain such
+galaxies.
+From these estimates, we expect the rate of
+miscentering due to galaxies that are too blue to be se-
+
+redMaPPer I: Algorithm and DR8 Catalog
+21
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+1.0 arcmin
+0.167 h-1 Mpc
+Figure 14.
+SDSS image of Abell 1835, a well-known cool-core
+cluster with strong star formation in the central galaxy (marked
+with red circle). The two candidate redMaPPer centers are denoted
+with blue circles, and the true center is missed due to its strong
+deviation from the red sequence.
+lected as central galaxies is ≲2%,
+9. THE CLUSTER FINDER
+We have now described in detail all the ingredients that
+go into the redMaPPer cluster ﬁnder. Here, we focus on
+how these ingredients are blended within the context of
+the cluster ﬁnder to produce a catalog. In particular, we
+discuss how clusters are ultimately deﬁned and perco-
+lated to ensure that every cluster is found once and only
+once. From a practical perspective, the cluster ﬁnding is
+broken into three stages. First, we look for overdensities
+around each individual galaxy using zred as an estimate
+of the cluster redshift. Second, we calculate the cluster
+likelihoods for each of the galaxies that have a suﬃcient
+overdensity. Third, after sorting by cluster likelihood, we
+percolate through the full catalog while probabilistically
+masking out cluster members. A process ﬂow-chart for
+reference in this section is shown in Figure 15.
+9.1. First Pass
+In the ﬁrst pass we wish to identify galaxies that are
+credible centers of galaxy clusters. This task involves a
+lot of data handling, and so we wish to make it as eﬃcient
+as possible.
+We begin by taking every galaxy in the input cata-
+log with χ2(zred) < 20 and brighter than 0.2L∗at the
+red-sequence photometric redshift zred.18 These are very
+generous cuts, yet they reduce the input DR8 catalog
+from 56 million galaxies to 23 million possible cluster
+centers in the redshift region 0.05 < zred < 0.6. Next, we
+take all galaxies within 0.5h−1 Mpc of a candidate cen-
+ter and measure λ, setting the cluster redshift to zred.
+Candidate centers with λ/S < 3 are rejected. The scale
+value S = 1/(1 −C) (from Section 5.1) is used to ensure
+18 In the case of the training runs, we take every “seed” galaxy
+at the spectroscopic redshift.
+Input Catalog!
+Check each galaxy!
+Consistent with 
+red sequence?!
+Reject!
+Keep!
+No!
+Yes!
+First Pass!
+Likelihood Sorting!
+Sort galaxies by 
+cluster likelihood!
+Percolation!
+Compute λ, zλ using 
+masked catalog!
+Determine most likely center!
+Recompute λ, zλ using 
+new centers!
+Mask catalog using pmem!
+Figure 15.
+Process ﬂowchart for the redMaPPer cluster ﬁnder,
+as described in this Section
+that we have detected at least three red galaxies above
+the magnitude limit. This cut rejects a further ∼60%
+of the catalog of candidate centrals. Finally, for all cen-
+ters that pass these cuts we calculate zλ as described in
+Section 7.2 to better reﬁne the redshift of the possible
+cluster.
+9.2. Likelihood Sorting
+Given our list of possible clusters from the ﬁrst pass,
+we now calculate the cluster likelihood for each of these
+clusters. The total likelihood is a combination of the λ
+likelihood and the centering likelihood. To calculate the
+λ likelihood, we ﬁrst calculate the richness λ using the
+optimized radial scale parameters with R0 = 1.0 h−1 Mpc
+and β = 0.2 as described in Section 4. The λ likelihood
+is then given by
+ln Lλ = −λ
+S −
+X
+ln(1 −pmem),
+(75)
+where λ is evaluated at the cluster photometric redshift
+zλ.
+Next, following Section 8 and Eqn. 66, the centering
+likelihood is given by
+ln Lcen = ln[φcen(mi|zλ,λ)Gcen(zred)fcen(w|zλ,λ)], (76)
+where we combine the luminosity, zred, and local galaxy
+density w of each galaxy. The total likelihood used in
+the ranking of possible cluster centers is
+ln L = ln Lλ + ln Lcen.
+(77)
+Note that the amplitude of the λ likelihood function
+is typically much larger than that of the centering like-
+lihood. Thus, to zeroth order, clusters are ﬁrst ranked
+by λ likelihood. Two candidate centrals with similar λ
+likelihoods are then ranked according to the central like-
+lihood. As will be described below, we reﬁne the choice
+of cluster center in the percolation step, so the initial
+
+22
+Rykoff et al.
+centering likelihood is not especially inﬂuential in deter-
+mining the ﬁnal cluster center.
+9.3. Percolation
+Having rank-ordered the cluster candidates according
+to likelihood, we now need to percolate the list to assign
+galaxies to clusters and ensure that no cluster is counted
+multiple times. The basic outline of the percolation pro-
+ceeds as follows.
+1. Given cluster number i in the list, recompute λ and
+zλ based on the percolated galaxy catalog. At the
+beginning of the percolation, the percolated galaxy
+catalog is simply the input galaxy catalog.
+2. Determine the cluster center and centering proba-
+bility via the method outlined in Section 8.
+3. Perform a ﬁnal calculation of λ and zλ with respect
+to the new central galaxy.
+4. Update the percolated galaxy catalog by masking
+out galaxies based on their membership probabili-
+ties.
+5. Remove all lower-ranked possible centers that have
+a membership probability pmem > 0.5 of being a
+member of cluster i. Note these galaxies are still
+allowed to provide membership weight to lower-
+ranked clusters as part of the percolated galaxy
+catalog.
+6. Repeat Step 1 for the next cluster galaxy in the
+ranked list.
+9.3.1. Masking Galaxies
+Masking galaxies based on their membership probabili-
+ties is the “probabilistic percolation” step of the redMaP-
+Per algorithm. To perform this step, we keep track of the
+“total probability” that a galaxy belongs to a cluster,
+which we call ptaken. The probability pfree = 1 −ptaken
+is the probability that the galaxy does not belong to any
+cluster. Initially, one has ptaken = 0 and pfree = 1 for all
+galaxies. Upon ﬁnding a galaxy cluster, the entire galaxy
+catalog is percolated by updating the probability ptaken
+via
+ptaken,i+1 = ptaken,i + pfree,ipmem
+(78)
+where pmem is given by Eqn. 1.
+Now, when we re-estimate the richness of cluster i +
+1, we must take into account the fact that some of the
+galaxies have a non-zero probability of belonging to a
+cluster j < i + 1. We do so by modifying the richness
+calculation from Eqn. 2 via
+λ =
+X
+pfreepmem(x|λ).
+(79)
+The ﬁrst factor above is simply the probability that a
+galaxy is “free” to belong to the new cluster, and pmem
+is the standard membership probability from Eqn. 1. For
+instance, suppose a galaxy has a probability pmem = 0.3
+of belonging to the ﬁrst cluster in the rank-ordered list.
+In this case, the galaxy still has 70% of its probability
+to give to a cluster lower in the list. In practice, when
+quoting cluster membership probabilities pmem we report
+not the raw pmem value as given by Eqn. 1, but rather
+the product pfreepmem for that galaxy–cluster pair. That
+is, the reported value is the correct probability that the
+given galaxy belongs to the cluster under consideration.
+For galaxy clusters that are sparse in the sky (e.g., at
+high richness) these corrections are negligible.
+9.3.2. Extent of Clusters and Percolation Radius
+As noted above, cluster richness is measured within a
+radius Rc(λ) that optimizes the signal-to-noise ratio of
+the richness measurements (R12), but is not in any way
+chosen to be related to standard deﬁnitions of the extent
+of a halo, say R200c.
+For cosmological purposes, it is
+useful to diﬀerentiate between the radius Rc(λ) which
+deﬁnes the richness measurement, and the percolation
+radius that is used to mask out cluster members and
+blend or deblend nearby systems. In particular, ideally
+one selects the percolation radius so that it matches as
+best as possible the percolation radii employed in the
+halo deﬁnition used to calibrate the corresponding halo
+mass function.
+In the appendix of R12 we used maxBCG clusters to
+obtain an approximate scaling of mass to λ richness19.
+We found that the slope of the mass–λ relation is consis-
+tent with 1, and that R200c ≈1.5Rc(λ). Consequently,
+we have adopted 1.5Rc(λ) as our default percolation ra-
+dius.
+That is, galaxies are masked out to this radius.
+We note that while galaxies outside the Rc(λ) radius are
+not used in the summand in Eqn. 2, we can still esti-
+mate pmem in exactly the same way as we do with all
+other galaxies out to an arbitrary radius, which is how
+we implement the large percolation radius above.
+In practice, for the λ/S > 20 richness threshold we
+have employed, changing the mask radius by ±50% has
+a very small impact on the resulting cluster catalog. Only
+a small number of clusters (∼5%) – primarily satellites of
+the richest λ > 100 clusters – are aﬀected at all by mak-
+ing this change. We expect to return to the question of
+what the optimal masking radius is in future work, par-
+ticularly within the context of cosmological constraints
+from galaxy clusters.
+9.4. A Sample Cluster
+At this point, it would be useful to investigate a sample
+rich cluster to explore the distribution of cluster mem-
+bers. We have selected RM J164019.8+464241.5 (Abell
+2219), one of the richest clusters in SDSS, at a redshift
+of z = 0.23. In Figure 16 we show four aspects of this
+cluster.
+In the top-left panel, we show the SDSS im-
+age of the cluster. In the top-right panel, we show the
+distribution of cluster members with pmem > 0.05, with
+the symbol size proportional to the membership proba-
+bility. As can be seen in the histogram of pmem in the
+bottom-right panel, this distribution is strongly peaked
+near pmem > 0.9. We note that we do not show another,
+larger peak at pmem = 0, for the vast majority of galaxies
+in the ﬁeld that are not red-sequence cluster members.
+Finally, in the bottom-left panel we show the distribution
+of cluster members as a function of radius. The dashed
+red line shows the expected distribution of galaxies for
+an NFW proﬁle with rs = 0.5 h−1 Mpc, thus showing
+19 As shown in Appendix F, λcol used in R12 is within ∼10%
+of the multi-color λ used in this work.
+
+redMaPPer I: Algorithm and DR8 Catalog
+23
+that the radial distribution of cluster galaxies is broadly
+consistent with the NFW model.
+10. THE REDMAPPER SDSS DR8 CLUSTER
+CATALOG
+We have run the redMaPPer cluster ﬁnding algorithm
+in the SDSS DR8 photometric catalog described in Sec. 2.
+The full cluster ﬁnder run contains all clusters with λ ≥
+5S(zλ) and zλ ∈[0.05,0.6]. However, we have chosen to
+apply very conservative cuts to our catalog . The cuts
+we apply are:
+1. The richness is cut to λ ≥20S(zλ). Roughly speak-
+ing, this requires that every cluster have at least 20
+galaxy counts above the ﬂux limit of the survey or
+0.2L∗at the cluster redshift, whichever is higher.
+From R12, we estimate that this results in an ef-
+fective mass cut of M200 ≳1014 M⊙.
+2. The redshift range is cut to zλ ∈[0.08,0.55], so as
+to minimize edge eﬀects from the training sample.
+3. Only clusters with fmask < 0.2 are included (see
+Eqn 23), ensuring clusters are not overly compro-
+mised by bad ﬁelds, bright stars, and survey edges.
+The resulting cluster catalog contains 25,236 systems.
+In Figure 17 we show the full footprint of the catalog.
+The color scale shows the density contrast relative to
+the mean cluster density, where red regions are denser
+than average and blue regions are less dense, as estimated
+using all λ ≥5, zλ ∈[0.1,0.3] clusters so as to give a
+better sense of the large scale structure in the survey.
+The image was produced by binning the catalog into a
+Mangle simple pixelization scheme of depth 7 (Swanson
+et al. 2008).
+In Figure 18 we show the comoving density of redMaP-
+Per clusters with λ/S(z) > 20 over the full redshift range
+of interest.
+The comoving density is roughly constant
+at zλ ≲0.35 where the catalog is volume limited. At
+zλ ∼0.35 the richness and redshift scatter are signif-
+icantly boosted by both the 4000 ˚A break ﬁlter tran-
+sition and the magnitude limit of the survey reaching
+0.2L∗.
+Therefore, the comoving density is boosted by
+low richness clusters scattering up into our sample. A
+full accounting for this scatter must be made in order to
+precisely calculate the redMaPPer abundance function,
+which we leave to future work. Above this redshift the
+magnitude limit starts to kick in (via the scale factor
+S(z)), and we only observe the most massive clusters.
+As an illustration of this eﬀect, in Figure 19 we plot
+the richness λ vs the photometric redshift zλ for the ﬁ-
+nal redMaPPer catalog. The red dashed line shows the
+redshift-dependent richness cut λ > 20S(z).
+Finally, we show a sample redMaPPer cluster. In Fig-
+ure 20 we show REDM J003208.2+180625.3, the richest
+redMaPPer cluster not found within the MCXC cluster
+catalog (Piﬀaretti et al. 2011), a system with λ = 236±12
+at redshift zλ = 0.396 ± 0.013. We note that this cluster
+is associated with a source in the ROSAT Bright Source
+Catalog (Voges et al. 1999). The speciﬁc data available
+for each of the clusters and members are described in Ap-
+pendix G, and a detailed comparison of the redMaPPer
+clusters to X-ray and SZ catalogs is presented in Paper
+II.
+11. PURITY AND COMPLETENESS
+Purity and completeness can mean many diﬀerent
+things depending on the context. There is a tendency
+to think of purity as the probability that a cluster in the
+catalog is a real cluster, and to think of completeness
+as the probability that a real cluster is in the catalog.
+However, it is often incorrect to think of these quantities
+as calibrating failure rates of the algorithm. Here, we
+adopt speciﬁc deﬁnitions of purity and completeness and
+discuss their implications. For an alternative deﬁnition
+of purity and completeness by comparing redMaPPer-
+detected clusters to X-ray catalogs, we refer the reader
+to Paper II.
+For cluster cosmology, the relevant quantity is the
+probability of detecting a halo of mass M with richness
+λobs, which can be decomposed into a convolution of two
+components,
+P(λobs|M) =
+Z
+dλtrueP(λobs|λtrue)P(λtrue|M).
+(80)
+The probability P(λtrue|M) is a feature of the Uni-
+verse, and must be properly marginalized over in any
+cosmological study that relies on the cluster number
+function. Constraining this probability distribution can
+also be supplemented by utilizing realistic mock cata-
+logs (e.g., Song et al. 2012a, Wechsler et al., in prepara-
+tion) which we return to in future work. On the other
+hand, P(λobs|λtrue) is a feature of the cluster ﬁnding al-
+gorithm itself. This probability fully contains all of the
+information associated with measurement error in our
+catalog.
+In the present work, we deﬁne completeness
+and purity as speciﬁc integrals over this distribution.
+Purity
+and
+completeness,
+used
+as
+a
+simple
+parametrization of P(λobs|λtrue),
+can be estimated
+in several ways. Perhaps the simplest consists of remov-
+ing galaxy clusters, randomizing galaxy positions, and
+then re-inserting galaxy clusters.
+The cluster ﬁnding
+algorithm can then be rerun, and one can determine
+which clusters are detected, and how many “false”
+clusters are detected (e.g., Goto et al. 2002; Koester
+et al. 2007b; Hao et al. 2010). However, as shown in the
+literature (Lopes et al. 2004; Rozo et al. 2011), such an
+algorithm is fundamentally ﬂawed because background
+galaxies are not uniformly distributed.
+Consequently,
+we take a somewhat diﬀerent approach, as described
+below.
+1. Generate random points: We generate a list of ran-
+dom points uniformly sampling the input survey
+mask. These points are to be the centers of mock
+clusters that will be inserted into the data set. This
+procedure ensures we sample all the systematics in
+the survey, as well as the eﬀect of masked regions.
+We note that these locations are not sampled from
+the DR8 galaxy positions.
+2. Sample “true” cluster richness and redshift: Using
+the full cluster catalog (λ > 5), we randomly sam-
+ple galaxy clusters to generate pairs of parameters
+(λtrue,ztrue). This ensures our model cluster distri-
+bution has the same richness and redshift distribu-
+tion as the ﬁnal catalog, including covariances.
+3. For each pair of sampled values (λtrue,ztrue), as-
+
+24
+Rykoff et al.
+0.1
+0.0
+-0.1
+RA - 250.0825 (deg)
+-0.10
+-0.05
+0.00
+0.05
+0.10
+Dec - 46.7115 (deg)
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.1
+0.0
+-0.1
+RA - 250.0825 (deg)
+-0.10
+-0.05
+0.00
+0.05
+0.10
+Dec - 46.7115 (deg)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+r
+0
+50
+100
+150
+200
+Σpmem (<r) / r
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+pmem
+0
+20
+40
+60
+80
+100
+N
+Figure 16. Top Left: SDSS image of RM J164019.8+464241.5 (Abell 2219). Top Right: Locations of cluster members with pmem > 0.05,
+with the symbol size proportional to the membership probability. Bottom Left: Distribution of cluster members as a function of radius.
+The dashed red line shows the expected distribution of galaxies for an NFW proﬁle with rs = 0.5 h−1 Mpc. Bottom Right: Distribution of
+pmem for cluster members. This is strongly peaked near pmem > 0.9. We note that we do not show another, larger peak at pmem = 0, for
+the vast majority of galaxies in the ﬁeld that are not red-sequence cluster members.
+sign them a spatial location using a random point
+from Step 1, and sample galaxies using the clus-
+ter model:
+Using the same method as in Sec-
+tion 5.2, we use Monte Carlo sampling to gener-
+ate 5000 galaxies with the model radial and lumi-
+nosity proﬁles. From this sample of 5000 cluster
+galaxies, we randomly sample λtrue galaxies from
+within Rc(λtrue), as well as kλtrue galaxies from
+Rc(λtrue) < r < Rc(2λtrue), where k scales with
+λtrue as appropriate for the radial proﬁle. This en-
+sures that our fake clusters do not have artiﬁcial
+hard edges.
+4. Measure λobs for the generated fake cluster at the
+random location, and repeat 100 times. When mea-
+suring λobs, we mask out galaxies according to the
+bright stars and edges in the survey mask, as well
+as applying any necessary magnitude limits. We
+do not, however, make corrections for higher order
+eﬀects such as blending of galaxies.
+In this way, we generate a map over the full sky of the
+detectability of clusters as a function of redshift and rich-
+ness, while taking into account the large-scale structure
+that is already imprinted on the galaxy catalog. This
+is a more stringent test than a random-background test,
+but still does not capture the additional eﬀect that cor-
+related large scale structure can have on the galaxy clus-
+ters. However, we expect that these additional eﬀects
+are subdominant: while the correlation length of galaxy
+clusters can be as large as ∼20 Mpc, the typical length-
+scale over which projections are eﬀective is ∼100 Mpc
+
+redMaPPer I: Algorithm and DR8 Catalog
+25
+-50
+0
+50
+100
+150
+200
+250
+RA
+-20
+0
+20
+40
+60
+80
+Dec
+Figure 17. Footprint of the redMaPPer DR8 catalog, with clus-
+ters binned into a Mangle simple pixelization scheme of depth 7.
+All clusters with λ > 5 and zλ ∈[0.1,0.3] are shown to better
+illustrate the large-scale structure in the catalog.
+Figure 18.
+Comoving density of redMaPPer DR8 clusters as a
+function of photometric redshift (zλ) for clusters with λ/S(z) >
+10,20,40. All densities have been computed by taking the sum of
+cluster p(z). The comoving density is roughly constant at zλ <
+0.35, where the catalog is volume limited (denoted by the vertical
+dashed line).
+Above this redshift the comoving density falls oﬀ
+rapidly as the detection threshold rapidly increases.
+or more, so for most of this volume 1 + ξ ≈1. Roughly
+speaking, we would expect no more than 20% corrections
+to our estimated impurity from these eﬀects, so for exam-
+ple, if 5% of our clusters suﬀer from projection eﬀects in
+this analysis, it likely that this fraction is underestimated
+by by ∼0.2 × 0.05 = 1%. A more detailed treatment of
+projection eﬀects will be presented in a future work (see
+also the discussion on the impact of the background on
+λ in Rozo et al. 2011).
+One additional concern with regards to the above test
+is that the clusters that we input into our data set are
+produced with the same ﬁlters that we used to ﬁnd galaxy
+clusters. As discussed in Rykoﬀet al. (2012), the choice
+of luminosity and radial ﬁlters have negligible impact
+0.1
+0.2
+0.3
+0.4
+0.5
+zλ
+0
+20
+40
+60
+80
+100
+120
+140
+λ
+DR8 Volume Limit
+Figure 19. Two-dimensional histogram of λ vs. zλ for redMaP-
+Per clusters.
+The red dashed line shows the redshift-dependent
+richness cut of λ > 20S(z). Although this ﬁgure generally shows a
+smooth distribution, the boost in low richness clusters at the tran-
+sition redshift of z = 0.35 apparent; this redshift is denoted by the
+vertical dashed line.
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+1.0 arcmin
+0.224 h-1 Mpc
+Figure 20.
+SDSS
+composite
+image
+of
+the
+cluster
+RM
+J003208.2+180625.3, the richest redMaPPer cluster not found
+within the MCXC cluster catalog. This system has λ = 236 ± 12
+at a redshift of zλ = 0.396 ± 0.013, and is associated with a
+source in the ROSAT Bright Source Catalog. This particular clus-
+ter has three candidate centers, denoted with blue circles, with
+Pcen = {0.5,0.25,0.25}.
+on the richness measurements. Rozo et al. (2011) also
+demonstrated that cluster ellipticity is largely irrelevant.
+Thus, we expect our results to be robust to changes to the
+cluster model used to generate the inserted clusters. We
+have veriﬁed this by inserting real redMaPPer clusters
+as above, where the cluster galaxies are sampled from
+the members list according to their membership proba-
+bilities. Our results are nearly identical to those derived
+from the model clusters above.
+
+26
+Rykoff et al.
+In Figure 21 we illustrate how we use the above outputs
+to deﬁne purity and completeness. The ﬁgure shows the
+expectation value ⟨λobs⟩for the observed richness of a
+galaxy cluster vs. λtrue for a narrow redshift slice (0.2 <
+z < 0.22). Note that although λtrue is a ﬁxed value, each
+cluster has a distribution of λobs, and we have plotted
+the mean value.
+To deﬁne completeness, consider the sub-sample of
+galaxy clusters in some richness bin in λtrue, e.g., that de-
+ﬁned by the vertical red short-dashed lines in Figure 21.
+The bulk of this cluster sample falls within a tight locus
+around the λobs ≈λtrue line, with some noise associated
+with background ﬂuctuations.
+The mean relation can
+be measured, including its scatter, using ﬁtting methods
+robust to outliers (we rely on median statistics).
+The
+diagonal red short-dashed lines show the ±4σ scatter,
+and points outside this region are gross outliers.
+We
+see that all such outliers fall above the main cloud of
+points: these are projection eﬀects, where we placed a
+fake galaxy cluster atop an existing richer structure. It
+is precisely to characterize these outliers that we do not
+limit our model clusters to avoid the existing structure
+in the catalog. The completeness c(λtrue) is deﬁned as
+the fraction of the non-outlier points to the total number
+of clusters in the richness bin, i.e., it is the ratio of the
+number of clusters within the red dashed parallelogram
+(λobs is consistent with λtrue within the scatter) to the
+number of clusters in the λtrue bin.
+Note that with this deﬁnition c(λtrue) ≤1 does not
+imply that we are missing clusters. Instead, it is simply
+estimating the fraction of clusters at a given λtrue that
+suﬀer from severe projection eﬀects. Similarly, for clus-
+ters with λtrue near the detection threshold, a fraction
+of these clusters with have λobs less than the detection
+threshold. Thus, these clusters are only “missing” due
+to well understood observational scatter.
+Similarly, we can estimate purity by considering clus-
+ters in a bin in λobs, e.g., that deﬁned by the blue long-
+dashed lines in Figure 21. Several of the clusters in this
+bin are clear outliers compared to their corresponding
+λtrue. The fraction of such outliers in the λobs bin is the
+impurity. However, we note one additional restriction;
+that is, we discard all outliers with λobs ≥λtrue/2, de-
+noted by the grey region in the ﬁgure. We note that in
+any projection eﬀect, λobs = λmain+λproj, the richness of
+the main and projected halo respectively. By deﬁnition,
+the main halo has a richness λmain ≥λobs/2, and we are
+concerned with calculating the purity of main halos only.
+Thus, any fake cluster with λtrue ≤λobs/2 is necessarily
+a projection on a real, signiﬁcantly richer cluster in the
+catalog and should be discarded in this analysis. As with
+the completeness calculation, we emphasize that the re-
+sulting purity is the fraction of galaxy clusters as a func-
+tion of the observed richness that suﬀer from projection
+eﬀects, and does not represent an absence of galaxies.
+To formalize all of the above discussion, we deﬁne the
+completeness in a bin of richness λtrue as
+completeness =
+P
+in λtrue bin
+R λ1
+λ0 dλobs P(λobs|λtrue)
+N(λtrue)
+, (81)
+where the sum is over all clusters in a given bin of λtrue.
+We deﬁne λ0 = λtrue −4σ, with the restriction that
+20
+40
+60
+80
+100
+λtrue
+20
+40
+60
+80
+100
+λobs
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 21.
+Expectation value of the measured richness (⟨λobs⟩)
+vs. input richness (λtrue) for simulated clusters in the narrow red-
+shift range 0.2 < z < 0.22. Note that although λtrue is a ﬁxed
+value, each cluster has a distribution of λobs and we have plotted
+the mean value. To measure completeness, we consider the sub-
+sample of clusters in a richness bin in λtrue, deﬁned by the verti-
+cal red short-dashed lines. While most of the cluster sample falls
+within a tight locus around λobs ≈λtrue, there are some cluster
+that fall above the 4σ contours deﬁned by the diagonal red short-
+dashed lines. These outliers are projection eﬀects, where we placed
+a fake cluster atop an existing richer structure, and are counted to-
+ward incompleteness. For reference, the one-to-one line is shown
+with the magenta dotted line. To measure purity, we consider the
+sub-sample of clusters in a richness bin in λobs, deﬁned by the blue
+long-dashed lines. The clusters that are signiﬁcant outliers with
+low λtrue are impurities where the measured cluster is the result
+of a projection eﬀect of multiple systems. The grey region denotes
+“unphysical” projections where λobs ≥2λtrue, and as such the fake
+cluster with richness λtrue is the secondary rather than the primary
+halo.
+λ0 > 20; λ1 = λtrue + 4σ; σ2 = σ2
+int + σ2
+λ; and N(λtrue)
+is the total number of clusters in the bin. We estimate
+σint directly from the output as the intrinsic scatter in
+the λobs–λtrue relation, and we have chosen to deﬁne an
+outlier (incomplete) cluster as any cluster that has a mea-
+sured richness λobs that is more than 4σ discrepant from
+its true richness λtrue.
+By the same token, the purity is deﬁned as
+purity =
+P
+in λobs bin
+R λ1
+λ0 dλobs P(λobs|λtrue)
+P
+in λobs bin
+R λobs,2
+λobs,1 dλobs P(λobs|λtrue)
+,
+(82)
+where now the sums are over all clusters in a given bin of
+λobs. Note that we have the additional restruction that
+the sum is restricted to systems with λtrue ≥⟨λobs⟩/2.
+We deﬁne λ0 = λtrue −4σint and λ1 = λtrue + 4σint as
+before, and λobs,1 and λobs,2 are the extent of the richness
+bin in question.
+In Figure 22 we show the completeness and purity as
+a function of richness for ﬁve redshift bins for the DR8
+galaxy and cluster catalog. At low redshifts (z < 0.3)
+the completeness is essentially ≳99% at λ > 30, but
+falls below this threshold due to clusters randomly scat-
+tering in and out of the selection threshold. At higher
+redshift, as we encounter the magnitude limit of the DR8
+catalog our richness threshold increases and thus the rich-
+
+redMaPPer I: Algorithm and DR8 Catalog
+27
+20
+40
+60
+80
+100
+λtrue
+0.5
+0.6
+0.7
+0.8
+0.9
+1.0
+Completeness
+0.5<z<0.6
+0.4<z<0.5
+0.3<z<0.4
+0.2<z<0.3
+0.1<z<0.2
+20
+40
+60
+80
+100
+λobs
+0.80
+0.85
+0.90
+0.95
+1.00
+Purity
+0.5<z<0.6
+0.4<z<0.5
+0.3<z<0.4
+0.2<z<0.3
+0.1<z<0.2
+Figure 22. Top panel: Completeness as a function of input rich-
+ness, λtrue, in ﬁve redshift bins for the DR8 catalog. At low red-
+shift, the completeness at λ < 30 falls oﬀas measurement errors
+scatter clusters in and out of our λ ≥20 selection threshold. At
+higher redshifts, the selection threshold increases, as does the mea-
+surement error, leading to a broader decrease extending to higher
+richness values. Bottom panel: Purity — i.e., fraction of galaxy
+clusters not aﬀected by projection eﬀects — as a function of mea-
+sured richness, λobs, in ﬁve redshift bins.
+ness at which these threshold eﬀects come into play also
+increases.
+Our purity is > 95% for all richness and redshift bins,
+with the richest systems being less pure. This can be un-
+derstood very simply: consider a chance superposition
+of two clusters of richness λ leading to a single detec-
+tion of richness 2λ. This factor of two shift has a much
+more dramatic impact on the overall abundance function
+at the rich end, simply because the richness function is
+steeper there, i.e., a constant projection fraction in λtrue
+translates into a projection fraction that decreases with
+λobs. Again, all these “impurities” actually correspond
+to real clusters; it’s just that the observed richness has
+been systematically overestimated.
+One curious feature of our purity is that it seems to in-
+crease with decreasing richness, and with increasing red-
+shift. This is a consequence of our deﬁnition: at lower
+richness and higher redshifts, the measurements errors
+in the richness are larger, so a cluster that is a 4σ out-
+lier needs to be more and more of an extreme projection,
+which makes such 4σ outliers rarer.
+That is, the pu-
+rity increases not because there are fewer projections,
+but rather because the projections that do occur become
+increasingly less important relative to the observational
+errors in the richness estimates.
+In this context, it is important to emphasize that the
+purity that we have deﬁned here is fundamentally diﬀer-
+ent from the purity that is usually deﬁned for X-ray or SZ
+cluster ﬁnding. Let us take SZ as a speciﬁc example: a
+false detection in SZ occurs when random Gaussian noise
+in the map produces a ﬂuctuation that can be mistaken
+for an SZ cluster. In our galaxy catalog, galaxies are de-
+tected at > 10σ, so a “false detection” of a cluster near
+our threshold (λ = 20) would require 20 simultaneous
+10σ noise ﬂuctuations colocated in the sky, and strongly
+correlated across all 5-bands to mimic red-sequence col-
+ors. If regions with bad photometry have been properly
+culled out (by application of the BOSS mask), this sim-
+ply does not happen. Every galaxy overdensity identiﬁed
+by redMaPPer is a true galaxy overdensity: there are no
+true false detections driven by observational noise. The
+key, however, is that the galaxy overdensity is a cylin-
+drical galaxy overdensity which may contain more than
+one massive halo, and is precisely this rate that we have
+tried to characterize with our deﬁnition of purity.
+12. CLUSTER MASKS
+One of the great advantages of using model clusters
+placed randomly on the real sky is that we can use the
+same output to map the detectability of redMaPPer clus-
+ters across the entire survey. In this way, we can directly
+construct a set of random points directly applicable to
+the cluster mask, which is not the same as the galaxy
+mask that deﬁnes the survey. An appropriate set of ran-
+dom points is essential for cross-correlation studies for
+cluster cosmology (e.g., Landy & Szalay 1993).
+As an illustration of the diﬀerence between the galaxy
+mask that deﬁnes the survey and the cluster mask that
+deﬁnes the redMaPPer catalog, we have run a dense sam-
+ple of random points in the vicinity of Arcturus using the
+methods described in Section 11. This very bright star
+contaminates the SDSS photometry over a large area,
+and thus eﬀectively masks out a region of the sky that is
+0.8◦in radius. To isolate the eﬀect of the survey mask,
+all the random points shown are associated with model
+clusters of the same true richness λtrue = 40, with a red-
+shift distribution appropriate for redMaPPer.
+In Figure 23 we show the map of the detectability of
+λtrue = 40 clusters in a 4◦× 4◦region around Arcturus.
+Each pixel shows the fraction of time a sample cluster
+is detected, using Eqn. 81, where black is 0% and white
+is 100%.
+In the low redshift bin (0.1 < z < 0.2, up-
+per left panel) the detectability of λtrue = 40 clusters is
+essentially 100% outside the Arcturus mask, except for
+a few pixels around bright Tycho stars. Note, however,
+that due to our requirement that the area of a cluster
+must not be signiﬁcantly masked out (fmask < 0.2), the
+edge for the detectability of a cluster at these redshifts is
+slightly farther from the center of the Arcturus than the
+edge of the galaxy mask (denoted by the red dashed line).
+At higher redshift these edges drift closer to each other as
+the angular extent of the clusters decreases. However, in
+the highest redshift bin (0.4 < z < 0.5, lower right panel)
+the cluster is only detected ∼60%±30% of the time (see
+Figure 22) due to the survey depth. The detectability
+varies signiﬁcantly when clusters approach the threshold
+and we see a strong dependence on the local depth and
+structure.
+13. SUMMARY
+In this paper, we have introduced redMaPPer, a red-
+sequence cluster ﬁnder that is designed to make optimal
+use of large photometric surveys.
+As a case study in
+
+28
+Rykoff et al.
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.1 < z < 0.2
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.2 < z < 0.3
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.3 < z < 0.4
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+0.4 < z < 0.5
+Figure 23. Map of detectability of redMaPPer clusters of λtrue =
+40 in the region of the DR8 galaxy mask in the vicinity of Arcturus
+(red dashed circle). Each panel is 4◦on a side. At low redshift
+(0.1 < z < 0.2, upper left panel) a cluster will be detected es-
+sentially 100% of the time, except when it falls directly on top
+of a star (including typical Tycho stars, which show up as small
+black regions in the plot). Note that due to our requirement than
+no more than 20% of the area of the cluster is masked out that
+the eﬀective mask from Arcturus is slightly broader than that of
+the survey mask. At higher redshift this eﬀect is smaller because
+the clusters subtend a smaller physical region on the sky. In the
+0.4 < z < 0.5 bin (lower right panel) the cluster is only detected
+∼60% ± 30% of the time (see Figure 22).
+the implementation of the algorithm, we have run on
+the SDSS DR8 photometric catalog.
+We have shown
+that redMaPPer improves signiﬁcantly on previous clus-
+ter ﬁnders (see also Paper II), with many features that
+will be required to take advantage of upcoming surveys
+such as DES and LSST. In particular:
+1. redMaPPer is based on a multi-color extension of
+the optimized richness estimator λ, which has been
+shown to be a good mass proxy (R12 and Paper II).
+2. redMaPPer is self-training, with a modest require-
+ment in the number of training spectra, which can
+themselves be limited to the brightest cluster galax-
+ies. This makes it particularly well-suited to high-
+redshift surveys. Furthermore, the multi-color red-
+sequence model makes optimal use of all color data
+at all redshifts, with no sharp features as the 4000 ˚A
+break transitions between ﬁlters.
+3. redMaPPer can handle complex survey masks.
+Both mask-corrected richness values can be com-
+puted, as well as cluster-appropriate random point
+catalogs for large-scale structure studies.
+4. All clusters are assigned a redshift probability dis-
+tribution P(z), which enables a more accurate re-
+construction of the redshift distribution of the clus-
+ter population relative to simple point-redshift es-
+timates.
+5. The centering of clusters is fully probabilistic. In
+this way, the uncertainty in the position of the clus-
+ter can be handled in an analagous way to the red-
+shift uncertainty provided by P(z).
+6. The algorithm is numerically eﬃcient, and can be
+run on large surveys with modest computing power.
+Using the red-sequence model derived in the redMaP-
+Per calibration phase, we have derived two red-sequence
+based photometric redshifts.
+The ﬁrst, zred, is a red-
+sequence template-based photo-z, that has been designed
+to generate a good “ﬁrst-guess” estimation of the redshift
+in each cluster. We have also shown, in Appendix C, that
+zred compares very well to existing DR8 photometric red-
+shifts for this speciﬁc class of galaxies. However, zred has
+the advantage that it requires many fewer spectroscopic
+training galaxies. Moreover, these galaxies can be the
+brightest galaxies in the clusters, with no penalty to the
+performance of zred at the faint end of the galaxy sam-
+ple. The second, zλ, is a very precise photo-z derived
+from ﬁtting all cluster members simultaneously to the
+red sequence model. In addition, we derive a P(z) esti-
+mator for zλ, which we show is superior to point-based
+photometric redshifts for the purposes of estimating the
+redshift distribution of the galaxy clusters. In DR8, this
+is especially true in the region of the ﬁlter transition at
+z ∼0.35.
+As a case study in the implementation of the algo-
+rithm, we have run redMaPPer on the 10,400 deg2 BOSS
+region from the SDSS DR8 photometric catalog. Using
+red galaxy spectroscopic redshifts from 1/5 of the total
+area from z ∈[0.05,0.6], we are able to constrain a ro-
+bust red-sequence model that deﬁnes both the richness
+and photometric redshift estimators. The photometric
+redshifts, zλ, have small bias and low scatter, ranging
+from σz = 0.006 at z ∼0.1 to σz = 0.020 at z ∼0.5,
+due to increased photometric noise near the survey limit.
+The rate of catastrophic outliers is low, with only ∼1%
+of galaxy clusters appearing as 4σ outliers. Note that be-
+cause of our high photo-z precision, a cluster at z = 0.1
+with a redshift oﬀset as small as ∆z = 0.025 is con-
+sidered a catastrophic redshift failure. Furthermore, we
+show that the majority of these outliers are bad centers
+rather than bad redshifts; when the catalog is cleaned by
+demanding that central and satellite galaxies with spec-
+troscopy must all be within 1,000 km/s, the failure rate
+decreases to ≲0.2%.
+After running redMaPPer on the full DR8 photomet-
+ric catalog, we apply a conservative selection cut of
+λ/S(z) > 20, for a total of 25,236 clusters in the redshift
+range of z ∈[0.08,0.55]. As shown in paper II, the co-
+moving density of redMaPPer clusters satisfying this cut
+it lower than that of all other SDSS photometric cluster
+catalogs. The scale factor, S(z), given by Eqn. 22, deﬁnes
+the correction factor on the richness caused by the survey
+depth. The catalog is volume-limited at z < 0.35, where
+S = 1 and the survey depth is brighter than the ﬁducial
+luminosity cut of 0.2L∗used by the λ richness. Because
+our selection threshold corresponds to a total of 20 galaxy
+detections, as we lose galaxies at high redshift due to the
+magnitude limit of the survey, these 20 galaxies must all
+
+redMaPPer I: Algorithm and DR8 Catalog
+29
+be due to bright members. Therefore, the correspond-
+ing richness threshold of 20/S(z) is much higher. This
+increased detection threshold results in fewer galaxy clus-
+ters at high redshifts. Our adopted richness threshold of
+20 detected red sequence galaxies is chosen to provide the
+most robust cluster catalog possible, with a mass thresh-
+old of M ≳1014 M⊙where our catalog is volume limited
+at z ≲0.35 (R12, Paper II). Although the full redMaP-
+Per catalog extends to lower richnesses, we expect expect
+performance will worsen as one moves towards lower and
+lower richness thresholds.
+Finally, we investigate the purity and completeness of
+our cluster ﬁnding algorithm, focusing on the observa-
+tionally relevant probability distribution P(λobs|λtrue).
+We have deﬁned impurity and incompleteness as the frac-
+tion of clusters for which the observed richness λobs is
+signiﬁcantly diﬀerent from the true richness λtrue. These
+outliers are caused by projection eﬀects: when two halos
+are merged together, this manifests itself as incomplete-
+ness — a cluster with richness λtrue is up-scattered sig-
+niﬁcantly, so it is “missing” from where it should have
+been — or impurity — the richness λobs of such a clus-
+ter is signiﬁcantly overestimated.
+We note that while
+the completeness of redMaPPer is near 100%, the purity
+is ∼95% at the rich end, increasing at lower richness.
+This decrease simply reﬂects larger observational error
+(in a proportional sense) for lower richness clusters: i.e.
+“outliers” become more rare not because projection ef-
+fects are less rare, but because projection eﬀects become
+sub-dominant to observational uncertainties. Our esti-
+mate of the incidence of projection eﬀects is thus ∼5%,
+similar to what was estimated in Rozo et al. (2011). A
+more detailed analysis of projection eﬀects for redMaP-
+Per clusters will be presented in a future work.
+In Paper II, we present a detailed comparison of the
+redMaPPer cluster catalog to various X-ray and SZ cat-
+alogs with high quality mass proxies.
+In all cases, we
+show that the redMaPPer richness λ is a low scatter
+mass proxy with high completeness and low impurity
+compared to these “truth” tables. We also compare the
+performance of redMaPPer to other photometric cluster
+ﬁnders that have been run on SDSS data, and show that
+redMaPPer outperforms these other algorithms in all
+metrics (e.g., photo-z performance; mass scatter; and pu-
+rity and completeness), though some do perform equally
+well in subsets of these categories in speciﬁc redshift
+ranges.
+While this present work has focused on the application
+of redMaPPer to the SDSS DR8 catalog, we emphasize
+that this algorithm was developed speciﬁcally for upcom-
+ing large photometric surveys such as DES and LSST. In
+particular, its ability to simultaneously utilizes all avail-
+able photometric data, its smooth handling of the ﬁlter
+transition of the 4000 ˚A break across ﬁlter passes, and its
+ability to self-calibrate using only minimal spectroscopic
+training samples of bright cluster galaxies are all speciﬁ-
+cally designed to enable cluster ﬁnding in these new pho-
+tometric data sets. This will be especially advantageous
+at z ≳0.7 in the Southern Hemisphere, where we do not
+have the advantages of more than a decade of survey data
+from the SDSS spectrograph. Thus, in short order we ex-
+pect redMaPPer will be capable of producing large, high
+quality catalogs of ∼80,000 clusters at z < 1 with DES,
+opening a new era of high redshift cluster cosmology.
+We thank the anonymous referee for an exceedingly
+careful read of our manuscript, and their numerous com-
+ments which helped improve the readability and content
+of this manuscript.
+This work was supported in part by the U.S. De-
+partment of Energy contract to SLAC no.
+DE-AC02-
+76SF00515. AEE acknowledges support from NSF AST-
+0708150 and NASA NNX07AN58G. This work was also
+supported by World Premier International Research Cen-
+ter Initiative (WPI Initiative), MEXT, Japan.
+Funding for SDSS-III has been provided by the Alfred
+P. Sloan Foundation, the Participating Institutions, the
+National Science Foundation, and the U.S. Department
+of Energy Oﬃce of Science. The SDSS-III web site is
+http://www.sdss3.org/.
+SDSS-III is managed by the Astrophysical Research
+Consortium for the Participating Institutions of the
+SDSS-III Collaboration including the University of Ari-
+zona, the Brazilian Participation Group, Brookhaven Na-
+tional Laboratory, University of Cambridge, Carnegie
+Mellon University, University of Florida, the French
+Participation Group, the German Participation Group,
+Harvard University, the Instituto de Astroﬁsica de Ca-
+narias, the Michigan State/Notre Dame/JINA Participa-
+tion Group, Johns Hopkins University, Lawrence Berke-
+ley National Laboratory, Max Planck Institute for As-
+trophysics, Max Planck Institute for Extraterrestrial
+Physics, New Mexico State University, New York Uni-
+versity, Ohio State University, Pennsylvania State Uni-
+versity, University of Portsmouth, Princeton University,
+the Spanish Participation Group, University of Tokyo,
+University of Utah, Vanderbilt University, University of
+Virginia, University of Washington, and Yale University.
+APPENDIX
+A. PHOTOMETRIC REDSHIFT CORRECTION
+PARAMETERS
+A.1. Constraining zred Correction Parameters
+Our approach to constraining the zred correction pa-
+rameters ¯cz(z) and ¯sz(z) is similar to that employed for
+the red sequence calibration (note the z subscript). As
+before, we have chosen to constrain these parameters at
+a given node spacing, using cubic spline interpolation be-
+tween the nodes. The node spacing we have chosen for
+DR8 is 0.05 for ¯cz(z) and 0.10 for ¯sz(z), suited to the
+characteristic variation scales.
+One signiﬁcant complication that we have to deal with
+is that we have membership probabilities for all the
+galaxies. In order to properly make use of the proba-
+bilities, as in Eqn. 33 we need to know the background
+PDF. Unfortunately, there is no ﬁrst-principle way of
+calculating the zred background as a function of ztrue.
+Therefore, we have chosen to assume the background is
+a Gaussian function with zero mean and ﬁnite width, and
+to marginalize over this background as a set of nuisance
+terms. As above, we assume the background width, σb(z)
+is a smoothly interpolated function with a node spacing
+of 0.10. To ensure that we are calculating the correction
+factors appropriate for red galaxies, and not blue cluster
+
+30
+Rykoff et al.
+members and interlopers, we limit ourselves to galaxies
+with pmem > 0.7.
+Given a model correction,
+⟨cz|ztrue,mi⟩= ¯cz(ztrue) + ¯sz(ztrue)[mi −f
+mi(z)(ztrue)],
+(A1)
+then we have a Gaussian PDF for the true galaxies,
+G1 =
+1
+√
+2πσzred
+exp
+−[(zred −ztrue] −⟨cz|ztrue,mi⟩]2
+2σ2zred
+
+,
+(A2)
+and for the background,
+G2 =
+1
+√
+2πσb
+exp
+−[zred −ztrue]2
+2σ2
+b
+
+.
+(A3)
+The total likelihood is then
+L = w[pmemG1 + (1 −pmem)G2],
+(A4)
+where we have made the addition of a weight function, w,
+which is a smooth function of χ2 that de-weights galaxies
+with large χ2 and are possible outliers. The weight w is
+w =
+1
+exp[(χ2 −χ2
+95)/0.2] + 1,
+(A5)
+where χ2
+95 is the 95th percentile of all galaxies with
+pmem > 0.7.
+As before, we ﬁnd the ¯cz(z), ¯sz(z), and σb(z) pa-
+rameters by maximizing P L using the downhill-simplex
+method.
+A.2. Constraining zλ Correction Parameters
+Our approach to constraining the zλ correction param-
+eters is analogous to that used for the zred parameters in
+Appendix A.1.
+However, our job is a little easier be-
+cause we are applying corrections such that ⟨ztrue|zλ⟩is
+unbiased rather than the converse. Therefore, the cor-
+rection term can be a function of zλ. For DR8, we use
+a cubic spline interpolation with node spacing of 0.04
+for ⟨cztrue|zλ⟩. In addition, we allow an additional vari-
+ance term as we ﬁnd that our raw zλ errors are under-
+estimated. For σzλ,int we use a smooth function with a
+node spacing of 0.10. To ensure that we are using well-
+measured clusters, we limit ourselves to calibration clus-
+ters that have λ/S(z) > 10, where S is the scale factor
+deﬁned in Eqn. 22.
+Essentially, this limits us to clus-
+ters with at least 10 red galaxies above the luminosity
+threshold or magnitude limit.
+Given a model correction ⟨cztrue|zλ⟩and intrinsic scat-
+ter correction σzλ,int, we have a Gaussian PDF for the
+clusters,
+G =
+1
+√
+2πσtot
+exp
+−[(zλ −zCG) −⟨cztrue|zλ⟩]2
+2σ2
+tot
+
+,
+(A6)
+where σtot =
+q
+σ2zλ + σ2
+zλ,int. The total likelihood is then
+given by ln L = P ln G. As before, we ﬁnd ⟨cztrue|zλ⟩and
+σ2
+zλ,int by maximizing this likelihood using the downhill-
+simplex method.
+With this parametrization in hand, we can calculate
+the corrected zλ and error as zλ = zλ,raw + ⟨cztrue|zλ⟩,
+and σ2
+zλ = σ2
+zλ,raw + σ2
+zλ,int. However, we ﬁnd that after
+applying these corrections there may still be small resid-
+uals in the training sample. Therefore, we iterate on this
+solution two further times to obtain a ﬁnal corrected red-
+shift zλ.
+After the calibration is complete, we must also ap-
+ply these corrections to the P(ztrue|zλ) estimation for
+each cluster. To replicate the zλ oﬀset represented by
+⟨cztrue|zλ⟩, we ﬁrst oﬀset the central value of the P(z)
+distribution. Next, to replicate the increased scatter we
+“expand the space” between the P(z) bins, so that a
+Gaussian ﬁt to P(z) will measure the same width as the
+corrected σzλ value. We ﬁnd that this does an adequate
+job of maintaining asymmetries in the P(z) distribution
+which show up near the ﬁlter transitions.
+B. HOW MANY TRAINING CLUSTERS?
+When calibrating the red sequence in Section 6 on DR8
+data, we make use of all the spectroscopy available in our
+2000 deg2 training region. However, much of this is su-
+perﬂuous. First, most of the spectroscopic galaxies —
+even the LRG samples — are not in massive clusters.
+Second, our strategy of leveraging central galaxy spec-
+troscopy to all the galaxies in a cluster means that we do
+not require thousands of clusters to perform the calibra-
+tion. In this section, we investigate how many training
+clusters — each represented by a single spectroscopic red-
+shift for the central galaxy — are required to create an
+accurate and unbiased richness and redshift estimate.
+To test the number of required training clusters we
+follow the method of Section 6.5 to measure the bias in
+the recovered richness and photometric redshift values on
+a predetermined set of test clusters. For our test suite, we
+select the {5,10,20,40,80} richest clusters per redshift bin
+of ±0.025 in the training region. The redshift binning is
+used to ensure we have a relatively uniform coverage over
+the redshift range of interest. In practice, of course, the
+training clusters need not be so uniformly sampled. For
+each of these spectroscopic training sets we recalibrate
+the red sequence and measure the richness λ and redshift
+zλ for each of the test clusters from Section 6.5.
+In Figure 24 we show the results of these test runs.
+The left panel shows the richness bias and signiﬁcance of
+the bias as a function of redshift for the various training
+samples. Although we can get a reasonable calibration of
+the red sequence with as few as ﬁve spectra per ±0.025
+redshift bin, the resulting richnesses are signiﬁcantly bi-
+ased (∼1σ) at the transition redshift z ∼0.35. In order
+to achieved unbiased richness estimates (< 0.3σ) then we
+require ∼40 clusters per redshift bin. We assume any
+residual biases are due to the noise in estimating the oﬀ-
+diagonal elements of the covariance matrix. This results
+in a total of ∼400 spectra to achieve essentially the same
+ﬁdelity of calibration as we can achieve with millions of
+SDSS spectra. The right panel shows the photometric
+redshift bias and signiﬁcance, similar to the left panel.
+For accurate photo-z estimation, we require even fewer
+training spectra: ∼20 per redshift bin, or a total of 200.
+For upcoming photometric surveys such as DES, we
+can obtain these spectra by ﬁrst running a crude run
+with an approximate red sequence model. After selecting
+bright central galaxies, these can easily be followed up
+spectroscopically, as they are the most luminous galaxies
+at any redshift. For example, over 85% of the training
+
+redMaPPer I: Algorithm and DR8 Catalog
+31
+ 
+ 
+ 
+ 
+ 
+ 
+0.90
+0.95
+1.00
+1.05
+1.10
+<λN / λ>
+λ5
+λ10
+λ20
+λ40
+λ80
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+z
+-0.5
+0.0
+0.5
+1.0
+< (λN - λ) / σ >
+ 
+ 
+ 
+ 
+ 
+ 
+-0.04
+-0.03
+-0.02
+-0.01
+0.00
+0.01
+0.02
+< zλ,N - zCG >
+zλ,5
+zλ,10
+zλ,20
+zλ,40
+zλ,80
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+zCG
+-0.5
+0.0
+0.5
+1.0
+< (zλ,N - zCG ) / σ >
+Figure 24. Left panel, top: Average richness bias as a function of redshift for {5,10,20,40,80} training clusters per redshift bin of width
+±0.025, compared to the richness using the full DR8 training sample. All curves use the same set of 4300 test clusters. Left panel, bottom:
+Error normalized average deviation relative to the baseline. With at least 40 (10) clusters per redshift bin of ±0.025, biases are always
+< 0.3σ (< 0.5σ). Thus, with only 400 well-chosen spectra of the brightest galaxies, we can achieve nearly the same precision as is possible
+with all the SDSS spectra. Right panel, top: Average uncorrected photometric redshift (zλ) bias as a function of redshift for {5,10,20,40,80}
+training clusters per redshift bin of width ±0.025, compared to the spectroscopic redshift of the central galaxy, zCG. Right panel, bottom:
+Error normalized average deviation relative to the baseline. With at least 20 clusters per redshift bin of ±0.025 we achieve the same redshift
+performance as is possible with all SDSS spectra.
+spectra required for DR8 training are brighter than mi <
+18.5. Thus, our method allows for an incredibly eﬃcient
+use of limited spectroscopic resources to enable science
+in large photometric surveys.
+C. COMPARISON OF zred TO SDSS DR8
+PHOTO-ZS
+We consider two sets of photometric redshift estimates
+available for all of DR8. The ﬁrst, “zphoto”, uses an up-
+dated method of Csabai et al. (2007)20, and the second,
+“p(z)”, uses the method of Sheldon et al. (2012). In this
+section we make use of high probability cluster member
+galaxies to compare these photometric redshifts to zred
+at both bright magnitudes (where training galaxies are
+plentiful) and at fainter magnitudes.
+For our “pseudo-spectroscopic” test sample, we start
+with all clusters with λ > 5 and a central galaxy with
+spectroscopic redshift zCG. We then select all members
+with pmem > 0.9. We thus expect a contamination rate
+of up to 10%, although the real rate should be smaller
+than this. By assigning each high probability member to
+the spectroscopic redshift of the central galaxy we can
+leverage the red sequence to obtain spectroscopic quality
+redshifts to much fainter magnitudes than available in
+the SDSS main or LRG spectroscopic samples.
+Figure 25 shows the density map of the photometric
+redshift biases as a function of magnitude for zred, zphoto,
+and p(z) for a narrow redshift slice of 0.195 < zCG <
+0.205. For zred and zphoto we have assumed a probability
+distribution function (PDF) that is Gaussian with mean
+zred (zphoto) and width σzred (σzphoto). For the p(z) val-
+ues we use a spline interpolation to smooth the PDF and
+normalize the area to unity. On the right-hand side are
+projected histograms from the density ﬁeld.
+The dot-
+ted red lines show the zred distribution for comparison.
+Note that the density plot clearly shows the separation in
+magnitude between central and satellite galaxies. Both
+20 See http://www.sdss3.org/dr8/algorithms/photo-z.php
+zred and zphoto perform well down to the 0.2L∗limit of
+the redMaPPer richness estimation, while the p(z) val-
+ues have a broader distribution at the faint end. These is
+also obvious structure in the photo-z bias as a function
+of magnitude.
+Figure 26 shows the same map for a narrow redshift
+slice of 0.395 < zCG < 0.405. While all the photometric
+redshifts handle the luminous galaxies very well, the ap-
+pear to be slight biases at the faint end in the case of the
+DR8 zphoto, and a bifurcation of the distribution for the
+p(z) redshifts. The evolution of the bias in the p(z) esti-
+mates is due to a combination of eﬀects. First, the r-band
+magnitude was used as an input to the photo-z estimator.
+For a ﬁeld galaxy, a fainter magnitude correlates with a
+higher redshift. For cluster galaxies, however, galaxies of
+a wide range of luminosity occupy the same cluster. As a
+result, when using magnitude-based photo-z estimators
+on galaxies in clusters, one should expect an increasing
+bias with magnitude, which is simply a manifestation of
+the intra-cluster luminosity function. The large width of
+the error distributions relative to the other estimators are
+due primarily to the lack of training set galaxies in that
+range. As discussed in Sheldon et al. (2012), the main
+focus was on recovering the full r < 21.8 galaxy sam-
+ple. To avoid biases induced by training set selection,
+the authors did not include the most recent BOSS LRG
+samples in that work and deferred LRG-optimized p(z)
+estimates to a future paper. It is also worth pointing out
+that, despite the extra width of the error distributions
+obtained when using p(z), the recovered redshift distri-
+butions obtained by summing the p(z) of Sheldon et al.
+(2012) are still superior to the distributions estimated
+using the DR8 zphoto or single-point zred estimates.
+There are two important take-home messages from this
+comparison.
+First, the performance of state-of-the-art
+photo-z estimators appears to be suﬃciently accurate
+for bright galaxies that we would likely be able to use
+these in the initialization phase of redMaPPer without
+any loss. Second, zred appears to be at least as good —
+
+32
+Rykoff et al.
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+-0.10
+-0.05
+0.00
+0.05
+0.10
+zred - zCG
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+-0.10
+-0.05
+0.00
+0.05
+0.10
+zphoto - zCG
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+16.0
+16.5
+17.0
+17.5
+18.0
+18.5
+19.0
+mi
+-0.10
+-0.05
+0.00
+0.05
+0.10
+p(z) - zCG
+ 0.2  
+ 
+ 1.0
+PDF(z - zCG)
+ 
+ 
+ 
+ 
+ 
+Figure 25. Top: Density of total p(zred −zCG) as a function of
+i-band magnitude mi for all cluster members with pmem > 0.9 and
+0.195 < zCG < 0.205 in clusters with λ > 5. The right panel shows
+the total PDF at all magnitudes. There is a small bias in zred,
+though it is constant with magnitude. Middle: Same as top panel,
+with zphoto calculated with the algorithm of Csabai et al. (2007).
+The performance is good down to 0.2L∗. The right panel compares
+the distribution for zphoto (black line) to zred (red dotted line).
+Bottom: Same as top panel, with p(z) values from Sheldon et al.
+(2012).
+While the bright galaxy performance is good, there are
+biases at the faint end and the distribution is signiﬁcantly wider.
+if not better — than what is currently achieved, with
+much smaller spectroscopic training samples. As shown
+in Appendix B, we can achieve this redshift performance
+with only ≈400 of the brightest CG spectra. With the
+technique of assigning the spectroscopic redshift of the
+central galaxies to the members, we eﬀectively increase
+the faint end of our training sample. This is very useful
+for future surveys because of the high cost of obtaining
+spectroscopic redshifts of faint galaxies.
+D. COMPUTING PERFORMANCE
+BENCHMARKS
+The redMaPPer algorithm has been designed to be
+fast, eﬃcient, ﬂexible, and trivially parallelized. As there
+are two parts to running redMaPPer, the calibration and
+cluster-ﬁnding stages, we split the performance bench-
+marks into two parts.
+For the calibration phase, the runtime depends on the
+number of training spectra and clusters. For the DR8
+training sample on 2000 deg2, the full calibration takes
+∼30 CPU hr on a 3-year old 2.8 GHz AMD Opteron
+8389. Current Intel processors can run the calibration
+roughly twice as fast. For the minimal training sample of
+40 clusters per redshift bin (see Appendix B) calibration
+takes ∼13 CPU hr.
+The cluster-ﬁnding stage is designed to be split into
+chunks of arbitrary size on the sky. For these purposes
+we use the Mangle simple pixelization scheme (Swanson
+ 
+ 
+ 
+ 
+ 
+ 
+-0.2
+-0.1
+0.0
+0.1
+0.2
+zred - zCG
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+-0.2
+-0.1
+0.0
+0.1
+0.2
+zphoto - zCG
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+18.0
+18.5
+19.0
+19.5
+20.0
+20.5
+mi
+-0.2
+-0.1
+0.0
+0.1
+0.2
+p(z) - zCG
+ 0.2  
+ 
+ 1.0
+PDF(z - zCG)
+ 
+ 
+ 
+ 
+ 
+Figure 26. Same as Figure 25, with members selected from clus-
+ters with 0.395 < zCG < 0.405.
+et al. 2008), although any pixelization scheme will work.
+As long as the overlap region between pixels is wider than
+twice the largest size of any cluster in the catalog, then
+the percolation of clusters within each cell is guaranteed
+to be unique. For the DR8 catalog, this corresponds to a
+border region of 1.5◦, corresponding to twice the size of
+a cluster of richness ∼300 at z = 0.05, given the mask
+radius parameters. In total, running the cluster ﬁnder on
+the full DR8 catalog requires ∼500 CPU hr including all
+galaxy mask corrections. On a modestly sized compute
+cluster this can be run in much less than one day.
+E. VALIDATING THE CORRECTION C
+In Section 5 we laid out our methodology for correcting
+the richness for survey holes and a magnitude limit that is
+brighter than 0.2L∗. In order to validate the calculation
+of the correction term C described in that section, we
+have taken a subsample of clusters with 0.15 < z < 0.3
+and simulated a more restrictive magnitude limit. We
+have chosen a magnitude limit of mi < 19.6, which is
+0.2L∗at z = 0.2, so that all clusters at higher redshift
+will have their richness corrected according to our for-
+malism. The average correction for the z = 0.3 clusters
+is similar to that for the highest redshift clusters in our
+catalog, so this test will sample the full range of correc-
+tions employed.
+In Figure 27 we show the results of our test. In the
+top panel we show λ19.6 vs.
+λ0.2 for all clusters with
+0.2 < z < 0.3, where λ19.6 is the richness calculated with
+a magnitude limit of mi < 19.6 and λ0.2 is the standard
+λ with a 0.2L∗cut. When calculating λ19.6 we have re-ﬁt
+the photometric redshift zλ to ensure that our compari-
+son is as fair as possible. It is clear in the top panel that
+the correction richness scales with uncorrected richness,
+with some scatter as expected. In the bottom panel we
+
+redMaPPer I: Algorithm and DR8 Catalog
+33
+100
+λ0.2
+10
+100
+λ19.6
+0.15
+0.20
+0.25
+0.30
+zλ
+1.0
+1.5
+2.0
+2.5
+S = 1/(1-C)
+Estimated
+Measured
+Figure 27. Top: Richness calculated with a mi < 19.6 cut vs. full
+λ richness, for clusters with 0.15 < z < 0.3. The magnitude cut of
+mi < 19.6 is equivalent to 0.2L∗at z = 0.2, so all cluster at z > 0.2
+in this test have S(z) > 1.
+The corrected richness is consistent
+with the full richness. Bottom: Scale factor
+1
+1−C vs. photometric
+redshift. Black squares show the scale factor and uncertainty in
+the scale factor estimated in the mi < 19.6 run (shifted slightly for
+clarity). Red diamonds show the measured shift and width. Our
+measured values agree with our model.
+However at the largest
+corrections we are slightly overestimating the correction term as
+well as the uncertainty in the correction term.
+show the richness scale value (S =
+1
+1−C = λscaled/λraw)
+as a function of redshift. The black squares show the me-
+dian estimated value of S derived from Eqn. 15, while the
+black error bars represent the median error in S as de-
+rived from Eqn. 21. The red diamonds show the median
+measured value of S, and the red error bars represent the
+observed width in the distribution of S. Our predicted
+correction factor does scale with redshift as expected.
+However, our errors are slightly overestimated for the
+largest corrections.
+F. COMPARING λ TO λcol
+We now explore how the richness estimate used in this
+work, λ, compares to the single-color richness λcol used
+in R12. As detailed in Section 4, the primary diﬀerence
+in richness estimators is the replacement of the Gaus-
+sian color ﬁlter with a multi-color χ2 ﬁlter.
+However,
+we emphasize that there is also a subtle diﬀerence in the
+background model, as described in Section 4.1. That is,
+the χ2 ﬁlter does not distinguish between galaxies that
+are too red or too blue relative to the model, and while
+the red sequence model is symmetric, the background
+model is not.
+To make our comparisons, we have started with all
+redMaPPer clusters with λ > 20. We then calculate λg−r
+and λr−i using the appropriate color model from the red
+sequence parametrization. Our expectation is that λg−r
+should trace λ at low redshift where the dominant signal
+is from the g −r color, and λr−i should trace λ at high
+redshift.
+In Figure 28 we show the statistics from comparing
+λg−r and λr−i to λ. In the top panel we show the me-
+ 
+ 
+ 
+ 
+ 
+ 
+0.8
+0.9
+1.0
+1.1
+1.2
+1.3
+<λcol / λχ2>
+λg-r
+λr-i
+(a)
+ 
+ 
+ 
+ 
+ 
+ 
+0.00
+0.05
+0.10
+0.15
+0.20
+σ(λcol / λχ2)
+(b)
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+z
+-1.0
+-0.5
+0.0
+0.5
+1.0
+1.5
+2.0
+<(λcol - λχ2) / σλ>
+(c)
+Figure 28.
+(a) Average ratio between the single-color λcol vs.
+redshift for both λg−r (blue dotted line) and λr−i (red dashed
+line). As discussed in the text, this oﬀset is likely due to diﬀerent
+background models.
+In all cases the diﬀerence between the full
+multicolor λ and the color appropriate for the redshift range (g −r
+for z < 0.35 and r −i for z > 0.35) are less than 10%. (b) Width
+of the λcol/λ distribution as a function of redshift. The scatter is
+≲15% for the appropriate color except for the transition redshift
+of z ∼0.35. (c) Average oﬀset normalized by the richness error.
+Thus, using the single color λg−r is systematically biased high by
+∼1σ at low redshift, and λr−i is systematically biased low by 0.2σ
+at high redshift.
+dian ratio as a function of redshift. At all redshifts the
+bias between the appropriate λcol and λ is ≲10%. In
+the bottom panel we show the median normalized devi-
+ation, which is ∼1σ at low redshift and less so at high
+redshift where the richness errors are much larger due
+to the magnitude limit. We attribute this bias at low
+redshift to the diﬀerent background model employed, as
+galaxies that are redder than the red sequence are down-
+weighted in the λ model compared to the λcol model.
+These biases are not large, but they are signiﬁcant and
+thus show the importance of using the same color model
+and consistent survey data to achieve the best richness
+estimation.
+The middle panel of Figure 28 shows the width of the
+λcol/λ distribution as a function of redshift. The scatter
+is ≲15% for the appropriate color except at z ∼0.35,
+where the 4000˚A break is transitioning from g to r. It
+is in this transition region that a single color richness
+estimator does especially poorly and we have the biggest
+advantage of using a multi-color estimator.
+G. DESCRIPTION OF COLUMNS IN THE DR8
+CLUSTER CATALOG
+The
+full
+redMaPPer
+DR8
+cluster
+and
+member
+catalogs
+are
+available
+at
+http://risa.stanford.edu/redmapper/
+in
+FITS
+format, and from the online journal in machine-readable
+
+34
+Rykoff et al.
+formats. A summary of the cluster catalog information is
+given in Table 1. A summary of the member information
+is given in Table 2.
+REFERENCES
+Abell, G. O. 1958, ApJS, 3, 211
+Abell, G. O., Corwin, Jr., H. G., & Olowin, R. P. 1989, ApJS, 70,
+1
+Ahn, C. P. et al. 2012, ApJS, 203, 21
+Aihara, H. et al. 2011, ApJS, 193, 29
+Allen, S. W. 1995, MNRAS, 276, 947
+Annis, J. et al. 2011, ArXiv: 1111.6619
+Annis, J., et al. 1999, in Bulletin of the American Astronomical
+Society, Vol. 31, American Astronomical Society Meeting
+Abstracts, 1391
+Bahcall, N. A., et al. 2003, ApJS, 148, 243
+Becker, M. R. et al. 2007, ApJ, 669, 905
+Benson, B. A., et al. 2013, ApJ, 763, 147
+Biviano, A. 2000, in Constructing the Universe with Clusters of
+Galaxies
+Blackburne, J. A., & Kochanek, C. S. 2012, ApJ, 744, 76
+Brodwin, M. et al. 2011, ApJ, 732, 33
+Clerc, N., Sadibekova, T., Pierre, M., Pacaud, F., Le F`evre, J.-P.,
+Adami, C., Altieri, B., & Valtchanov, I. 2012, MNRAS, 423,
+3561
+Csabai, I., Dobos, L., Trencs´eni, M., Herczegh, G., J´ozsa, P.,
+Purger, N., Budav´ari, T., & Szalay, A. S. 2007, Astronomische
+Nachrichten, 328, 852
+Dawson, K. S. et al. 2013, AJ, 145, 10
+Durret, F., et al. 2011, A&A, 535, A65
+Eisenhardt, P. R. M. et al. 2008, ApJ, 684, 905
+Gal, R. R., et al. 2009, AJ, 137, 2981
+George, M. R. et al. 2012, ApJ, 757, 2
+—. 2011, ApJ, 742, 125
+Gladders, M. D., & Yee, H. K. C. 2000, AJ, 120, 2148
+Gladders, M. D., et al. 2007, ApJ, 655, 128
+Goto, T., et al. 2002, AJ, 123, 1807
+Hansen, S. M., McKay, T. A., Wechsler, R. H., Annis, J.,
+Sheldon, E. S., & Kimball, A. 2005, ApJ, 633, 122
+Hansen, S. M., Sheldon, E. S., Wechsler, R. H., & Koester, B. P.
+2009, ApJ, 699, 1333
+Hao, J. et al. 2009, ApJ, 702, 745
+—. 2010, ApJS, 191, 254
+Hasselﬁeld, M. et al. 2013, JCAP, 7, 8
+Henry, J. P., et al. 2009, ApJ, 691, 1307
+Hockney, R. W., & Eastwood, J. W. 1981, Computer Simulation
+Using Particles (Computer Simulation Using Particles, New
+York: McGraw-Hill, 1981)
+Hoﬄeit, D., & Jaschek, C. . 1991, The Bright star catalogue
+(None)
+Høg, E. et al. 2000, A&A, 355, L27
+Johnston, D. E. et al. 2007, ArXiv e-prints, 709,
+astro-ph/0709.1159
+Kaiser, N., et al. 2002, in Society of Photo-Optical
+Instrumentation Engineers (SPIE) Conference Series, Vol. 4836,
+Society of Photo-Optical Instrumentation Engineers (SPIE)
+Conference Series, ed. J. A. Tyson & S. Wolﬀ, 154–164
+Kepner, J., Fan, X., Bahcall, N., Gunn, J., Lupton, R., & Xu, G.
+1999, ApJ, 517, 78
+Koester, B., et al. 2007a, ApJ, 660, 239
+Koester, B. P. et al. 2007b, ApJ, 660, 221
+Landy, S. D., & Szalay, A. S. 1993, ApJ, 412, 64
+Lin, Y.-T., & Mohr, J. J. 2004, ApJ, 617, 879
+Lopes, P. A. A., et al. 2004, AJ, 128, 1017
+—. 2006, ApJ, 648, 209
+LSST Dark Energy Science Collaboration. 2012, ArXiv e-prints,
+astro-ph/1211.0310
+Mahdavi, A., Hoekstra, H., Babul, A., Bildfell, C., Jeltema, T., &
+Henry, J. P. 2013, ApJ, 767, 116
+Mana, A., Giannantonio, T., Weller, J., Hoyle, B., H¨utsi, G., &
+Sartoris, B. 2013, MNRAS, 434, 684
+Mandelbaum, R., Seljak, U., & Hirata, C. M. 2008, JCAP, 8, 6
+Mantz, A., et al. 2010, MNRAS, 406, 1759
+Matthews, T. A., Morgan, W. W., & Schmidt, M. 1964, ApJ,
+140, 35
+McNamara, B. R. et al. 2006, ApJ, 648, 164
+Menanteau, F., et al. 2013, ApJ, 765, 67
+Milkeraitis, M., van Waerbeke, L., Heymans, C., Hildebrandt, H.,
+Dietrich, J. P., & Erben, T. 2010, MNRAS, 406, 673
+More, S., van den Bosch, F. C., Cacciato, M., Skibba, R., Mo,
+H. J., & Yang, X. 2011, MNRAS, 410, 210
+Murphy, D. N. A., Geach, J. E., & Bower, R. G. 2012, MNRAS,
+420, 1861
+Navarro, J. F., Frenk, C. S., & White, S. D. M. 1995, MNRAS,
+275, 56
+Nelder, J. A., & Mead, R. 1965, Computer Journal, 308
+Oemler, Jr., A. 1976, ApJ, 209, 693
+Piﬀaretti, R., et al. 2011, A&A, 534, A109
+Popesso, P., Biviano, A., B¨ohringer, H., & Romaniello, M. 2007,
+A&A, 464, 451
+Rozo, E., Rykoﬀ, E., Koester, B., Nord, B., Wu, H.-Y., Evrard,
+A., & Wechsler, R. 2011, ApJ, 740, 53
+Rozo, E., & Rykoﬀ, E. S. 2014, ApJ, 783, 80
+Rozo, E. et al. 2009, ApJ, 703, 601
+—. 2007, ArXiv Astrophysics e-prints, astro-ph/0703571
+Rozo, E., et al. 2010, ApJ, 708, 645
+Rykoﬀ, E. S. et al. 2012, ApJ, 746, 178
+Schlegel, D. J., Finkbeiner, D. P., & Davis, M. 1998, ApJ, 500,
+525
+Schombert, J. M. 1986, ApJS, 60, 603
+Sheldon, E. S., Cunha, C. E., Mandelbaum, R., Brinkmann, J., &
+Weaver, B. A. 2012, ApJS, 201, 32
+Sinnott, R. W. 1988, The complete new general catalogue and
+index catalogues of nebulae and star clusters by J. L. E. Dreyer
+(None)
+Soares-Santos, M., et al. 2011, ApJ, 727, 45
+Song, J., Mohr, J. J., Barkhouse, W. A., Warren, M. S., Dolag,
+K., & Rude, C. 2012a, ApJ, 747, 58
+Song, J., et al. 2012b, ApJ, 761, 22
+Stott, J. P., et al. 2012, MNRAS, 422, 2213
+Swanson, M. E. C., Tegmark, M., Hamilton, A. J. S., & Hill, J. C.
+2008, MNRAS, 387, 1391
+Szabo, T., Pierpaoli, E., Dong, F., Pipino, A., & Gunn, J. 2011,
+ApJ, 736, 21
+Thanjavur, K., et al. 2009, ApJ, 706, 571
+The DES Collaboration. 2005, ArXiv: 0510346
+Tinker, J. L., George, M. R., Leauthaud, A., Bundy, K.,
+Finoguenov, A., Massey, R., Rhodes, J., & Wechsler, R. H.
+2012, ApJ, 755, L5
+van Breukelen, C., & Clewley, L. 2009, MNRAS, 395, 1845
+Vikhlinin, A., et al. 2009, ApJ, 692, 1060
+Voges, W. et al. 1999, A&A, 349, 389
+von der Linden, A., Best, P. N., Kauﬀmann, G., & White,
+S. D. M. 2007, MNRAS, 379, 867
+von der Linden, A., et al. 2012, ArXiv: 1208.0597
+Wen, Z. L., et al. 2012, ApJS, 199, 34
+York, D. G., Adelman, J., Anderson, J. E., Anderson, S. F.,
+Annis, J., & the SDSS collaboration. 2000, AJ, 120, 1579
+Zwicky, F., Herzog, E., & Wild, P. 1968, Catalogue of galaxies
+and of clusters of galaxies (Pasadena: California Institute of
+Technology (CIT), 1961-1968)
+
+redMaPPer I: Algorithm and DR8 Catalog
+35
+Table 1
+redMaPPer DR8 Cluster Catalog Format
+Column
+Name
+Format
+Description
+1
+ID
+I7
+redMaPPer Cluster Identiﬁcation Number
+2
+NAME
+A20
+redMaPPer Cluster Name
+3
+RA
+F12.7
+Right ascension in decimal degrees (J2000)
+4
+DEC
+F12.7
+Declination in decimal degrees (J2000)
+5
+Z LAMBDA
+F6.4
+Cluster photo-zzλ
+6
+Z LAMBDA ERR
+F6.4
+Gaussian error estimate for zλ
+7
+LAMBDA
+F6.2
+Richness estimate λ
+8
+LAMBDA ERR
+F6.2
+Gaussian error estimate for λ
+9
+S
+F6.3
+Richness scale factor (see Eqn. 22)
+10
+Z SPEC
+F8.5
+SDSS spectroscopic redshift for most likely center (-1.0 if not available)
+11
+OBJID
+I20
+SDSS DR8 CAS object identiﬁer
+12
+IMAG
+F6.3
+i-band cmodel magnitude for most likely central galaxy (dereddened)
+13
+IMAG ERR
+F6.3
+error on i-band cmodel magnitude
+14
+MODEL MAG U
+F6.3
+u model magnitude for most likely central galaxy (dereddened)
+15
+MODEL MAGERR U
+F6.3
+error on u model magnitude
+16
+MODEL MAG G
+F6.3
+g model magnitude for most likely central galaxy (dereddened)
+17
+MODEL MAGERR G
+F6.3
+error on g model magnitude
+18
+MODEL MAG R
+F6.3
+r model magnitude for most likely central galaxy (dereddened)
+19
+MODEL MAGERR R
+F6.3
+error on r model magnitude
+20
+MODEL MAG I
+F6.3
+i model magnitude for most likely central galaxy (dereddened)
+21
+MODEL MAGERR I
+F6.3
+error on i model magnitude
+22
+MODEL MAG Z
+F6.3
+z model magnitude for most likely central galaxy (dereddened)
+23
+MODEL MAGERR Z
+F6.3
+error on z model magnitude
+24
+ILUM
+F7.3
+Total membership-weighted i-band luminosity (units of L∗)
+25
+P CEN[0]
+E9.3
+Centering probability Pcen for most likely central
+26
+RA CEN[0]
+F12.7
+R.A. for most likely central
+27
+DEC CEN[0]
+F12.7
+Decl. for most likely central
+28
+ID CEN[0]
+I20
+DR8 CAS object identiﬁer for most likely central
+29-32
+CEN[1]
+Pcen, R.A., Decl., and ID for second most likely central
+33-36
+CEN[2]
+Pcen, R.A., Decl., and ID for third most likely central
+37-40
+CEN[3]
+Pcen, R.A., Decl., and ID for fourth most likely central
+41-44
+CEN[4]
+Pcen, R.A., Decl., and ID for ﬁfth most likely central
+45-65
+PZBINS
+F7.4
+Redshift points at which P(z) is evaluated
+66-86
+PZ
+E10.3
+P(z) evaluated at redshift points given by PZBINS
+Note. — The full catalog contains 86 columns of information on 25325 clusters. This table is presented in its entirety
+in the online edition of the journal, and at http://risa.stanford.edu/redmapper.
+Table 2
+redMaPPer DR8 Member Catalog Format
+Column
+Name
+Format
+Description
+1
+ID
+I7
+redMaPPer Cluster Identiﬁcation Number
+2
+RA
+F12.7
+Right ascension in decimal degrees (J2000)
+3
+DEC
+F12.7
+Declination in decimal degrees (J2000)
+4
+R
+F5.3
+Distance from cluster center (h−1 Mpc)
+5
+P MEM
+F5.3
+Membership probability pmem
+6
+IMAG
+F6.3
+i-band cmodel magnitude (dereddened)
+7
+IMAG ERR
+F6.3
+error on i-band cmodel magnitude
+8
+MODEL MAG U
+F6.3
+u model magnitude (dereddened)
+9
+MODEL MAGERR U
+F6.3
+error on u model magnitude
+10
+MODEL MAG G
+F6.3
+g model magnitude (dereddened)
+11
+MODEL MAGERR G
+F6.3
+error on g model magnitude
+12
+MODEL MAG R
+F6.3
+r model magnitude (dereddened)
+13
+MODEL MAGERR R
+F6.3
+error on r model magnitude
+14
+MODEL MAG I
+F6.3
+i model magnitude (dereddened)
+15
+MODEL MAGERR I
+F6.3
+error on i model magnitude
+16
+MODEL MAG Z
+F6.3
+z model magnitude (dereddened)
+17
+MODEL MAGERR Z
+F6.3
+error on z model magnitude
+18
+Z SPEC
+F8.5
+SDSS spectroscopic redshift (-1.0 if not available)
+19
+OBJID
+I20
+SDSS DR8 CAS object identiﬁer

@@ -1,0 +1,2891 @@
+VLP: A Survey on Vision-language Pre-training
+Fei-Long Chen 1,2*          Du-Zhen Zhang 1,3*          Ming-Lun Han 1,3*          Xiu-Yi Chen 1,3          
+Jing Shi 1          Shuang Xu 1          Bo Xu 1,2,3
+1 Institute of Automation, Chinese Academy of Sciences, Beijing 100190, China
+2 School of Future Technology, University of Chinese Academy of Sciences, Beijing 100049, China
+3 School of Artificial Intelligence, University of Chinese Academy of Sciences, Beijing 100049, China
+ 
+Abstract:   In the past few years, the emergence of pre-training models has brought uni-modal fields such as computer vision (CV) and
+natural language processing (NLP) to a new era. Substantial works have shown that they are beneficial for downstream uni-modal tasks
+and avoid training a new model from scratch. So can such pre-trained models be applied to multi-modal tasks? Researchers have ex-
+plored this problem and made significant progress. This paper surveys recent advances and new frontiers in vision-language pre-training
+(VLP), including image-text and video-text pre-training. To give readers a better overall grasp of VLP, we first review its recent ad-
+vances  in  five  aspects:  feature  extraction,  model  architecture,  pre-training  objectives,  pre-training  datasets,  and  downstream  tasks.
+Then, we summarize the specific VLP models in detail. Finally, we discuss the new frontiers in VLP. To the best of our knowledge, this is
+the first survey focused on VLP. We hope that this survey can shed light on future research in the VLP field.
+Keywords:   Vision and language, pre-training, transformers, multimodal learning, representation learning.
+Citation:   F.  L.  Chen,  D.  Z.  Zhang,  M.  L.  Han,  X.  Y.  Chen,  J.  Shi,  S.  Xu,  B.  Xu.  VLP: A survey on vision-language pre-training.
+Machine Intelligence Research, vol.20, no.1, pp.38–56, 2023. http://doi.org/10.1007/s11633-022-1369-5
+ 
+ 1   Introduction
+Making machines respond in ways similar to humans
+has  been  a  relentless  goal  of  AI  researchers.  To  enable
+machines  to  perceive  and  think,  researchers  propose  a
+series  of  related  tasks,  such  as  face  recognition,  reading
+comprehension,  and  human-machine  dialogue,  to  train
+and evaluate the intelligence of machines in a particular
+aspect.  Specifically,  domain  experts  manually  construct
+standard  datasets  and  then  train  and  evaluate  relevant
+models  on  them.  However,  due  to  the  limitations  of  re-
+lated technologies, it is often necessary to train on a large
+amount of labelled data to obtain a better and more cap-
+able model. The recent emergence of pre-training models
+based on the Transformer structure[1] has alleviated this
+problem.  They  are  first  pre-trained  via  self-supervised
+learning that typically exploits auxiliary tasks (pre-train-
+ing  objectives)  to  mine  supervision  signals  from  large-
+scale unlabelled data to train the model, thereby learning
+universal representations. Then, they can achieve surpris-
+ing effectiveness by fine-tuning with only a tiny amount
+of manually-labelled data on downstream tasks. Since the
+advent of BERT[2] in natural language processing (NLP),
+various  pre-training  models  have  sprung  up  in  the  uni-
+modal  field,  such  as  vision  transformer  (ViT)[3] in  com-
+puter  vision  (CV)  and  Wave2Vec[4] in  speech.  Substan-
+tial  works  have  shown  they  are  beneficial  for  down-
+stream uni-modal tasks and avoid training a new model
+from scratch.
+Similar to the uni-modal field, there is also a problem
+of less high-quality labelled data in the multi-modal field.
+The natural question is, can the above pre-training meth-
+od be applied to multi-modal tasks? Researchers have ex-
+plored this problem and made significant progress. In this
+paper, we focus on mainstream vision-language pre-train-
+ing (VLP), including image-text and video-text pre-train-
+ing.  VLP  mainly  learns  the  semantic  correspondence
+between different modalities by pre-training on large-scale
+data. For example, in image-text pre-training, we expect
+the  model  to  associate  “dog”  in  text  with  what  “dog”
+looks like in images. In video-text pre-training, we expect
+the  model  to  map  objects/actions  in  the  text  to
+objects/actions  in  the  video.  To  achieve  this  goal,  the
+VLP objects and model architecture need to be cleverly
+designed  to  allow  the  model  to  mine  the  associations
+between different modalities.
+To give readers a better global grasp of VLP, we first
+comprehensively review its recent advances and focus on
+five significant aspects:
+Feature  extraction. This  section  includes  the  pre-
+processing  and  representation  methods  of  image,  video,
+ 
+Review
+Manuscript received June 5, 2022; accepted August 17, 2022
+Recommended by Associate Editor Chun-Hua Shen
+ 
+*These authors contribute equally to this work
+© The Author(s) 2023
+ 
+Machine Intelligence Research
+www.mi-research.net
+20(1), February 2023, 38-56
+DOI: 10.1007/s11633-022-1369-5
+ 
+
+and text in VLP models (see Section 2).
+Model architecture. We introduce the architecture
+of  the  VLP  models  from  two  different  perspectives:
+Single-stream  versus  dual-stream  from  multi-modal  fu-
+sion  perspective  and  encoder-only  versus  Encoder-de-
+coder  from  the  overall  architectural  design  perspective
+(see Section 3).
+Pre-training objectives. Pre-training objectives are
+the core of VLP, mainly used to guide the model to learn
+vision-language  associated  information.  We  summarize
+typical  and  characteristic  pre-training  objectives  divided
+into completion, matching, temporal, and particular types
+(see Section 4).
+Pre-training datasets. Data is critical for VLP. We
+briefly introduce mainstream corpora for VLP and their
+specific sizes (see Section 5).
+Downstream tasks. Various tasks require a cooper-
+ative knowledge of both vision and language. We discuss
+the basic details and goals of these tasks (see Section 6).
+Then  we  summarize  the  specific  state-of-the-art
+(SOTA) VLP models in detail (see Section 7). Finally, we
+conclude  the  paper  and  have  broad  discussions  on  new
+frontiers in VLP (see Section 8).
+Although there are many surveys on pre-trained lan-
+guage models[5, 6] and pre-trained vision models[7], to the
+best of our knowledge, this is the first survey focused on
+VLP. We hope that our survey can help researchers bet-
+ter understand this field and inspire them to design bet-
+ter models.
+ 2   Feature extraction
+This  section  describes  how  VLP  models  preprocess
+and represent an image, video, and text to obtain coun-
+terpart features.
+ 2.1   Feature extraction
+ 2.1.1   Image feature extraction
+V = [o1,
+o2, · · · , ok]
+k
+oi
+5
+OD-based region features (OD-RFs). Most previ-
+ous  work[8−10] on  VLP  utilizes  pre-trained  object  detect-
+ors to extract visual features. The most commonly used
+object detection model is Faster R-CNN[11] with bottom-
+up attention[12]. It is designed to identify objects belong-
+ing  to  certain  classes  and  localize  them  with  bounding
+boxes. By using the Faster R-CNN, VLP models obtain
+the  OD-based  Region  feature  embedding 
+ of an image with  selected regions. Each re-
+gion feature 
+ is a 2 048-d Region-of-Interest (RoI) fea-
+ture with its bounding box. The bounding box is defined
+by  the  coordinates  of  the  bottom-left  and  top-right
+corners of the region. VLP models use bounding boxes to
+construct -d vectors, and the vector is embedded into a
+high-dimensional  representation  (2 048-d)  named  visual
+geometry  embedding.  The  OD-RFs  are  obtained  by
+adding the OD-based Region feature embedding with its
+visual  geometry  embedding.  Although  ODFs  have
+brought  impressive  performance,  extracting  region  fea-
+tures can be time-consuming. To relieve this problem, the
+pre-trained object detectors are usually frozen during pre-
+training, which can limit the capacity of VLP models.
+CNN-based  grid  features  (CNN-GFs). VLP
+models[13, 14] extract visual features by utilizing convolu-
+tional  neural  networks  (CNNs)  to  obtain  the  grid  fea-
+tures. On the one hand, VLP models can train the CNNs
+end-to-end by using the grid features[15] directly. On the
+other hand, VLP models can also first discretize grid fea-
+tures  using  a  learned  vision  dictionary  and  then  feed
+them into the cross-modal module.
+Ii ∈RH×W ×C
+Ip ∈RN×(P 2×C)
+(H, W)
+C
+(P, P)
+N = HW/P 2
+Ii
+{vcls, v1, · · · , vN}
+vcls
+[CLS]
+ViT-based patch features (ViT-PFs). Inspired by
+ViT[3, 16],  VLP  models  reshape  the  image 
+into a sequence of flattened 2D patches 
+,
+where 
+ is the resolution of the original image, 
+ is
+the  number  of  channels, 
+ is  the  resolution of each
+image patch, and 
+ is the resulting number of
+patches, which also serves as the effective input sequence
+length for the transformer. An input image 
+ is encoded
+into  a  sequence  of  embeddings: 
+,  where
+ is the embedding of the 
+ token.
+ 2.1.2   Video feature extraction
+M
+Vi ∈RM×H×W ×C
+H × W
+M = 1
+M × N
+P × P
+N =
+HW/P 2
+A  video  clip  is  denoted  as 
+ frames  (images).  VLP
+models[17, 18] extract the frame features using the method
+mentioned above. The two most commonly used features
+are CNN-GFs and ViT-PFs. For CNN-GFs, VLP models
+first  use  ResNet[19] pre-trained  on  ImageNet[20] or  Slow-
+Fast[21],  and  I3D[22] pre-trained  on  Kinetics[23] to  extract
+2D  and  3D  visual  features  for  each  video  frame.  These
+features  are  concatenated  as  visual  features  and  fed
+through a fully-connected (FC) layer to be projected into
+the  same  lower-dimensional  space  as  token  embeddings.
+For ViT-PFs, a video clip 
+ consists of M
+frames  of  resolution 
+,  where 
+ for  images.
+Following the protocol in ViT and Timesformer, the in-
+put  video  clip  is  divided  into 
+ non-overlapping
+spatio-temporal  patches  of  size 
+,  where 
+.
+ 2.1.3   Text feature extraction
+For  the  textual  features,  following  pre-trained  lan-
+guage models such as BERT[2], RoBERTa[24], AlBERT[25],
+and  XLNet[26],  VLP  models[9, 27, 28] first  segment  the  in-
+put sentence into a sequence of subwords, and then, in-
+sert  a  start-of-sequence  token  and  an  end-of-sequence
+token  at  the  beginning  and  the  end  of  the  sequence  to
+generate the input text sequence. Text input representa-
+tions are computed via summing the corresponding word
+embedding,  text  position  embedding,  and  text  type  em-
+bedding.
+ 2.2   Feature representation
+To  make  full  use  of  uni-modal  pre-trained  models,
+VLP  models  can  send  the  visual  or  text  features  to  a
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+39 
+ 
+
+transformer  encoder[1].  Specifically,  VLP  models  utilize
+the standard transformer encoder with random initializa-
+tion  to  generate  the  visual  or  textual  representation.  In
+addition,  VLP  models  can  utilize  a  pre-trained  visual
+transformer  to  encode  the  ViT-PFs,  such  as  ViT  and
+DeiT[29]. VLP models can use a pre-trained textual trans-
+former to encode the textual features, such as BERT. For
+simplicity, we name this transformer Xformer.
+ 3   Model architecture
+In  this  section,  we  introduce  the  architecture  of  the
+VLP  models  from  two  different  perspectives:  1)  single-
+stream versus dual-stream from a multi-modal fusion per-
+spective, and 2) encoder-only versus encoder-decoder from
+the overall architectural design perspective.
+ 3.1   Single-stream versus dual-stream
+The  single-stream  architecture[9, 30, 31] refers  to  that
+the  text  and  visual  features  are  concatenated  together,
+then  fed  into  a  single  transformer  block,  as  shown  in
+Fig. 1(a). The single-stream structure utilizes merged at-
+tention to fuse multi-modal inputs. The single-stream ar-
+chitecture is more parameter-efficient, as the same set of
+parameters is used for both modalities.
+Dual-stream  architecture. The  dual-stream  archi-
+tecture[32, 33] refers to that the text and visual features are
+not concatenated together but sent to two different trans-
+former blocks independently, as shown in Fig. 1(b). These
+two  transformer  blocks  do  not  share  parameters.  To
+achieve higher performance, cross-attention (as shown by
+the dotted line in Fig. 1(b)) is used to enable cross-modal
+interaction. To achieve higher efficiency, there can be also
+no  cross-attention  between  the  visual  transformer  and
+textual transformer blocks.
+ 3.2   Encoder-only versus encoder-decoder
+Many  VLP  models  adopt  the  encoder-only  architec-
+ture,  where  the  cross-modal  representations  are  directly
+fed into an output layer to generate the final outputs. In
+contrast,  other  VLP  models  advocate  using  a  trans-
+former  encoder-decoder  architecture,  where  the  cross-
+modal  representations  are  first  fed  into  a  decoder  and
+then to an output layer.
+ 4   Pre-training objectives
+This section introduces how we pre-train VLP models
+by using different pre-training objectives, which are cru-
+cial for learning the universal representation of vision-lan-
+guage.  We  summarize  the  pre-training  objectives  into
+four categories: completion, matching, temporal, and par-
+ticular types.
+1)  Completion  is  to  reconstruct  the  masked  element
+by  leveraging  the  unmasked  remainders  to  understand
+the modality (see Sections 4.1–4.3).
+2) Matching is to unify the vision and language into a
+shared  hidden  space  to  generate  universal  vision-lan-
+guage representation (see Sections 4.4–4.6).
+3)  Temporal  is  to  learn  good  representation  by  re-
+ordering the disrupted input sequence (see Section 4.7).
+4)  Particular  types  consist  of  other  pre-training  ob-
+jects,  such  as  visual  question  answering  and  visual  cap-
+tioning (see Section 4.8).
+Now we introduce the most used pre-training object-
+ives.
+ 4.1   Masked language modeling
+[MASK]
+Masked  language  modeling  (MLM),  which  was  first
+proposed by Taylor[34] in the literature, is widely known
+because the BERT model adapted it as a novel pre-train-
+ing task. To model language conditioned on vision, MLM
+in  VLP  models  is  similar  to  MLM  in  pre-training  lan-
+guage  models  (PLMs)  but  predicts  the  masked  textual
+tokens not only by the rest of the textual tokens but also
+by the visual tokens. Empirically, VLP models following
+BERT  randomly  mask  each  textual  input  token  with  a
+probability of 15% and replace the masked one by using a
+special token 
+ 80% of the time, a random textual
+ 
+(b) Dual-stream architecture
+Self-attention
+Feedforward
+Visual features
+Textual features
+(a) Single-stream architecture
+Cross-attention
+Self-attention
+Feedforward
+Visual features
+Cross-attention
+Self-attention
+Feedforward
+Textual features
+M ×
+M ×
+M ×
+QVT
+KVT
+VVT
+QV
+KV
+VV
+QV
+KT
+VT
+QT
+KV
+VV
+QT
+KT
+VT
+Fig. 1     Illustration of two types of model architectures for VLP
+ 
+ 40
+Machine Intelligence Research 20(1), February 2023
+ 
+
+token 10% of the time, and the original token 10% of the
+time to perform masking. The formal definition is as fol-
+lows:
+LMLM = −E(v,w)∼D log P(wm|w\m, v)
+(1)
+v
+w
+wm
+w\m
+D
+where  denotes the vision, 
+ denotes the textual tokens,
+ denotes the masked textual tokens, 
+ denotes the
+remaining  textual  tokens,  and 
+ denotes  the  training
+dataset.
+ 4.2   Prefix language modeling
+Prefix  language  modeling  (PrefixLM)[14] is  unified  in
+MLM and language modeling (LM). To make the model
+simultaneously  have  a  good  understanding  and  genera-
+tion ability, PrefixLM is proposed to facilitate the model
+with  solid  generation  capability  that  enables  text-in-
+duced  zero-shot  generalization  without  fine-tuning.  Pre-
+fixLM differs from the standard LM such that it enables
+bi-directional  attention  to  the  prefix  sequence  and  only
+conducts  autoregressive  factorization  on  the  remaining
+tokens.
+ PrefixLM
+ under
+ the
+ sequence-to-sequence
+(seq2seq)  framework  not  only  enjoys  the  bidirectional
+contextualized  representation  as  in  MLM  but  also  can
+perform text generation similar to LM. The formal defini-
+tion is as follows:
+LPrefixLM = −E(v,w)∼D log P(w≥Tp|w≤TP , v)
+(2)
+TP
+where 
+ denotes the length of the prefix sequence.
+ 4.3   Masked vision modeling
+To  have  a  good  understanding  of  vision  or  generate
+images/videos given text, like MLM, masked vision mod-
+eling  (MVM)[30] samples  vision  (image  or  video)  regions
+or patches and usually masks their visual features with a
+probability of 15%. VLP models need to reconstruct the
+masked  visual  features  given  the  remaining  visual  fea-
+tures and all the textual features. The masked visual fea-
+tures are set to zeros. Because visual features are high-di-
+mensional and continuous, VLP models propose two vari-
+ants for MVM.
+Masked features regression. Learns to regress the
+model output of masked features to its original visual fea-
+tures.  VLP  models  convert  the  model  output  of  the
+masked features to a vector of the same dimension as the
+original  visual  features  first  and  apply  L2  regression
+between the original visual features and the vector. The
+formal definition is as follows:
+LMVM = E(v,w)∼Df(vm|v\m, w)
+(3)
+f(vm|v\m, w) =
+K
+∑
+i=1
+∥h(vi
+m) −O(vi
+m))∥2
+2
+(4)
+h(vi
+m)
+O(vi
+m)
+where 
+ denotes  the  predicted  vision  representation
+and 
+ denotes the original vision representation.
+Masked  feature  classification. Learns  to  predict
+the  object  semantic  class  for  the  masked  features.  VLP
+models first feed the output of the masked features into
+an FC layer to predict the scores of object class, which
+further  goes  through  a  softmax  function  to  be  trans-
+formed  into  a  prediction  normalized  distribution.  Note
+that there is no ground-truth label. There are two kinds
+of methods to train VLP models. One is that VLP mod-
+els take the most likely object class from the object detec-
+tion model as the hard label (with probability 0 or 1), as-
+suming that the detected object class is the ground-truth
+label  for  the  masked  features,  and  apply  cross-entropy
+loss  to  minimize  the  gap  between  the  prediction  and
+pseudo-class. The other is that VLP models utilize a soft
+label  as  a  supervision  signal,  which  is  the  raw  output
+from  the  detector  (i.e.,  a  distribution  of  object  classes),
+and  minimize  the  Kullback-Leibler  (KL)  divergence
+between two distributions. The formal definition is as fol-
+lows:
+LMVM = E(v,w)∼Df(vm|v\m, w).
+(5)
+We  use  the  object  detection  output  from  Faster  R-
+CNN and take the detected object category as the label
+of the masked region:
+f1(vm|v\m, w) =
+K
+∑
+i=1
+CE(c(vi
+m) −g1(vi
+m))
+(6)
+g1(vi
+m)
+K
+where 
+ is  the  detected  object  category  and 
+denotes the number of vision regions.
+We avoid this assumption by using a soft label as a
+supervision signal, which is the raw output from the de-
+tector:
+f2(vm|v\m, w) =
+K
+∑
+i=1
+DKL(ˆc(vi
+m) −g2(vi
+m))
+(7)
+g1(vi
+m)
+where 
+ is the detected object category distribution.
+ 4.4   Vision-language matching
+[CLS]
+CLSV
+Vision-language matching (VLM)[35] is the most com-
+monly used pre-training objective to align vision and lan-
+guage, which aims to project vision and language into the
+same  space.  In  the  single-stream  VLP  models,  they  use
+the representation of the special token 
+ as the fused
+representation  of  both  modalities.  In  the  dual-stream
+VLP  models,  they  concatenate  the  visual  representation
+of the special visual token [
+] and the textual repres-
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+41 
+ 
+
+CLST
+entation of the special textual token [
+] as the fused
+representation  of  both  modalities.  VLP  models  feed  the
+fused  representation  of  both  modalities  to  an  FC  layer
+and a sigmoid function to predict a score between 0 and
+1,  where  0  indicates  that  vision  and  language  are  mis-
+matched,  and  1  indicates  that  vision  and  language  are
+matched. During training, VLP models sample positive or
+negative pairs from the dataset at each step. The negat-
+ive  pair  is  created  by  replacing  the  vision  or  text  in  a
+paired sample with randomly samples selected from oth-
+er samples.
+ 4.5   Vision-language contrastive learning
+N × N
+N
+N 2 −N
+CLSV
+CLST
+Vision-language  contrastive  learning  (VLC)[35] also
+aims to align vision and language. Different VLM, VLC
+predicts  the  matched  vision-language  pairs  from 
+possible vision-language pairs given a batch of 
+ vision-
+language pairs. Note that there are 
+ negative vis-
+ion-language  pairs  within  a  training  batch.  VLP  models
+use  the  visual  representation  of  the  special  visual  token
+[
+] and the textual representation of the special tex-
+tual  token  [
+]  to  denote  the  aggregated  representa-
+tion of the vision and language, respectively. VLP mod-
+els  compute  the  softmax-normalized  vision  (image  or
+video)-to-text similarity and text-to-vision similarity and
+leverage cross-entropy losses over vision-to-text and text-
+to-vision  similarities  to  update  themselves.  The  similar-
+ity  is  often  implemented  by  dot  products.  The  formal
+definitions are as follows:
+pv2t
+m (I) =
+exp(s(I, Tm)/τ)
+∑M
+m=1 exp(s(I, Tm)/τ)
+(8)
+pt2v
+m (T) =
+exp(s(T, Im)/τ)
+∑M
+m=1 exp(s(T, Im)/τ)
+(9)
+LVLC = 1
+2E(I,T )∼D[CE(yv2t, pv2t(I))+
+CE(yt2v, pt2v(T))]
+(10)
+I, T
+s(·)
+τ
+yv2t
+yt2v
+where 
+ denotes the images and texts, 
+ denotes the
+similarity function,  denotes the temperature coefficient,
+,  and 
+ denote  the  labels  of  vision2text  retrieval
+and text2vision retrieval.
+ 4.6   Word-region alignment
+Word-region  alignment  (WRA)[30] is  an  unsupervised
+pre-training  objective  to  align  vision  regions  (vision
+patches)  and  words.  VLP  models  utilize  optimal  trans-
+port to learn the alignment between vision and language.
+Empirically,  VLP  models  use  the  IPOT[30] algorithm  to
+approximate  the  optimal  transport  (OT)  distance  since
+the  exact  minimization  is  computationally  intractable.
+After solving minimization, the OT distance serves as the
+WRA loss to train VLP models. The formal definition is
+as follows:
+LWRA =
+min
+T ∈II(a,b)
+T
+∑
+i=1
+K
+∑
+j=1
+Tij · c(wi, vj)
+(11)
+c(wi, vj)
+wi
+vj
+T ∈II(a, b) = {T ∈
+RT ×K|T1m = a, T T 1n = b} a
+b
+wi
+vj
+where 
+ is  the  cost  function  evaluating  the
+distance
+ between 
+ 
+and 
+, 
+, 
+ and  are Dirac function
+coefficients centered on 
+ and 
+.
+ 4.7   Frame order modeling
+To better model the timing of the video, VLP models
+randomly  disrupt  the  order  of  some  input  frames  and
+then predict the actual position of each frame. Frame or-
+der modeling (FOM)[36] is modeled as a classification task
+in practice.
+ 4.8   Particular pre-training objects
+To  better  adapt  to  downstream  tasks,  VLP  models
+sometimes  use  the  training  objects  of  some  downstream
+tasks, such as visual question answering (VQA)[12, 37, 38],
+and  visual  captioning  (VC)[39, 40],  as  pre-training  object-
+ives. As for VQA, VLP models take the fused representa-
+tion  mentioned  above,  apply  an  FC  layer,  and  use  the
+transformed  representation  to  predict  the  classification
+over  predefined  answer  candidates.  In  addition  to  VLP
+models tackling the task as classification over predefined
+answer  candidates,  VLP  models  can  also  directly  gener-
+ate answers in their original text format. As for VC, to
+reconstruct  the  input  sentence  to  endow  VLP  models
+with  the  generation  capability,  VLP  models  employ  an
+auto-regressive  decoder  to  generate  a  corresponding  tex-
+tual description of the image or video.
+Note that due to space limitations, we only introduce
+some popular pre-training objectives. We omit some spe-
+cific  pre-training  objectives  such  as  grounding  referring
+expression  (GRE),  image-conditioned  denoising  autoen-
+coding  (IDA)[41],  text-conditioned  image  feature  genera-
+tion  (TIFG)[41],  object  detection  (OD)[42],  and  aligned
+Kaleido  patch  modeling  (AKPM)[43].  Moreover,  we  put
+masked action prediction into the category of MVM.
+ 5   Pre-training datasets
+Pre-training datasets are significant for the success of
+cross-modal representation learning. The quality and the
+size of pre-training datasets sometimes overwhelm the im-
+portance  of  training  strategies  and  algorithms.  Hence,  a
+detailed  description  of  several  widely  used  pre-training
+datasets  is  necessary. Table  1 shows  statistics  of  some
+popular pre-training datasets for VLP.
+Since  VLP  includes  image-language  pre-training  and
+ 42
+Machine Intelligence Research 20(1), February 2023
+ 
+
+video-language pre-training, we roughly divide pre-train-
+ing  datasets  into  two  main  categories.  In  later  sections,
+we  provide  more  details  about  representative  pre-train-
+ing datasets for each category. It is worth noting that no
+matter which category pre-training datasets belong, they
+differ  in  size  and  sources  across  different  research.  In
+most  works,  the  pre-training  datasets  for  VLP  are  con-
+structed  by  combining  public  datasets  across  different
+cross-modal  tasks  or  scenarios.  However,  other  works,
+such  as  VideoBERT[58],  ImageBERT[53],  ALIGN[55],  and
+CLIP[16], conduct pre-training with self-constructed data-
+sets.  These  self-constructed  datasets  are  usually  larger
+than most public datasets, but might contain more noise.
+ 5.1   Datasets for image-language pre-train-
+ing
+For image-language pre-training, the most widely used
+data form is image-text pairs. Most image-language pre-
+training datasets consist of a large number of image-cap-
+tion  pairs.  SBU[44] and  Flickr30k[45] are  collected  from
+Flickr  and  labelled  with  human-generated  annotations.
+COCO[46] consists  of  images  with  five  human-generated
+captions filtered with special procedures to guarantee the
+quality  of  images  and  annotations.  CC3M[51] and
+CC12M[54] are constructed by crawling images and their
+alt-text HTML attributes from the Internet and annotat-
+ing  these  pictures  with  filtered  descriptions.  Due  to  the
+looser  filtering  strategies,  CC12M  contains  more  noise
+than  CC3M.  Another  data  source  is  the  visual  question
+answering task. Many image-language datasets are organ-
+ized as structured data in the context of visual question
+answering.  The  representative  large-scale  dataset  is  the
+visual genome (VG)[47]. VG contains rich information in
+its structured data form. Its region-level descriptions and
+question-answer pairs are frequently used in the study of
+image-language  pre-training.  Besides  VG,  VQA[48] and
+GQA[52] are  also  popular  datasets  of  visual  question-an-
+swer pairs. Compared with VGA, GQA further alleviates
+systematic biases.
+The  datasets  mentioned  above  are  suitable  for  most
+common scenarios. There are also some datasets designed
+for special cases. Matterport3D[49] consists of RGB-D im-
+ages  of  building-scale  scenes  annotated  with  labels  for
+classification  and  segmentation.  Fashion-Gen[50] contains
+fashion images paired with item descriptions generated by
+professional stylists.
+ 5.2   Datasets for video-language pre-train-
+ing
+Compared  to  image-language  pre-training  datasets,
+video-language  pre-training  datasets  are  usually  more
+time-consuming and more difficult to collect and process.
+These  inconveniences  restrict  the  development  of  the
+community  and  the  scale  of  pre-training.  Datasets  for
+video-language  pre-training  cover  different  scenarios
+and sources. Most of them, such as Kinetics-400[23], How-
+To100M[56], and WebVid-2M[57], are collected from the In-
+ternet  and  processed  with  different  procedures.  These
+ 
+Table 1    Details of some popular pre-training datasets for VLP. Names of some datasets are abbreviated for the convenience of
+subsequent descriptions. FLKR represents Flickr30k, and HT100M represents HowTo100M.
+Dataset
+# Images
+# Image-text pairs
+Duration (hrs)
+# Clips
+# Videos
+SBU[44]
+875 K
+875 K
+–
+–
+–
+FL KR[45]
+29 K
+145 K
+–
+–
+–
+COCO[46]
+113 K
+567 K
+–
+–
+–
+VG[47]
+108 K
+5.4 M
+–
+–
+–
+VGQA[47]
+108 K
+1.8 M
+–
+–
+–
+VQA[48]
+83 K
+444 K
+–
+–
+–
+Matterport3D[49]
+104 K
+104 K
+–
+–
+–
+FashionGen[50]
+260 K
+260 K
+–
+–
+–
+CC3M[51]
+3 M
+3 M
+–
+–
+–
+GQA[52]
+82 K
+1 M
+–
+–
+–
+LAIT[53]
+10 M
+10 M
+–
+–
+–
+CC12M[54]
+12 M
+12 M
+–
+–
+–
+ALIGN[55]
+1.8 B
+1.8 B
+–
+–
+–
+ Kinetics400[23]
+–
+–
+817
+306 K
+306 K
+TVQA[38]
+–
+–
+461
+22 K
+925
+HT100M[56]
+–
+–
+134 K
+136 M
+1.2 M
+WebVid2M[57]
+–
+–
+13 K
+2.5 M
+2.5 M
+ 
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+43 
+ 
+
+kinds of videos are usually accompanied by subtitles, thus
+providing weak or strong alignments between video clips
+and  text.  Although  those  subtitles  sometimes  might  be
+too weak to align modalities, they still provide useful in-
+formation,  especially  for  the  pre-training  on  large-scale
+datasets. Another source of video-text pairs is television
+programs. TVQA[38] is a video-language pre-training data-
+set  generated  from  television  shows.  These  television
+shows are collected and converted to a dataset comprised
+of  many  dialogues  for  understanding  the  videos  and  re-
+cognizing semantic concepts in videos.
+Considering the diversity of the sources and the form-
+ation  of  these  datasets,  researchers  apply  different  an-
+notation and processing procedures. For example, Kinet-
+ics-400[23] consists  of  many  action-related  videos  annot-
+ated with action classes. For other datasets[38, 56, 57], the
+accompanying  captions/subtitles  of  video  clips  or  the
+class of concepts in videos are usually processed and used
+as annotations.
+ 6   Downstream tasks
+As  shown  in Fig. 2,  a  diverse  range  of  tasks  requires
+cooperative knowledge of vision and language. In this sec-
+tion,  we  introduce  the  fundamental  details  and  goals  of
+these tasks.
+Visual  question  answering  (VQA).[37, 59–61] Giv-
+ing a visual input (image or video), VQA represents the
+task of correctly providing an answer to a question. It is
+usually regarded as a classification task where the model
+predicts the most suitable answer from a pool of choices.
+To obtain an accurate performance, it is important to in-
+fer logical entailments from images (or videos) based on
+the question posed.
+Visual  reasoning  and  compositional  question
+answering  (GQA).[52, 62, 63] GQA  is  an  upgraded  ver-
+sion of VQA and aims to advance research on the visual
+reasoning  of  natural  scenes.  The  images,  questions,  and
+answers in its dataset have matching semantic represent-
+ations. The advantage of this structured representation is
+that the distribution of answers can be more uniform, and
+we  can  analyze  the  model′s  performance  from  more  di-
+mensions.  Compared  with  the  single  evaluation  metric
+(e.g., accuracy) of traditional VQA, GQA includes multi-
+dimensional  evaluation  metrics:  consistency,  validity,
+plausibility, distribution, and grounding.
+Video-language  inference  (VLI).[36, 64, 65] Given  a
+video clip with aligned subtitles as a premise paired with
+a natural language hypothesis based on the video content,
+a model needs to infer whether the hypothesis is entailed
+or contradicted by the given video clip.
+Visual entailment (VE).[66−68] In the VE task, the
+image is the premise, and the text is the hypothesis. Its
+goal is to predict whether the text is an “Entailment Im-
+age”.  There  are  three  labels,  Entailment,  Neutral,  and
+Contradiction.
+Visual  commonsense  reasoning  (VCR).[69−71]
+VCR  is  the  task  of  inferring  common  sense  information
+and  cognitive  understanding  by  a  machine  when  it  sees
+an  image.  It  exists  in  the  form  of  multiple-choice  ques-
+tions. For a question about the image, there are several
+alternative  answers.  The  model  must  choose  an  answer
+from several answers and then select the reason for choos-
+ing  this  answer  from  several  alternative  reasons.  Thus,
+VCR  can  be  divided  into  two  tasks,  including  question
+answering  (selecting  the  best  answer  from  a  pool  of  ex-
+pected answers to the question) and answer justification
+(providing  the  rationale  behind  the  given  answer).  You
+can  follow  VCR′s  leaderboard1 to  track  VLP′s  latest
+ideas.
+Natural  language  for  visual  reasoning  (NL-
+VR).[72, 73] NLVR is a subtask of the broader VCR cat-
+egory, limited to the classification paradigm. The input of
+the NLVR task is two images and a text description, and
+the  output  is  whether  the  corresponding  relationship
+between the images and the text description is consistent
+(two  labels:  true  or  false).  It  is  typically  different  from
+VQA  due  to  longer  text  sequences  covering  various  lin-
+guistic phenomena.
+Grounding  referring  expressions  (GRE).[74−76]
+The GRE task aims to localize certain regions (e.g., ob-
+jects and persons) in an image given a referring expres-
+sion,  where  the  main  challenge  is  to  comprehend  and
+align various types of information from a visual and tex-
+tual domain, such as visual attributes, locations, and in-
+teractions  with  surrounding  regions.  Specifically,  the
+model can output a score for each region, and the region
+with the highest score is used as the prediction region.
+Category recognition (CR).[43] CR refers to identi-
+fying the category and sub-category of a product, such as
+{HOODIES,  SWEATERS}, {TROUSERS,  PANTS},
+which  are  vital  attributes  for  describing  a  product  and
+are useful in many real-life applications.
+Multi-modal sentiment analysis (MSA).[77−80] MSA is
+aimed to detect sentiments in videos by leveraging multi-mod-
+al signals (e.g., vision, language, etc.). It predicts the affective
+orientation of an utterance as a continuous intensity variable.
+Vision-language  retrieval  (VLR).[81−84] VLR  in-
+volves  understanding  both  vision  (image  or  video)  and
+language  domains  with  appropriate  matching  strategies.
+It  includes  two  subtasks,  vision-to-text,  and  text-to-vis-
+ion retrieval, where vision-to-text retrieval is to fetch the
+top-most  relevant  text  description  from  a  larger  pool  of
+descriptions as per vision and vice versa. VLR is widely
+used in domain-specific searches, multiple search engines,
+and context-based vision retrieval design systems.
+Visual captioning (VC).[40, 85, 86] VC aims to gener-
+ate  semantically  and  syntactically  appropriate  text  de-
+scriptions for a given visual (image or video) input. Gen-
+1 https://visualcommonsense.com/leaderboard/
+ 44
+Machine Intelligence Research 20(1), February 2023
+ 
+
+erating relevant and explanatory captions for a visual in-
+put  requires not only  a  rich  knowledge  of  the  language,
+but  also  a  consistent  understanding  of  scenes,  entities,
+and their interactions that appear in the visual input.
+Novel  object  captioning  at  scale  (NoCaps).[87, 88]
+NoCaps extends the VC task to test a model′s capability of
+describing  novel  objects  from  the  Open  Images  dataset,
+which are unseen in the training corpus.
+Visual dialogue (VD).[89−92] The specific task in VD
+is the following: Given an image, a dialog history consist-
+ing of a sequence of question-answer pairs, and a natural
+language follow-up question, the goal for the task is to re-
+spond to the question in free-form natural language (e.g.,
+generate  an  answer).  VD  is  the  visual  analogue  of  the
+Turing Test.
+Multi-modal  machine  translation  (MMT).[93−95]
+MMT is a two-fold task of translation and text generation,
+translating  text  from  one  language  to  another  with  addi-
+tional information from other modalities, e.g., images. The
+additional  visual  features  aim  to  remove  ambiguities  that
+may  arise  in  straightforward  text  machine  translation  and
+help retain the context of the text descriptions. The multi-
+modal  representation  space  facilitates  robust  latent  repres-
+entations to complement the inherent semantic information
+preserved by visual and linguistic embeddings, respectively.
+Vision-language  navigation  (VLN).[96−98] VLN  is
+a grounding language task for an agent′s locomotion as it
+sees and explores real-world dynamics based on linguistic
+instructions. Like generation tasks, it is typically seen as
+the  task  of  sequence-to-sequence  transcoding.  However,
+VLN has unique characteristics. It usually has longer se-
+quences, and the dynamics of the problem are quite dif-
+ferent since it is a real-time evolving task. Its main chal-
+lenge lies in understanding the environment and making
+confident decisions during exploration.
+Optical character recognition (OCR).[99, 100] OCR
+generally refers to extracting handwritten or printed text
+from images (such as street signs and photos of products)
+as well as documents (articles, bills, invoices, financial re-
+ports,  etc.),  which  includes  two  parts:  text  detection
+(similar  to  regression)  and  text  recognition  (similar  to
+classification).
+In addition, there are some image-related downstream
+tasks  for  evaluating  the  image-text  pre-training  models,
+including semantic segmentation[101, 102], and object detec-
+tion[103, 104].  There  are  also  some  video-related  down-
+stream  tasks  for  evaluating  the  video-text  pre-training
+models, including action classification (AC)[58], action seg-
+mentation (AS)[105] and action step localization (ASL)[106].
+Recently, Changpinyo et al.[54] scaled up pre-training
+data  for  VLP  tasks  and  benchmarked  its  effectiveness
+against  Conceptual  Captions  3M  on  multiple  down-
+stream tasks with an emphasis on long-tail visual recogni-
+tion. Rethmeier and Augenstein[107] studied the perform-
+ance of pre-trained model on a challenging long-tail task
+and  analyze  the  resulting  long-tail  learning  capabilities
+under zero-shot, few-shot, and full supervision conditions
+to  explore  the  performance  influence  of  model  size  and
+self-supervision signal amount.
+ 7   SOTA VLP models
+Image-text VLP models. VisualBERT[9], known as
+the  first  image-text  pre-training  model,  uses  the  visual
+features  extracted  by  Faster  R-CNN,  concatenates  the
+visual  features  and  textual  embeddings,  and  then  feeds
+the concatenated features to a single transformer initial-
+ized  by  BERT.  Many  VLP  models[13, 30, 53, 108] follow  a
+similar  feature  extraction  and  architecture  as  Visual-
+BERT  while  adjusting  the  pre-training  objectives  and
+pre-training  datasets.  Recently,  VDBERT[109] modelled
+the common implicit vision-language alignment in vision
+and  language  by  pre-training  on  large-scale  image-text
+pairs  via  transfer  learning[110, 111].  VLMO[112] leverages
+patch  embeddings  for  image  and  word  embeddings  for
+text and feeds the concatenated embeddings into a single
+transformer  with  modality  experts,  and  achieves  an  im-
+pressive  performance.  METER[33] explores  how  to  use  a
+uni-modal pre-trained model and proposes a dual-stream
+architecture  model  to  handle  the  multimodel  fusion,
+ 
+Downstream tasks
+Classification
+Regression
+Retrieval
+Generation
+Other tasks
+Visual question
+answering (VQA)
+Visual reasoning and compositional
+question answering (GQA)
+Video-language
+inference (VLI)
+Natural language for
+visual reasoning (NLVR)
+Visual entailment
+(VE)
+Visual commonsense
+reasoning (VCR)
+Grounding referring
+expressions (GRE)
+Category recognition
+(CR)
+Multi-modal sentiment
+analysis (MSA)
+Vision-language
+retrieval (VLR)
+Visual captioning
+(VC)
+Novel object captioning at
+scale (NoCaps)
+Visual dialogue (VD)
+Multi-modal machine
+translation (MMT)
+Vision-language
+navigation (VLN)
+Optical character
+recognition (OCR)
+Fig. 2     Illustration of downstream tasks in VLP
+ 
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+45 
+ 
+
+which  achieves  the  SOTA  performance  in  many  down-
+stream  tasks.  The  summary  of  mainstream  image-text
+VLP models is shown in Table 2.
+Video-text VLP models. VideoBERT[58], known as
+the first video-text pre-training model, extends the BERT
+model to process videos and texts simultaneously. Video-
+BERT uses the pre-trained ConvNet and S3D[133] to ex-
+tract  video  features  and  concatenate  them  with  textual
+word  embeddings  to  feed  into  a  transformer  initialized
+with BERT. ConvNet and S3D are frozen when training
+the VideoBERT, which indicates the approach is not end-
+to-end.  Recently,  inspired  by  ViT,  CLIP4Clip[17] and
+CLIP2Video[18] first  process  video  clips  into  frames  and
+get  patch  embeddings  according  to  the  method  of  ViT
+processing  images  for  each  frame.  CLIP4clip  and
+CLIP2Video  optimize  themselves  in  an  end-to-end  man-
+ner  and  achieve  SOTA  performance.  The  summary  of
+mainstream video-text VLP models is shown in Table 3.
+ 8   Conclusions and new frontiers
+In this paper, we provide the first VLP survey. We re-
+view its recent advances from five aspects: feature extrac-
+tion,  model  architecture,  pre-training  objectives,  pre-
+training datasets, and downstream tasks, and summarize
+the specific SOTA VLP models in detail. We hope that
+our  survey  can  help  researchers  understand  VLP  better
+and inspire new work to advance this field. In the future,
+based  on  existing  works,  VLP  can  be  further  developed
+from the following aspects:
+Incorporating  acoustic  information. Most  previ-
+ous work on multi-modal pre-training emphasize the joint
+modeling of language and vision but ignore the informa-
+tion  buried  in  audio[137, 138].  Although  the  semantic  in-
+formation in audio might intersect with language, audio
+could provide extra emotion information, acoustic bound-
+ary  information,  etc.  Moreover,  pre-training  with  audio
+makes  the  model  capable  of  downstream  tasks  with
+acoustic inputs. Until now, joint modeling and represent-
+ation across text, vision, and audio is still an open prob-
+lem  left  for  further  investigation.  Several  cutting-edge
+works have shed light on the future of this research field.
+Unlike previous VLP models, VATT[139] takes the raw au-
+dio  as  input  and  learns  the  multi-modal  representations
+with  the  noise  contrastive  estimation  (NCE).  Differing
+from VATT, OPT[140] learns the cross-modal representa-
+tions  across  text,  image,  and  audio  jointly  with  various
+multi-level  masking  strategies,  and  it  is  also  capable  of
+generating  text  and  images.  Some  other  works,  such  as
+AudioCLIP[141] and  MERLOT  Reserve[142],  also  shows
+their unique approaches to learning the cross-modal rep-
+resentations over three modalities.
+Knowledgeable  and  cognitive  learning. Al-
+though  the  existing  VLP  models  have  achieved  remark-
+able performance, their essence is to fit large-scale multi-
+modal  datasets.  Making  VLP  models  more  knowledge-
+able  is  important  for  future  VLP.  For  input  vision  and
+text,  there  is  rich  related  external  common  sense  world
+knowledge  and  illustrative  situational  knowledge[143],
+which can be used to augment the input and accelerate
+the  model  training  and  inference.  The  solution  to  this
+problem  requires  unified  cognitive  model  architectures,
+knowledge-guided  pre-training  objectives,  and  the  sup-
+port of interacting with new knowledge.
+Prompt tuning. Currently, fine-tuning is the domin-
+ant method to transfer the knowledge of VLP to down-
+stream  tasks.  However,  as  the  scale  of  the  model  in-
+creases,  each  downstream  task  has  its  fine-tuning  para-
+meters,  leading  to  parameter  inefficiency.  Moreover,  the
+diverse downstream tasks also make the design of the pre-
+training and fine-tuning stages cumbersome, leading to a
+gap  between  them.  Recently,  prompt  tuning  has  been
+getting  more  and  more  attention  in  NLP.  By  designing
+discrete or continuous prompts and using MLM for spe-
+cific downstream tasks, these models could: 1) reduce the
+computational cost of fine-tuning the enormous amounts
+of parameters; 2) bridge the gap between pre-training and
+fine-tuning. Prompt tuning is a promising way to stimu-
+late  the  linguistic  and  world  knowledge  distributed  in
+PLMs.  In  the  next  step,  it  can  be  improved  and  trans-
+ferred to multi-modal scenarios, breaking the traditional
+paradigm and solving the pain points of VLP[144].
+Model compression and acceleration. Model com-
+pression and acceleration is an essential approach to im-
+prove  the  efficiency  of  VLP  models.  In  this  case,  large
+models are compressed to small ones to meet the need for
+faster inference and deployment on various real-life scen-
+arios  such  as  resource-constrained  devices.  In  general
+PLMs, model compression and acceleration is a hot topic,
+and specific methods include parameter sharing[25], model
+pruning[145], knowledge distillation[146], and model quantiz-
+ation[147].  Recently,  knowledge  distillation  has  been  used
+to compress VLP models[148], but other methods, such as
+pruning  and  quantization  of  VLP  models,  remain  to  be
+explored. Furthermore, a data-efficient VLP paradigm is
+constructed[149]. However, only a few efforts are currently
+focused on improving the efficiency of VLP models, leav-
+ing much room for exploration.
+Out-of-domain  pre-training. Despite  the  signific-
+ant progress achieved by VLP models, part of their suc-
+cess can be traced back to the introduction of in-domain
+pre-training datasets used in both pre-training and down-
+stream  tasks.  The  out-of-domain  pre-training  will  be  an
+essential research direction, that is, VLP models transfer
+the  learned  knowledge  and  representation  into  down-
+stream tasks with unknown data distributions. To mitig-
+ate the distribution biases between pre-training and fine-
+tuning, DeVLBert[32] is proposed to perform intervention-
+based  learning.  It  borrows  the  idea  of  the  backdoor  ad-
+justment from the research area of causality and designs
+several  neural-network  based  structures  for  Bert-style
+out-of-domain pre-training.
+ 46
+Machine Intelligence Research 20(1), February 2023
+ 
+
+ 
+Table 2    The summary of mainstream image-text VLP models. The number of downstream tasks determines whether the
+model is generic or domain-specific VLP. FE: Feature extraction. PT: Pre-training. Emb: Embedding. SC in datasets
+column: Self-constructed or self-collected. MTL in datasets column: All datasets for multi-task learning in
+corresponding work. See other abbreviations in datasets column in Table 1.
+Model
+Domain
+Vision FE
+Language FE Multi-modal
+fusion
+Decoder
+PT objectives
+PT datasets
+Downstream tasks
+VisualBERT[9]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM
+COCO
+GRE+NLVR+VC
+R+VQA
+ViLBERT[8]
+Image
+OD-RFs
+Emb
+Dual-stream
+No
+MLM+VLM+MVM
+COCO+VG
+VLR+NLVR+VE
++VQA
+LXMERT[113]
+Image
+OD-
+RFs+Xformer
+Xformer
+Dual-stream
+No
+MLM+VLM+MVM+
+VQA
+COCO+VG+VQA
++GQA+VGQA
+GQA+NLVR+
+VQA
+B2T2[114]
+Image
+CNN-GFs
+Emb
+Single-stream
+No
+MLM+VLM
+CC3M
+VCR
+Unicoder-VL[13]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+CC3M+SBU
+VLR+VCR
+VL-BERT[108]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+MVM
+CC3M
+GRE+VCR+VQA
+VLP[31]
+Image
+OD-RFs
+Emb
+Dual-stream
+Yes
+MLM+LM
+CC3M
+VC+VQA
+UNITER[30]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM+
+WRA
+COCO+VG+SBU
++CC3M
+GRE+VLR+NLV
+R+VCR+
+VE+VQA
+12-IN-1[115]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+MVM
+MTL
+GQA+GRE+VC+
+NLVR+VE+VQA
+VisDial-BERT[116]
+Image
+OD-RFs
+Emb
+Dual-stream
+No
+MLM+VLM+MVM
+CC3M+VQA
+VD
+ImageBERT[53]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+LAIT+CC3M+
+SBU
+VLR
+PREVALENT[117]
+Image
+CNN-
+GFs+Xformer
+Xformer
+Single-stream
+No
+MLM+MVM
+Matterport3D
+VLN
+XGPT[41]
+Image
+OD-RFs
+Emb
+Dual-stream
+Yes
+MLM+IDA+VC+
+TIFG
+CC3M
+VC+VLR
+InterBER[118]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+COCO+CC3M+
+SBU
+VLR+VCR
+PixelBERT[119]
+Image
+CNN-GFs
+Emb
+Single-stream
+No
+MLM+VLM
+COCO+VG
+VLR+NLVR+
+VQA
+OSCAR[10]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM
+COCO+SBU+CC3
+M+FLKR+VQA+
+GQA+VGQA
+GQA+VC+VLR+
+NLVR+NoCaps+V
+QA
+VLN-BERT[120]
+Image
+OD-RFs
+Emb
+Dual-stream
+No
+MLM+VLM+MVM
+CC3M
+VLN
+FashionBERT[121]
+Image
+Xformer
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+FashionGen
+VLR
+VILLA[122]
+Image
+OD-
+RFs+Xformer
+Xformer
+Single-stream
+No
+MLM+VLM+MVM
+COCO+VG+CC3
+M+SBU
+GRE+VLR+NLV
+R+VCR
++VE+VQA
+ERNIE-ViL[123]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+MVM
+CC3M+SBU
+GRE+VLR+VCR
++VQA
+RVL-BERT[124]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+CC3M
+VC+VQA
+VinVL[27]
+Image
+OD-RFs
+Emb
+Single-stream
+No
+MLM+VLM
+COCO+CC3M+SB
+U+FLKR+VQA+
+GQA+VGQA
+GQA+VC+VLR+
+NLVR+NoCaps+V
+QA
+VL-T5[125]
+Image
+OD-RFs
+Emb
+Single-stream
+Yes
+MLM+VLM+VQA+
+GRE+VC
+COCO+VG+VQA
++GQA+VGQA
+GQA+GRE+VC+
+MMT+NLVR+VC
+R+VQA
+ViLT[126]
+Image
+ViT-PFs
+Emb
+Single-stream
+No
+MLM+VLM
+COCO+VG+SBU
++CC3M
+VLR+NLVR+
+VQA
+ALIGN[55]
+Image
+CNN-GFs
+Xformer
+Dual-stream
+No
+VLC
+ALIGN
+VLR
+Kaleido-BERT[43]
+Image
+CNN-GFs
+Emb
+Single-stream
+No
+MLM+VLM+AKPM
+FashionGen
+CR+VC+VLR
+MDETR[42]
+Image
+Xformer
+Xformer
+Single-stream
+Yes
+OD+MLM+VLC
+COCO+VG+FLK
+R+GQA
+GQA+VQA
+SOHO[127]
+Image
+CNN-GFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+COCO+VG
+VLR+NLVR
++VE+VQA
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+47 
+ 
+
+Advanced  model  architecture. Nowadays,  trans-
+former-based  architectures  make  great  progress  in  VLP.
+Is  such  a  structure  the  optimal  structure  for  VLP?  We
+note that the recently popular diffusion model[150] for im-
+age  generation  has  succeeded  greatly.  Some  resear-
+chers[151] also  extend  the  diffusion  model  to  controllable
+text  generation.  So,  whether  the  diffusion  model  can  be
+used in VLP? It may be a question worth exploring in the
+future.  Moreover,  neural  networks  themselves  are  in-
+spired by neuroscience, and we can explore next-genera-
+tion VLP frameworks with support from other disciplines.
+The  inspirations  from  mathematics  include  the  frame-
+Table 2 (continued) The summary of mainstream image-text VLP models. The number of downstream tasks determines whether the
+model is generic or domain-specific VLP. FE: Feature extraction. PT: Pre-training. Emb: Embedding. SC in datasets
+column: Self-constructed or self-collected. MTL in datasets column: All datasets for multi-task learning in
+corresponding work. See other abbreviations in datasets column in Table 1.
+Model
+Domain
+Vision FE
+Language FE Multi-modal
+fusion
+Decoder
+PT objectives
+PT datasets
+Downstream tasks
+E2E-VLP[128]
+Image
+CNN-GFs
+Emb
+Single-stream
+Yes
+OD+MLM+VLM
+COCO+VG
+VC+VLR+NLVR
++VQA
+Visual Parsing[129]
+Image
+Xformer
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+COCO+VG
+VLR+VCR+VE+
+VQA
+CLIP-ViL[130]
+Image
+CNN-GFs
+Emb
+Single-stream
+Yes
+MLM+VLM+VQA
+COCO+VG+VQA
++GQA+VGQA
+VE+VLN+VQA
+ALBEF[35]
+Image
+Xformer
+Xformer
+Dual-stream
+No
+MLM+VLM+VLC
+COCO+VG+CC3
+M+SBU
+VLR+NLVR+VQ
+A
+SimVLM[14]
+Image
+CNN-GFs
+Emb
+Single-stream
+Yes
+PrefixLM
+ALIGN
+VC+NLVR+VE+
+VQA
+MURAL[131]
+Image
+CNN-GFs
+Xformer
+Dual-stream
+No
+VLC
+CC12M+ALIGN
+VC+VLR
+VLMO[112]
+Image
+ViT-PFs
+Emb
+Single-stream
+No
+MLM+VLC+VLM
+COCO+VG+CC3
+M+SBU
+VQA+NLVR+
+VLR
+METER[33]
+Image
+Xformer
+Xformer
+Dual-stream
+No
+MLM+VLM
+COCO+VG+CC3
+M+SBU
+VLR+NLVR+
+VE+VQA
+X-VLM[28]
+Image
+Xformer
+Xformer
+Single-stream
+No
+MLM+VLM+VG
+COCO+VG+CC3
+M+SBU
+VLR+NLVR+
+VE+VQA
+TCL[132]
+Image
+Xformer
+Xformer
+Single-stream
+No
+MLM+VLM+TCL
+COCO+VG+CC3
+M+SBU
+VLR+NLVR+
+VE+VQA
+ 
+ 
+Table 3    The summary of mainstream video-text VLP models. The number of downstream tasks determines whether the model is
+generic or domain-specific VLP. FE: Feature extraction. PT: Pre-training. Emb: Embedding. SC in datasets column:
+Self-constructed or self-collected. MTL in Datasets column: All datasets for multi-task learning in
+corresponding work. See other abbreviations in the datasets column in Table 1.
+Model
+Domain
+Vision FE
+Language FE Multi-modal
+fusion
+Decoder
+PT objectives
+PT datasets
+Downstream tasks
+VideoBERT[58]
+Video
+CNN-GFs
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+SC
+AC+VC
+CBT[105]
+Video
+CNN-
+GFs+Xformer
+Xformer
+Single-stream
+No
+VLC
+Kinetics
+AC+AS+VC
+UniVL[106]
+Video
+CNN-GFs
+Xformer
+Dual-stream
+Yes
+MLM+VLM+VC
+HT100M
+AS+ASL+MSA+V
+C+VLR
+HERO[36]
+Video
+CNN-
+GFs+Xformer
+Xformer
+Single-stream
+No
+MLM+VLM+MVM+
+FOM
+HT100M+TV
+VC+VLI+VQA+V
+LR
+MMFT-BERT[134]
+Video
+OD-
+RFs+Xformer
+Xformer
+Single-stream
+No
+VQA
+TV
+VQA
+ActBERT[135]
+Video
+OD-RFs+CNN
+Emb
+Single-stream
+No
+MLM+VLM+MVM
+HT100M
+AS+ASL+VC+VQ
+A+VLR
+CLIP[16]
+Image
+/Video
+CNN/Xformer
+Xformer
+Dual-stream
+No
+VLC
+SC
+OCR +AC etc.
+Frozen[57]
+Video
+ViT-PFs
+Emb
+Dual-Stream
+No
+VLC
+WebVid2M+CC3M
+VLR
+Region-
+Learner[136]
+Video
+ViT-PFs
+Emb
+Dual-Stream
+No
+VLC
+WebVid2M+CC3M
+VLR
+CLIP4Clip[17]
+Video
+ViT-PFs
+Emb
+Dual-Stream
+No
+VLC
+WebVid2M+CC3M
+VLR
+CLIP2Video[18]
+Video
+ViT-PFs
+Emb
+Dual-Stream
+No
+VLC
+WebVid2M+CC3M
+VLR
+ 
+ 48
+Machine Intelligence Research 20(1), February 2023
+ 
+
+work  of  non-Euclidean  space  manifold  and  how  to  put
+some geometric priors into the model[152, 153], which are re-
+latively new research directions. Research on the energy-
+efficient  spiking  neural  networks[154–156] in  the  brain-in-
+spired  field  may  also  provide  insights  into  the  explora-
+tion of novel VLP architectures.
+ Acknowledgements
+This  work  was  supported  by  the  Key  Research  Pro-
+gram  of  the  Chinese  Academy  of  Sciences  (No.  ZDBS-
+SSW-JSC006)  and  the  Strategic  Priority  Research  Pro-
+gram  of  the  Chinese  Academy  of  Sciences  (No.  XDA
+27030300).
+ Open Access
+This article is licensed under a Creative Commons At-
+tribution  4.0  International  License,  which  permits  use,
+sharing, adaptation, distribution and reproduction in any
+medium or format, as long as you give appropriate credit
+to the original author(s) and the source, provide a link to
+the  Creative  Commons  licence,  and  indicate  if  changes
+were made.
+The images or other third party material in this art-
+icle  are  included  in  the  article′s  Creative  Commons  li-
+cence,  unless  indicated  otherwise  in  a  credit  line  to  the
+material. If material is not included in the article′s Creat-
+ive  Commons  licence  and  your  intended  use  is  not  per-
+mitted by statutory regulation or exceeds the permitted
+use, you will need to obtain permission directly from the
+copyright holder.
+To  view  a  copy  of  this  licence,  visit http://creative-
+commons.org/licenses/by/4.0/.
+References
+ A.  Vaswani,  N.  Shazeer,  N.  Parmar,  J.  Uszkoreit,  L.
+Jones, A. N. Gomez, L. Kaiser, I. Polosukhin. Attention
+is  all  you  need.  In  Proceedings of the 31st International
+Conference on Neural Information Processing Systems,
+ACM, Long Beach, USA, pp. 6000–6010, 2017.
+[1]
+ J. Devlin, M. W. Chang, K. Lee, K. Toutanova. BERT:
+Pre-training  of  deep  bidirectional  transformers  for  lan-
+guage understanding. In Proceedings of Conference of the
+North American Chapter of the Association for Computa-
+tional Linguistics: Human Language Technologies,  Min-
+neapolis,  USA,  pp. 4171–4186,  2019.  DOI:  10.18653/v1/
+N19-1423.
+[2]
+ A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn,
+X. H. Zhai, T. Unterthiner, M. Dehghani, M. Minderer,
+G. Heigold, S. Gelly, J. Uszkoreit, N. Houlsby. An image
+is  worth  161×6  words:  Transformers  for  image  recogni-
+tion at scale. In Proceedings of the 9th International Con-
+ference on Learning Representations, 2021.
+[3]
+ S.  Schneider,  A.  Baevski,  R.  Collobert,  M.  Auli.
+Wav2Vec: Unsupervised pre-training for speech recogni-
+tion. In Proceedings of the 20th Annual Conference of the
+International Speech Communication Association, Graz,
+Austria, pp. 3465–3469, 2019. DOI: 10.21437/Interspeech.
+[4]
+2019-1873.
+ X. P. Qiu, T. X. Sun, Y. G. Xu, Y. F. Shao, N. Dai, X. J.
+Huang.  Pre-trained  models  for  natural  language  pro-
+cessing: A survey. Science China Technological Sciences,
+vol. 63, no. 10, pp. 1872–1897, 2020. DOI: 10.1007/s11431-
+020-1647-3.
+[5]
+ X. Han, Z. Y. Zhang, N. Ding, Y. X. Gu, X. Liu, Y. Q.
+Huo, J. Z. Qiu, Y. Yao, A. Zhang, L. Zhang, W. T. Han,
+M. L. Huang, Q. Jin, Y. Y. Lan, Y. Liu, Z. Y. Liu, Z. W.
+Lu,  X.  P.  Qiu,  R.  H.  Song,  J.  Tang,  J.  R.  Wen,  J.  H.
+Yuan,  W.  X.  Zhao,  J.  Zhu.  Pre-trained  models:  Past,
+present  and  future.  AI Open,  vol. 2,  pp. 225–250,  2021.
+DOI: 10.1016/j.aiopen.2021.08.002.
+[6]
+ K. Han, Y. H. Wang, H. T. Chen, X. H. Chen, J. Y. Guo,
+Z. H. Liu, Y. H. Tang, A. Xiao, C. J. Xu, Y. X. Xu, Z. H.
+Yang, Y. M. Zhang, D. C. Tao. A survey on vision trans-
+former. IEEE Transactions on Pattern Analysis and Ma-
+chine Intelligence,  to  be  published.  DOI:  10.1109/
+TPAMI.2022.3152247.
+[7]
+ J.  S.  Lu,  D.  Batra,  D.  Parikh,  S.  Lee.  ViLBERT:  Pre-
+training  task-agnostic  visiolinguistic  representations  for
+vision-and-language  tasks.  In  Proceedings of the 33rd
+Conference on Neural Information Processing Systems,
+Vancouver, Canada, pp. 13–23, 2019.
+[8]
+ L. H. Li, M. Yatskar, D. Yin, C. J. Hsieh, K. W. Chang.
+VisualBERT:  A  simple  and  performant  baseline  for  vis-
+ion and language. [Online], Available: https://arxiv.org/
+abs/1908.03557, 2019.
+[9]
+ X.  J.  Li,  X.  Yin,  C.  Y.  Li,  P.  C.  Zhang,  X.  W.  Hu,  L.
+Zhang,  L.  J.  Wang,  H.  D.  Hu,  L.  Dong,  F.  R.  Wei,  Y.
+Choi, J. F. Gao. OSCAR: Object-semantics aligned pre-
+training for vision-language tasks. In Proceedings of the
+16th European Conference on Computer Vision, Spring-
+er, Glasgow, UK, pp. 121–137, 2020. DOI: 10.1007/978-3-
+030-58577-8_8.
+[10]
+ S. Q. Ren, K. M. He, R. Girshick, J. Sun. Faster R-CNN:
+Towards real-time object detection with region proposal
+networks. In Proceedings of the 28th International Con-
+ference on Neural Information Processing Systems, ACM,
+Montreal, Canada, pp. 91–99, 2015.
+[11]
+ P. Anderson, X. D. He, C. Buehler, D. Teney, M. John-
+son, S. Gould, L. Zhang. Bottom-up and top-down atten-
+tion for image captioning and visual question answering.
+In  Proceedings of IEEE/CVF Conference on Computer
+Vision and Pattern Recognition,  IEEE,  Salt  Lake  City,
+USA,  pp. 6077–6086,  2018.  DOI:  10.1109/CVPR.2018.
+00636.
+[12]
+ G. Li, N. Duan, Y. J. Fang, M. Gong, D. X. Jiang. Uni-
+coder-VL: A universal encoder for vision and language by
+cross-modal pre-training. In Proceedings of the AAAI Con-
+ference on Artificial Intelligence, vol. 34, no. 7, pp. 11336–
+11344, 2020. DOI: 10.1609/aaai.v34i07.6795.
+[13]
+ Z. R. Wang, J. H. Yu, A. W. Yu, Z. H. Dai, Y. Tsvetkov,
+Y. Cao. SimVLM: Simple visual language model pretrain-
+ing with weak supervision. In Proceedings of the 10th In-
+ternational Conference on Learning Representations,
+2022.
+[14]
+ H. Z. Jiang, I. Misra, M. Rohrbach, E. Learned-Miller, X.
+L. Chen. In defense of grid features for visual question an-
+swering.  In  Proceedings of IEEE/CVF Conference on
+Computer Vision and Pattern Recognition,  IEEE,
+Seattle, USA, pp. 10267–10276, 2020. DOI: 10.1109/CV-
+[15]
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+49 
+ 
+
+PR42600.2020.01028.
+ A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh,
+S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark, G.
+Krueger, I. Sutskever. Learning transferable visual mod-
+els from natural language supervision. In Proceedings of
+the 38th International Conference on Machine Learning,
+pp. 8748–8763, 2021.
+[16]
+ H. S. Luo, L. Ji, M. Zhong, Y. Chen, W. Lei, N. Duan, T.
+R.  Li.  CLIP4Clip:  An  empirical  study  of  clip  for  end  to
+end video clip retrieval and captioning. Neurocomputing,
+vol. 508, pp. 293–304, 2022. DOI: 10.1016/j.neucom.2022.
+07.028.
+[17]
+ H. Fang, P. F. Xiong, L. H. Xu, Y. Chen. CLIP2Video:
+Mastering  video-text  retrieval  via  image  clip.  [Online],
+Available: https://arxiv.org/abs/2106.11097, 2021.
+[18]
+ K. M. He, X. Y. Zhang, S. Q. Ren, J. Sun. Deep residual
+learning  for  image  recognition.  In  Proceedings of IEEE
+Conference on Computer Vision and Pattern Recogni-
+tion, Las Vegas, pp. 770–778, 2016. DOI: 10.1109/CVPR.
+2016.90.
+[19]
+ J. Deng, W. Dong, R. Socher, L. J. Li, K. Li, L. Fei-Fei.
+ImageNet:  A  large-scale  hierarchical  image  database.  In
+IEEE Conference on Computer Vision and Pattern Re-
+cognition, Miami, USA, pp. 248–255, 2009. DOI: 10.1109/
+CVPR.2009.5206848.
+[20]
+ C.  Feichtenhofer,  H.  Q.  Fan,  J.  Malik,  K.  M.  He.  Slow-
+Fast  networks  for  video  recognition.  In  Proceedings of
+IEEE/CVF International Conference on Computer Vis-
+ion, IEEE, Seoul, Republic of Korea, pp. 6202–6211, 2019.
+DOI: 10.1109/ICCV.2019.00630.
+[21]
+ J. Carreira, A. Zisserman. Quo vadis, action recognition?
+A new model and the kinetics dataset. In Proceedings of
+IEEE Conference on Computer Vision and Pattern Re-
+cognition, Honolulu, USA, pp. 6299–6308, 2017. DOI: 10.
+1109/CVPR.2017.502.
+[22]
+ W. Kay, J. Carreira, K. Simonyan, B. Zhang, C. Hillier,
+S.  Vijayanarasimhan,  F.  Viola,  T.  Green,  T.  Back,  P.
+Natsev, M. Suleyman, A. Zisserman. The kinetics human
+action  video  dataset.  [Online],  Available:  https://arxiv.
+org/abs/1705.06950, 2017.
+[23]
+ Y.  H.  Liu,  M.  Ott,  N.  Goyal,  J.  F.  Du,  M.  Joshi,  D.  Q.
+Chen,  O.  Levy,  M.  Lewis,  L.  Zettlemoyer,  V.  Stoyanov.
+RoBERTa: A robustly optimized BERT pretraining ap-
+proach.  [Online],  Available:  https://arxiv.org/abs/1907.
+11692, 2019.
+[24]
+ Z.  Z.  Lan,  M.  D.  Chen,  S.  Goodman,  K.  Gimpel,  P.
+Sharma,  R.  Soricut.  ALBERT:  A  lite  BERT  for  self-su-
+pervised learning of language representations. In Proceed-
+ings of the 8th International Conference on Learning Rep-
+resentations, Addis Ababa, Ethiopia, 2019
+[25]
+ Z.  L.  Yang,  Z.  H.  Dai,  Y.  M.  Yang,  J.  Carbonell,  R.
+Salakhutdinov,  Q.  V.  Le.  XLNet:  Generalized  autore-
+gressive pretraining for language understanding. In Pro-
+ceedings of the 33rd International Conference on Neural
+Information Processing Systems,  ACM,  Vancouver,
+Canada, pp. 5753–5763, 2019.
+[26]
+ P. C. Zhang, X. J. Li, X. W. Hu, J. W. Yang, L. Zhang, L.
+J.  Wang,  Y.  Choi,  J.  F.  Gao.  VinVL:  Revisiting  visual
+representations  in  vision-language  models.  In  Proceed-
+ings of IEEE/CVF Conference on Computer Vision and
+Pattern Recognition,  IEEE,  Nashville,  USA,  pp. 5579–
+[27]
+5588, 2021. DOI: 10.1109/CVPR46437.2021.00553.
+ Y.  Zeng,  X.  S.  Zhang,  H.  Li.  Multi-grained  vision  lan-
+guage  pre-training:  Aligning  texts  with  visual  concepts.
+In  Proceedings of the 39th International Conference on
+Machine Learning,  Baltimore,  USA,  pp. 25994–26009,
+2022.
+[28]
+ H.  Touvron,  M.  Cord,  M.  Douze,  F.  Massa,  A.  Sab-
+layrolles,  H.  Jegou.  Training  data-efficient  image  trans-
+formers & distillation through attention. In Proceedings
+of the 38th International Conference on Machine Learn-
+ing, pp. 10347–10357, 2021.
+[29]
+ Y. C. Chen, L. J. Li, L. C. Yu, A. El Kholy, F. Ahmed, Z.
+Gan, Y. Cheng, J. J. Liu. UNITER: Universal image-text
+representation  learning.  In  Proceedings of the 16th
+European Conference on Computer Vision,  Springer,
+Glasgow,  UK,  pp. 104–120,  2020.  DOI:  10.1007/978-3-
+030-58577-8_7.
+[30]
+ L. W. Zhou, H. Palangi, L. Zhang, H. D. Hu, J. Corso, J.
+F.  Gao.  Unified  vision-language  pre-training  for  image
+captioning and VQA. In Proceedings of the AAAI Confer-
+ence on Artificial Intelligence,  vol. 34,  no. 7,  pp. 13041–
+13049, 2020. DOI: 10.1609/aaai.v34i07.7005.
+[31]
+ S. Y. Zhang, T. Jiang, T. Wang, K. Kuang, Z. Zhao, J. K.
+Zhu, J. Yu, H. X. Yang, F Wu. DeVLBert: Learning de-
+confounded  visio-linguistic  representations.  In  Proceed-
+ings of the 28th ACM International Conference on Multi-
+media,  ACM,  Seattle,  USA,  pp. 4373–4382,  2020.  DOI:
+10.1145/3394171.3413518.
+[32]
+ Z. Y. Dou, Y. C. Xu, Z. Gan, J. F. Wang, S. H. Wang, L.
+J. Wang, C. G. Zhu, P. C. Zhang, L. Yuan, N. Y. Peng, Z.
+C. Liu, M. Zeng. An empirical study of training end-to-
+end  vision-and-language  transformers.  In Proceedings of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, IEEE, New Orleans, USA, pp. 18145–18155,
+2022. DOI: 10.1109/CVPR52688.2022.01763.
+[33]
+ W. L. Taylor. “Cloze procedure”: A new tool for measur-
+ing  readability.  Journalism Quarterly,  vol. 30,  no. 4,
+pp. 415–433, 1953. DOI: 10.1177/107769905303000401.
+[34]
+ J. N. Li, R. R. Selvaraju, A. D. Gotmare, S. Joty, C. M.
+Xiong,  S.  C.  H.  Hoi.  Align  before  fuse:  Vision  and  lan-
+guage  representation  learning  with  momentum  distilla-
+tion.  In  Proceedings of 35th Conference on Neural In-
+formation Processing Systems, pp. 9694–9705, 2021.
+[35]
+ L. J. Li, Y. C. Chen, Y. Cheng, Z. Gan, L. C. Yu, J. J.
+Liu.  HERO:  Hierarchical  encoder  for  video  +  language
+omni-representation pre-training. In Proceedings of Con-
+ference on Empirical Methods in Natural Language Pro-
+cessing,  pp. 2046–2065,  2020.  DOI:  10.18653/v1/2020.
+emnlp-main.161.
+[36]
+ S. Antol, A. Agrawal, J. S. Lu, M. Mitchell, D. Batra, C.
+L.  Zitnick,  D.  Parikh.  VQA:  Visual  question  answering.
+In  Proceedings of IEEE International Conference on
+Computer Vision,  Santiago,  Chile,  pp. 2425–2433,  2015.
+DOI: 10.1109/ICCV.2015.279.
+[37]
+ J. Lei, L. C. Yu, M. Bansal, T. L. Berg. TVQA: Localized,
+compositional  video  question  answering.  In  Proceedings
+of Conference on Empirical Methods in Natural Lan-
+guage Processing,  Brussels,  Belgium,  pp. 1369–1379,
+2018. DOI: 10.18653/v1/D18-1167.
+[38]
+ O.  Vinyals,  A.  Toshev,  S.  Bengio,  D.  Erhan.  Show  and
+tell: A neural image caption generator. In Proceedings of
+[39]
+ 50
+Machine Intelligence Research 20(1), February 2023
+ 
+
+IEEE Conference on Computer Vision and Pattern Re-
+cognition,  Boston,  USA,  pp. 3156–3164,  2015.  DOI:  10.
+1109/CVPR.2015.7298935.
+ S. Bai, S. An. A survey on automatic image caption gen-
+eration.  Neurocomputing,  vol. 311,  pp. 291–304,  2018.
+DOI: 10.1016/j.neucom.2018.05.080.
+[40]
+ Q. L. Xia, H. Y. Huang, N. Duan, D. D. Zhang, L. Ji, Z.
+Sui,  E.  Cui,  T.  Bharti,  M.  Zhou.  XGPT:  Cross-modal
+generative pre-training for image captioning. In Proceed-
+ings of the 10th CCF International Conference on Natur-
+al Language Processing and Chinese Computing, Spring-
+er, Qingdao, China, pp. 786–797, 2021. DOI: 10.1007/978-
+3-030-88480-2_63.
+[41]
+ A. Kamath, M. Singh, Y. LeCun, G. Synnaeve, I. Misra,
+N. Carion. MDETR-modulated detection for end-to-end
+multi-modal  understanding.  In  Proceedings of IEEE/
+CVF International Conference on Computer Vision,
+IEEE, Montreal, Canada, pp. 1780–1790, 2021. DOI: 10.
+1109/ICCV48922.2021.00180.
+[42]
+ M. Zhuge, D. H. Gao, D. P. Fan, L. B. Jin, B. Chen, H.
+M. Zhou, M. H. Qiu, L. Shao. Kaleido-BERT: Vision-lan-
+guage pre-training on fashion domain. In Proceedings of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition,  IEEE,  Nashville,  USA,  pp. 12647–12657,
+2021. DOI: 10.1109/CVPR46437.2021.01246.
+[43]
+ V. Ordonez, G. Kulkarni, T. L. Berg. Im2TEXT: Describ-
+ing images using 1 million captioned photographs. In Pro-
+ceedings of the 24th International Conference on Neural
+Information Processing Systems, ACM, Granada, Spain,
+pp. 1143–1151, 2011.
+[44]
+ P. Young, A. Lai, M. Hodosh, J. Hockenmaier. From im-
+age  descriptions  to  visual  denotations:  New  similarity
+metrics  for  semantic  inference  over  event  descriptions.
+Transactions of the Association for Computational Lin-
+guistics,  vol. 2,  pp. 67–78,  2014.  DOI:  10.1162/tacl_a_
+00166.
+[45]
+ T. Y. Lin, M. Maire, S. J. Belongie, J. Hays, P. Perona,
+D. Ramanan, P. Dollár, C. L. Zitnick. Microsoft COCO:
+Common  objects  in  context.  In  Proceedings of the 13th
+European Conference on Computer Vision,  Springer,
+Zurich,  Switzerland,  pp. 740–755,  2014.  DOI:  10.1007/
+978-3-319-10602-1_48.
+[46]
+ R. Krishna, Y. K. Zhu, O. Groth, J. Johnson, K. Hata, J.
+Kravitz, S. Chen, Y. Kalantidis, L. J. Li, D. A. Shamma,
+M.  S.  Bernstein,  L.  Fei-Fei.  Visual  genome:  Connecting
+language and vision using crowdsourced dense image an-
+notations.  International Journal of Computer Vision,
+vol. 123, pp. 1, pp. 32–73, 2017. DOI: 10.1007/s11263-016-
+0981-7.
+[47]
+ Y.  Goyal,  T.  Khot,  D.  Summers-Stay,  D.  Batra,  D.
+Parikh. Making the V in VQA matter: Elevating the role
+of image understanding in visual question answering. In
+IEEE Conference on Computer Vision and Pattern Re-
+cognition, Honolulu, USA, pp. 6904–6913, 2017. DOI: 10.
+1109/CVPR.2017.670.
+[48]
+ A. X. Chang, A. Dai, T. A. Funkhouser, M. Halber, M.
+Nie\ssner, M. Savva, S. R. Song, A. Zeng, Y. D. Zhang.
+Matterport3D: Learning from RGB-D data in indoor en-
+vironments.  In  Proceedings of International Conference
+on 3D Vision, IEEE, Qingdao, China, pp. 667–676, 2017.
+DOI: 10.1109/3DV.2017.00081.
+[49]
+ N. Rostamzadeh, S. Hosseini, T. Boquet, W. Stokowiec,
+[50]
+Y. Zhang, C. Jauvin, C. Pal. Fashion-Gen: The generat-
+ive fashion dataset and challenge. [Online], Available: ht-
+tps://arxiv.org/abs/1806.08317, 2018.
+ P. Sharma, N. Ding, S. Goodman, R. Soricut. Conceptu-
+al captions: A cleaned, hypernymed, image alt-text data-
+set for automatic image captioning. In Proceedings of the
+56th Annual Meeting of the Association for Computa-
+tional Linguistics,  Melbourne,  Australia,  pp. 2556–2565,
+2018. DOI: 10.18653/v1/P18-1238.
+[51]
+ D. A. Hudson, C. D. Manning. GQA: A new dataset for
+real-world  visual  reasoning  and  compositional  question
+answering.  In  Proceedings of IEEE/CVF Conference on
+Computer Vision and Pattern Recognition,  IEEE,  Long
+Beach, USA, pp. 6700–6709, 2019. DOI: 10.1109/CVPR.
+2019.00686.
+[52]
+ D. Qi, L. Su, J. Song, E. Cui, T. Bharti, A. Sacheti. Im-
+ageBERT:  Cross-modal  pre-training  with  large-scale
+weak-supervised image-text data. [Online], Available: ht-
+tps://arxiv.org/abs/2001.07966, 2020.
+[53]
+ S. Changpinyo, P. Sharma, N. Ding, R. Soricut. Concep-
+tual  12M:  Pushing  web-scale  image-text  pre-training  to
+recognize  long-tail  visual  concepts.  In  Proceedings of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, IEEE, Nashville, USA, pp. 3558–3568, 2021.
+DOI: 10.1109/CVPR46437.2021.00356.
+[54]
+ C.  Jia,  Y.  F.  Yang,  Y.  Xia,  Y.  T.  Chen,  Z.  Parekh,  H.
+Pham, Q. V. Le, Y. H. Sung, Z. Li, T. Duerig. Scaling up
+visual  and  vision-language  representation  learning  with
+noisy text supervision. In Proceedings of the 38th Inter-
+national Conference on Machine Learning, pp. 4904–4916,
+2021.
+[55]
+ A.  Miech,  D.  Zhukov,  J.  B.  Alayrac,  M.  Tapaswi,  I.
+Laptev, J. Sivic. HowTo100M: Learning a text-video em-
+bedding  by  watching  hundred  million  narrated  video
+clips. In Proceedings of IEEE/CVF International Confer-
+ence on Computer Vision,  IEEE,  Seoul,  Republic  of
+Korea,  pp. 2630–2640,  2019.  DOI:  10.1109/ICCV.2019.
+00272.
+[56]
+ M. Bain, A. Nagrani, G. Varol, A. Zisserman. Frozen in
+time: A joint video and image encoder for end-to-end re-
+trieval. In Proceedings of IEEE/CVF International Con-
+ference on Computer Vision,  IEEE,  Montreal,  Canada,
+pp. 1728–1738,  2021.  DOI:  10.1109/ICCV48922.2021.
+00175.
+[57]
+ C. Sun, A. Myers, C. Vondrick, K. Murphy, C. Schmid.
+VideoBERT:  A  joint  model  for  video  and  language  rep-
+resentation learning. In Proceedings of IEEE/CVF Inter-
+national Conference on Computer Vision,  IEEE,  Seoul,
+Republic  of  Korea,  pp. 7463–7472,  2019.  DOI:  10.1109/
+ICCV.2019.00756.
+[58]
+ Q. Wu, D. Teney, P. Wang, C. H. Shen, A. Dick, A. Van
+Den  Hengel.  Visual  question  answering:  A  survey  of
+methods and datasets. Computer Vision and Image Un-
+derstanding,  vol. 163,  pp. 21–40,  2017.  DOI:  10.1016/j.
+cviu.2017.05.001.
+[59]
+ K. Kafle, C. Kanan. Visual question answering: Datasets,
+algorithms, and future challenges. Computer Vision and
+Image Understanding,  vol. 163,  pp. 3–20,  2017.  DOI:  10.
+1016/j.cviu.2017.06.005.
+[60]
+ K.  Kafle,  C.  Kanan.  An  analysis  of  visual  question  an-
+swering algorithms. In Proceedings of IEEE Internation-
+al Conference on Computer Vision,  Venice,  Italy,
+[61]
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+51 
+ 
+
+pp. 1965–1973, 2017. DOI: 10.1109/ICCV.2017.217.
+ S.  J.  Geng,  J.  Zhang,  H.  Zhang,  A.  Elgammal,  D.  N.
+Metaxas. 2nd place solution to the GQA challenge 2019.
+[Online],  Available:  https://arxiv.org/abs/1907.06794,
+2019.
+[62]
+ Y. Bitton, G. Stanovsky, R. Schwartz, M. Elhadad. Auto-
+matic  generation  of  contrast  sets  from  scene  graphs:
+Probing  the  compositional  consistency  of  GQA.  In  Pro-
+ceedings of Conference of the North American Chapter of
+the Association for Computational Linguistics: Human
+Language Technologies, pp. 94–105, 2021. DOI: 10.18653/
+v1/2021.naacl-main.9.
+[63]
+ J. C. Li, S. L. Tang, L. C. Zhu, H. C. Shi, X. W. Huang,
+F.  Wu,  Y.  Yang,  Y.  T.  Zhuang.  Adaptive  hierarchical
+graph  reasoning  with  semantic  coherence  for  video-and-
+language  inference.  In  Proceedings of IEEE/CVF Inter-
+national 
+Conference 
+on 
+Computer 
+Vision, 
+IEEE,
+Montreal,  Canada,  pp. 1867–1877,  2021.  DOI:  10.1109/
+ICCV48922.2021.00188.
+[64]
+ A. Chaudhary. Robust Vision and Language Inference via
+Semantics Transformed Adversarial Training, Ph. D. dis-
+sertation, Arizona State University, Phoenix, USA, 2021.
+[65]
+ N. Xie, F. Lai, D. Doran, A. Kadav. Visual entailment: A
+novel task for fine-grained image understanding. [Online],
+Available: https://arxiv.org/abs/1901.06706, 2019.
+[66]
+ H.  Y.  Song,  L.  Dong,  W.  N.  Zhang,  T.  Liu,  F.  R.  Wei.
+CLIP models are few-shot learners: Empirical studies on
+VQA  and  visual  entailment.  In  Proceedings of the 60th
+Annual Meeting of the Association for Computational
+Linguistics,  Dublin,  Ireland,  pp. 6088–6100,  2022.  DOI:
+10.18653/v1/2022.acl-long.421.
+[67]
+ N.  Xie,  F.  Lai,  D.  Doran,  A.  Kadav.  Visual  entailment
+task  for  visually-grounded  language  learning.  [Online],
+Available: https://arxiv.org/abs/1811.10582, 2018.
+[68]
+ R.  Zellers,  Y.  Bisk,  A.  Farhadi,  Y.  Choi.  From  recogni-
+tion to cognition: Visual commonsense reasoning. In Pro-
+ceedings of IEEE/CVF Conference on Computer Vision
+and Pattern Recognition,  IEEE,  Long  Beach,  USA,
+pp. 6720–6731, 2019. DOI: 10.1109/CVPR.2019.00688.
+[69]
+ W. J. Yu, J. W. Zhou, W. H. Yu, X. D. Liang, N. Xiao.
+Heterogeneous  graph  learning  for  visual  commonsense
+reasoning. In Proceedings of the 33rd International Con-
+ference on Neural Information Processing Systems, ACM,
+Vancouver, Canada, pp. 2769–2779, 2019.
+[70]
+ K. Ye, A. Kovashka. A case study of the shortcut effects
+in  visual  commonsense  reasoning.  In  Proceedings of
+AAAI Conference on Artificial Intelligence, vol. 35, no. 4,
+pp. 3181–3189, 2021. DOI: 10.1609/aaai.v35i4.16428.
+[71]
+ A. Suhr, M. Lewis, J. Yeh, Y. Artzi. A corpus of natural
+language for visual reasoning. In Proceedings of the 55th
+Annual Meeting of the Association for Computational
+Linguistics, Vancouver, Canada, pp. 217–223, 2017. DOI:
+10.18653/v1/P17-2034.
+[72]
+ A. Marasović, C. Bhagavatula, J. S. Park, R. Le Bras, N.
+A. Smith, Y. Choi. Natural language rationales with full-
+stack visual reasoning: From pixels to semantic frames to
+commonsense graphs. In Proceedings of Conference on Em-
+pitical Methods in Natural Language Processing, pp. 2810–
+2829, 2020. DOI: 10.18653/v1/2020.findings-emnlp.253.
+[73]
+ X. H. Liu, Z. H. Wang, J. Shao, X. G. Wang, H. S. Li. Im-
+[74]
+proving referring expression grounding with cross-modal
+attention-guided  erasing.  In  Proceedings of IEEE/CVF
+Conference on Computer Vision and Pattern Recogni-
+tion, IEEE, Long Beach, USA, pp. 1950–1959, 2019. DOI:
+10.1109/CVPR.2019.00205.
+ S. B. Yang, G. B. Li, Y. Z. Yu. Cross-modal relationship
+inference for grounding referring expressions. In Proceed-
+ings of IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, IEEE, Long Beach, USA, pp. 4145–
+4154, 2019. DOI: 10.1109/CVPR.2019.00427.
+[75]
+ H.  W.  Zhang,  Y.  L.  Niu,  S.  F.  Chang.  Grounding  refer-
+ring expressions in images by variational context. In Pro-
+ceedings of IEEE/CVF Conference on Computer Vision
+and Pattern Recognition,  IEEE,  Salt  Lake  City,  USA,
+pp. 4158–4166, 2018. DOI: 10.1109/CVPR.2018.00437.
+[76]
+ D. Ghosal, M. S. Akhtar, D. Chauhan, S. Poria, A. Ekbal,
+P.  Bhattacharyya.  Contextual  inter-modal  attention  for
+multi-modal  sentiment  analysis.  In  Proceedings of Con-
+ference on Empirical Methods in Natural Language Pro-
+cessing, Brussels, Belgium, pp. 3454–3466, 2018. DOI: 10.
+18653/v1/D18-1382.
+[77]
+ M. S. Akhtar, D. Chauhan, D. Ghosal, S. Poria, A. Ekbal,
+P.  Bhattacharyya.  Multi-task  learning  for  multi-modal
+emotion recognition and sentiment analysis. In Proceed-
+ings of Conference of the North American Chapter of the
+Association for Computational Linguistics: Human Lan-
+guage Technologies,  Minneapolis,  USA,  pp. 370–379,
+2019. DOI: 10.18653/v1/N19-1034.
+[78]
+ J.  M.  Liu,  P.  X.  Zhang,  Y.  Liu,  W.  D.  Zhang,  J.  Fang.
+Summary of multi-modal sentiment analysis technology.
+Journal of Frontiers of Computer Science and Techno-
+logy,  vol. 15,  no. 7,  pp. 1165–1182,  2021.  DOI:  10.3778/j.
+issn.1673-9418.2012075. (in Chinese)
+[79]
+ D. Z. Zhang, X. Y. Chen, S. Xu, B. Xu. Knowledge aware
+emotion  recognition  in  textual  conversations  via  multi-
+task incremental transformer. In Proceedings of the 28th
+International Conference on Computational Linguistics,
+Barcelona,  Spain,  pp. 4429–4440,  2020.  DOI:  10.18653/
+v1/2020.coling-main.392.
+[80]
+ K. Y. Wang, Q. Y. Yin, W. Wang, S. Wu, L. Wang. A
+comprehensive survey on cross-modal retrieval. [Online],
+Available: https://arxiv.org/abs/1607.06215, 2016.
+[81]
+ N. C. Mithun, J. C. Li, F. Metze, A. K. Roy-Chowdhury.
+Learning joint embedding with multimodal cues for cross-
+modal video-text retrieval. In Proceedings of ACM on In-
+ternational Conference on Multimedia Retrieval,  Yoko-
+hama,  Japan,  pp. 19–27,  2018.  DOI:  10.1145/3206025.
+3206064.
+[82]
+ H. Chen, G. G. Ding, X. D. Liu, Z. J. Lin, J. Liu, J. Han.
+IMRAM:  Iterative  matching  with  recurrent  attention
+memory for cross-modal image-text retrieval. In Proceed-
+ings of IEEE/CVF Conference on Computer Vision and
+Pattern Recognition,  IEEE,  Seattle,  USA,  pp. 12652–
+12660, 2020. DOI: 10.1109/CVPR42600.2020.01267.
+[83]
+ F.  L.  Chen,  X.  Y.  Chen,  J.  X.  Shi,  D.  Z.  Zhang,  J.  L.
+Chang,  Q.  Tian.  HiVLP:  Hierarchical  vision-language
+pre-training for fast image-text retrieval. [Online], Avail-
+able: https://arxiv.org/abs/2205.12105, 2022.
+[84]
+ K.  Xu,  J.  L.  Ba,  R.  Kiros,  K.  Cho,  A.  Courville,  R.
+Salakhutdinov, R. S. Zemel, Y. Bengio. Show, attend and
+tell:  Neural  image  caption  generation  with  visual  atten-
+tion.  In  Proceedings of the 32nd International Confer-
+[85]
+ 52
+Machine Intelligence Research 20(1), February 2023
+ 
+
+ence on International Conference on Machine Learning,
+ACM, Lille, France, pp. 2048–2057, 2015.
+ B. R. Wang, L. Ma, W. Zhang, W. Liu. Reconstruction
+network 
+for 
+video 
+captioning. 
+In 
+Proceedings 
+of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, IEEE, Salt Lake City, USA, pp. 7622–7631,
+2018. DOI: 10.1109/CVPR.2018.00795.
+[86]
+ H. Agrawal, K. Desai, Y. F. Wang, X. L. Chen, R. Jain,
+M.  Johnson,  D.  Batra,  D.  Parikh,  S.  Lee,  P.  Anderson.
+Nocaps: Novel object captioning at scale. In Proceedings
+of IEEE/CVF International Conference on Computer
+Vision,  IEEE,  Seoul,  Republic  of  Korea,  pp. 8948–8957,
+2019. DOI: 10.1109/ICCV.2019.00904.
+[87]
+ Q. Y. Feng, Y. Wu, H. H. Fan, C. G. Yan, M. L. Xu, Y.
+Yang.  Cascaded  revision  network  for  novel  object  cap-
+tioning. IEEE Transactions on Circuits and Systems for
+Video Technology,  vol. 30,  no. 10,  pp. 3413–3421,  2020.
+DOI: 10.1109/TCSVT.2020.2965966.
+[88]
+ A. Das, S. Kottur, K. Gupta, A. Singh, D. Yadav, J. M.
+F. Moura, D. Parikh, D. Batra. Visual dialog. In Proceed-
+ings of IEEE Conference on Computer Vision and Pat-
+tern Recognition,  Honolulu,  USA,  pp. 326–335,  2017.
+DOI: 10.1109/CVPR.2017.121.
+[89]
+ F. L. Chen, F. D. Meng, J. M. Xu, P. Li, B. Xu, J. Zhou.
+DMRM:  A  dual-channel  multi-hop  reasoning  model  for
+visual dialog. In Proceedings of AAAI Conference on Ar-
+tificial Intelligence,  vol. 34,  no. 5,  pp. 7504–7511,  2020.
+DOI: 10.1609/aaai.v34i05.6248.
+[90]
+ F. L. Chen, X. Y. Chen, F. D. Meng, P. Li, J. Zhou. GoG:
+Relation-aware graph-over-graph network for visual dia-
+log. In Proceedings of International Joint Conference on
+Natural Language Processing,  pp. 230–243,  2021.  DOI:
+10.18653/v1/2021.findings-acl.20.
+[91]
+ F. L. Chen, F. D. Meng, X. Y. Chen, P. Li, J. Zhou. Mul-
+timodal  incremental  transformer  with  visual  grounding
+for visual dialogue generation. In Proceedings of Interna-
+tional Joint Conference on Natural Language Processing,
+pp. 436–446,  2021.  DOI:  10.18653/v1/2021.findings-acl.
+38.
+[92]
+ L. Specia, S. Frank, K. Sima′an, D. Elliott. A shared task
+on multimodal machine translation and crosslingual im-
+age description. In Proceedings of the 1st Conference on
+Machine Translation,  Berlin,  Germany,  pp. 543–553,
+2016. DOI: 10.18653/v1/W16-2346.
+[93]
+ Y. J. Yin, F. D. Meng, J. S. Su, C. L. Zhou, Z. Y. Yang, J.
+Zhou, J. B. Luo. A novel graph-based multi-modal fusion
+encoder for neural machine translation. In Proceedings of
+the 58th Annual Meeting of the Association for Computa-
+tional Linguistics,  pp. 3025–3035,  2020.  DOI:  10.18653/
+v1/2020.acl-main.273.
+[94]
+ Y. H. Su, K. Fan, N. Bach, C. C. J. Kuo, F. Huang. Unsu-
+pervised multi-modal neural machine translation. In Pro-
+ceedings of IEEE/CVF Conference on Computer Vision
+and Pattern Recognition,  IEEE,  Long  Beach,  USA,
+pp. 10482–10491, 2019. DOI: 10.1109/CVPR.2019.01073.
+[95]
+ X. Wang, Q. Y. Huang, A. Celikyilmaz, J. F. Gao, D. H.
+Shen,  Y.  F.  Wang,  W.  Y.  Wang,  L.  Zhang.  Reinforced
+cross-modal  matching  and  self-supervised  imitation
+learning for vision-language navigation. In Proceedings of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 
+IEEE, 
+Long 
+Beach, 
+USA, 
+pp. 6629–
+6638, 2019. DOI: 10.1109/CVPR.2019.00679.
+[96]
+ F. D. Zhu, Y. Zhu, X. J. Chang, X. D. Liang. Vision-lan-
+guage navigation with self-supervised auxiliary reasoning
+tasks. In Proceedings of IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition,  IEEE,  Seattle,
+USA, pp. 10012–10022, 2020. DOI: 10.1109/CVPR42600.
+2020.01003.
+[97]
+ J. Gu, E. Stefani, Q. Wu, J. Thomason, X. Wang. Vision-
+and-language navigation: A survey of tasks, methods, and
+future  directions.  In  Proceedings of the 60th Annual
+Meeting of the Association for Computational Linguist-
+ics, Dublin, Ireland, pp. 7606–7623, 2022. DOI: 10.18653/
+v1/2022.acl-long.524.
+[98]
+ S. Mori, H. Nishida, H. Yamada. Optical Character Re-
+cognition, New York, USA: J. Wiley, 1999.
+[99]
+ J. Memon, M. Sami, R. A. Khan, M. Uddin. Handwritten
+optical  character  recognition  (OCR):  A  comprehensive
+systematic  literature  review  (SLR).  IEEE Access,  vol. 8,
+pp. 142642–142668,  2020.  DOI:  10.1109/ACCESS.2020.
+3012542.
+[100]
+ R. Strudel, R. Garcia, I. Laptev, C. Schmid. Segmenter:
+Transformer  for  semantic  segmentation.  In  Proceedings
+of IEEE/CVF International Conference on Computer
+Vision,  IEEE,  Montreal,  Canada,  pp. 7242–7252,  2021.
+DOI: 10.1109/ICCV48922.2021.00717.
+[101]
+ Y. J. Mo, Y. Wu, X. N. Yang, F. L. Liu, Y. J. Liao. Re-
+view  the  state-of-the-art  technologies  of  semantic  seg-
+mentation  based  on  deep  learning.  Neurocomputing,
+vol. 493, pp. 626–646, 2022. DOI: 10.1016/j.neucom.2022.
+01.005.
+[102]
+ Z. Q. Zhao, P. Zheng, S. T. Xu, X. D. Wu. Object detec-
+tion with deep learning: A review. IEEE transactions on
+neural networks and learning systems,  vol. 30,  no. 11,
+pp. 3212–3232,  2019.  DOI:  10.1109/TNNLS.2018.2876
+865.
+[103]
+ Y. X. Fang, B. C. Liao, X. G. Wang, J. M. Fang, J. Y. Qi,
+R. Wu, J. W. Niu, W. Y. Liu. You only look at one se-
+quence: Rethinking transformer in vision through object
+detection. In Proceedings of the 35th Conference on Neur-
+al Information Processing Systems,  pp. 26183–26197,
+2021.
+[104]
+ C.  Sun,  F.  Baradel,  K.  Murphy,  C.  Schmid.  Learning
+video  representations  using  contrastive  bidirectional
+transformer.  [Online],  Available:  https://arxiv.org/abs/
+1906.05743, 2019.
+[105]
+ H. S. Luo, L. Ji, B. T. Shi, H. Y. Huang, N. Duan, T. R.
+Li, J. Li, T. Bharti, M. Zhou. UniVL: A unified video and
+language pre-training model for multimodal understand-
+ing  and  generation.  [Online],  Available:  https://arxiv.
+org/abs/2002.06353, 2020.
+[106]
+ N. Rethmeier, I. Augenstein. Long-tail zero and few-shot
+learning via contrastive pretraining on and for small data.
+Computer Sciences and Mathematics Forum, vol. 3, no. 1,
+Article number 10, 2022. DOI: 10.3390/cmsf2022003010.
+[107]
+ W. J. Su, X. Z. Zhu, Y. Cao, B. Li, L. W. Lu, F. R. Wei,
+J.  F.  Dai.  VL-BERT:  Pre-training  of  generic  visual-lin-
+guistic representations. In Proceedings of the 8th Interna-
+tional Conference on Learning Representations,  Addis
+Ababa, Ethiopia, 2019.
+[108]
+ Y. Wang, S. R. Joty, M. R. Lyu, I. King, C. M. Xiong, S.
+C. H. Hoi. VD-BERT: A unified vision and dialog trans-
+former with BERT. In Proceedings of Conference on Em-
+[109]
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+53 
+ 
+
+pirical 
+Methods 
+in 
+Natural 
+Language 
+Processing,
+pp. 3325–3338, 2020. DOI: 10.18653/v1/2020.emnlp-main.
+269.
+ J.  H.  Dong,  Y.  Cong,  G.  Sun,  B.  N.  Zhong,  X.  W.  Xu.
+What  can  be  transferred:  Unsupervised  domain  adapta-
+tion for endoscopic lesions segmentation. In Proceedings
+of IEEE/CVF Conference on Computer Vision and Pat-
+tern Recognition,  IEEE,  Seattle,  USA,  pp. 4022–4031,
+2020. DOI: 10.1109/CVPR42600.2020.00408.
+[110]
+ J. H. Dong, Y. Cong, G. Sun, Z. Fang, Z. M. Ding. Where
+and  how  to  transfer:  Knowledge  aggregation-induced
+transferability  perception  for  unsupervised  domain  ad-
+aptation.  IEEE Transactions on Pattern Analysis and
+Machine Intelligence,  to  be  published.  DOI:  10.1109/
+TPAMI.2021.3128560.
+[111]
+ H.  B.  Bao,  W.  H.  Wang,  L.  Dong,  Q.  Liu,  O.  K.  Mo-
+hammed, K. Aggarwal, S. Som, F. R. Wei. VLMo: Uni-
+fied vision-language pre-training with mixture-of-modal-
+ity-experts.  [Online],  Available:  https://arxiv.org/abs/
+2111.02358, 2021.
+[112]
+ H.  Tan,  M.  Bansal.  LXMERT:  Learning  cross-modality
+encoder  representations  from  transformers.  In  Proceed-
+ings of Conference on Empirical Methods in Natural Lan-
+guage Processing and the 9th International Joint Confer-
+ence on Natural Language Processing,  Hong  Kong,
+China, pp. 5100–5111, 2019. DOI: 10.18653/v1/D19-1514.
+[113]
+ C. Alberti, J. Ling, M. Collins, D. Reitter. Fusion of de-
+tected  objects  in  text  for  visual  question  answering.  In
+Proceedings of Conference on Empirical Methods in Nat-
+ural Language Processing and the 9th International Joint
+Conference on Natural Language Processing, Hong Kong,
+China, pp. 2131–2140, 2019. DOI: 10.18653/v1/D19-1219.
+[114]
+ J.  S.  Lu,  V.  Goswami,  M.  Rohrbach,  D.  Parikh,  S.  Lee.
+12-in-1:  Multi-task  vision  and  language  representation
+learning.  In  Proceedings of IEEE/CVF Conference on
+Computer Vision and Pattern Recognition,  IEEE,
+Seattle, USA, pp. 10437–10446, 2020. DOI: 10.1109/CV-
+PR42600.2020.01045.
+[115]
+ V.  Murahari,  D.  Batra,  D.  Parikh,  A.  Das.  Large-scale
+pretraining  for  visual  dialog:  A  simple  state-of-the-art
+baseline.  In  Proceedings of the 16th European Confer-
+ence on Computer Vision,  Springer,  Glasgow,  UK,
+pp. 336–352, 2020. DOI: 10.1007/978-3-030-58523-5_20.
+[116]
+ W.  T.  Hao,  C.  Y.  Li,  X.  J.  Li,  L.  Carin,  J.  F  Gao.  To-
+wards  learning  a  generic  agent  for  vision-and-language
+navigation via pre-training. In Proceedings of IEEE/CVF
+Conference on Computer Vision and Pattern Recogni-
+tion,  IEEE,  Seattle,  USA,  pp. 13134–13143,  2020.  DOI:
+10.1109/CVPR42600.2020.01315.
+[117]
+ J. Y. Lin, A. Yang, Y. C. Zhang, J. Liu, J. R. Zhou, H. X.
+Yang.  InterBERT:  Vision-and-language  interaction  for
+multi-modal  pretraining.  [Online],  Available:  https://
+arxiv.org/abs/2003.13198, 2020.
+[118]
+ Z.  C.  Huang,  Z.  Y.  Zeng,  B.  Liu,  D.  M.  Fu,  J.  L.  Fu.
+Pixel-BERT:  Aligning  image  pixels  with  text  by  deep
+multi-modal  transformers.  [Online],  Available:  https://
+arxiv.org/abs/2004.00849, 2020.
+[119]
+ Y.  C.  Hong,  Q.  Wu,  Y.  K.  Qi,  C.  R.  Opazo,  S.  Gould.
+VLN-BERT:  A  recurrent  vision-and-language  bert  for
+navigation. In Proceedings of IEEE/CVF Conference on
+Computer Vision and Pattern Recognition,  IEEE,
+Nashville, USA, pp. 1643–1653, 2021. DOI: 10.1109/CV-
+[120]
+PR46437.2021.00169.
+ D. H. Gao, L. B. Jin, B. Chen, M. H. Qiu, P. Li, Y. Wei,
+Y. Hu, H. Wang. FashionBERT: Text and image match-
+ing  with  adaptive  loss  for  cross-modal  retrieval.  In  Pro-
+ceedings of the 43rd International ACM SIGIR Confer-
+ence on Research and Development in Information Re-
+trieval,  pp. 2251–2260,  2020.  DOI:  10.1145/3397271.
+3401430.
+[121]
+ Z. Gan, Y. C. Chen, L. J. Li, C. Zhu, Y. Cheng, J. J. Liu.
+Large-scale  adversarial  training  for  vision-and-language
+representation learning. In Proceedings of the 34th Inter-
+national Conference on Neural Information Processing
+Systems, ACM, Vancouver, Canada, pp. 6616–6628, 2020.
+[122]
+ F. Yu, J. J. Tang, W. C. Yin, Y. Sun, H. Tian, H. Wu, H.
+F. Wang. 
+ERNIE-ViL: Knowledge enhanced vision-lan-
+guage representations through scene graphs.  In  Proceed-
+ings of the AAAI Conference on Artificial Intelligence,
+vol. 35,  no. 4,  pp. 3208–3216,  2021.  DOI:  10.1609/aaai.
+v35i4.16431.
+[123]
+ M. J. Chiou, R. Zimmermann, J. S. Feng. Visual relation-
+ship detection with visual-linguistic knowledge from mul-
+timodal  representations.  IEEE Access,  vol. 9,  pp. 50441–
+50451, 2021. DOI: 10.1109/ACCESS.2021.3069041.
+[124]
+ J.  Cho,  J.  Lei,  H.  Tan,  M.  Bansal.  Unifying  vision-and-
+language tasks via text generation. In Proceedings of the
+38th International Conference on Machine Learning,
+pp. 1931–1942, 2021.
+[125]
+ W.  Kim,  B.  Son,  I.  Kim.  ViLT:  Vision-and-language
+transformer without convolution or region supervision. In
+Proceedings of the 38th International Conference on Ma-
+chine Learning, pp. 5583–5594, 2021.
+[126]
+ Z. C. Huang, Z. Y. Zeng, Y. P. Huang, B. Liu, D. M. Fu,
+J. L. Fu. Seeing out of the box: End-to-end pre-training
+for  vision-language  representation  learning.  In  Proceed-
+ings of IEEE/CVF Conference on Computer Vision and
+Pattern Recognition,  IEEE,  Nashville,  USA,  pp. 12976–
+12985, 2021. DOI: 10.1109/CVPR46437.2021.01278.
+[127]
+ H. Y. Xu, M. Yan, C. L. Li, B. Bi, S. F. Huang, W. M.
+Xiao,  F.  Huang.  E2E-VLP:  End-to-end  vision-language
+pre-training enhanced by visual learning. In Proceedings
+of the 59th Annual Meeting of the Association for Com-
+putational Linguistics and the 11th International Joint
+Conference on Natural Language Processing, pp. 503–513,
+2021. DOI: 10.18653/v1/2021.acl-long.42.
+[128]
+ H. W. Xue, Y. P. B. Liu, H. W. Peng, J. L. Fu, H. Q. Li,
+J.  B.  Luo.  Probing  inter-modality:  Visual  parsing  with
+self-attention  for  vision-language  pre-training.  In  Pro-
+ceedings of the 35th Conference on Neural Information
+Processing Systems, pp. 4514–4528, 2021.
+[129]
+ S. Shen, L. H. Li, H. Tan, M. Bansal, A. Rohrbach, K. W.
+Chang, Z. W Yao, K. Keutzer. How much can clip bene-
+fit vision-and-language tasks? In Proceedings of the 10th
+International Conference on Learning Representations,
+2022.
+[130]
+ A. Jain, M. Guo, K. Srinivasan, T. Chen, S. Kudugunta,
+C.  Jia,  Y.  F  Yang,  J.  Baldridge.  MURAL:  Multimodal,
+multitask retrieval across languages. [Online], Available:
+https://arxiv.org/abs/2109.05125, 2021.
+[131]
+ J. Y. Yang, J. L. Duan, S. Tran, Y. Xu, S. Chanda, L. Q.
+Chen,  B.  Zeng,  T.  Chilimbi,  J.  Z.  Huang.  Vision-lan-
+guage  pre-training  with  triple  contrastive  learning.  In
+[132]
+ 54
+Machine Intelligence Research 20(1), February 2023
+ 
+
+Proceeding of IEEE/CVF Conference on Computer Vis-
+ion and Pattern Recognition, IEEE, New Orleans, USA,
+pp. 15650–15659,  2022.  DOI:  10.1109/CVPR52688.2022.
+01522.
+ S. N. Xie, C. Sun, J. Huang, Z. W. Tu, K. Murphy. Re-
+thinking  spatiotemporal  feature  learning:  Speed-accur-
+acy trade-offs in video classification. [Online], Available:
+https://arxiv.org/abs/1712.04851, 2017.
+[133]
+ A.  Urooj,  A.  Mazaheri,  N.  da  Vitoria  Lobo,  M.  Shah.
+MMFT-BERT:  Multimodal  fusion  transformer  with
+BERT  encodings  for  visual  question  answering.  In  Pro-
+ceeding of Conference on Empirical Methods in Natural
+Language Processing,  pp. 4648–4660,  2020.  DOI:  10.
+18653/v1/2020.findings-emnlp.417.
+[134]
+ L.  C.  Zhu,  Y.  Yang.  ActBERT:  Learning  global-local
+video-text  representations.  In  Proceeding of IEEE/CVF
+Conference on Computer Vision and Pattern Recogni-
+tion, IEEE, Seattle, USA, pp. 8743–8752, 2020. DOI: 10.
+1109/CVPR42600.2020.00877.
+[135]
+ R. Yan, M. Z. Shou, Y. X. Ge, A. J. Wang, X. D. Lin, G.
+Y. Cai, J. H. Tang. Video-text pre-training with learned
+regions. [Online], Available: https://arxiv.org/abs/2112.
+01194, 2021.
+[136]
+ H. Zhu, M. D. Luo, R. Wang, A. H. Zheng, R. He. Deep
+audio-visual learning: A survey. International Journal of
+Automation and Computing,  vol. 18,  no. 3,  pp. 351–376,
+2021. DOI: 10.1007/s11633-021-1293-0.
+[137]
+ J. H. Tao, J. Huang, Y. Li, Z. Lian, M. Y. Niu. Correc-
+tion to: Semi-supervised ladder networks for speech emo-
+tion  recognition.  International Journal of Automation
+and Computing, vol. 18, no. 4, pp. 680–680, 2021. DOI: 10.
+1007/s11633-019-1215-6.
+[138]
+ H.  Akbari,  L.  Z.  Yuan,  R.  Qian,  W.  H.  Chuang,  S.  F.
+Chang,  Y.  Cui,  B.  Q.  Gong.  VATT:  Transformers  for
+multimodal  self-supervised  learning  from  raw  video,  au-
+dio  and  text.  In  Proceedings of the 35th Conference on
+Neural Information Processing Systems, pp. 24206–24221,
+2021.
+[139]
+ J.  Liu,  X.  X.  Zhu,  F.  Liu,  L.  T.  Guo,  Z.  J.  Zhao,  M.  Z.
+Sun, W. N. Wang, H. Q. Lu, S. Y. Zhou, J. J. Zhang, J.
+Q.  Wang.  OPT:  Omni-perception  pre-trainer  for  cross-
+modal understanding and generation. [Online], Available:
+https://arxiv.org/abs/2107.00249, 2021.
+[140]
+ A. Guzhov, F. Raue, J. Hees, A. Dengel. Audioclip: Ex-
+tending clip to image, text and audio. In Proceedings of
+IEEE International Conference on Acoustics, Speech and
+Signal Processing, Singapore, pp. 976–980, 2022. DOI: 10.
+1109/ICASSP43922.2022.9747631.
+[141]
+ R.  Zellers,  J.  S.  Lu,  X.  M.  Lu,  Y.  Yu,  Y.  P.  Zhao,  M.
+Salehi,  A.  Kusupati,  J.  Hessel,  A.  Farhadi,  Y.  Choi.
+MERLOT reserve: Neural script knowledge through vis-
+ion  and  language  and  sound.  In  Proceedings of
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, IEEE, New Orleans, USA, pp. 16354–16366,
+2022. DOI: 10.1109/CVPR52688.2022.01589.
+[142]
+ K. Z. Chen, Q. Y. Huang, Y. Bisk, D. McDuff, J. F. Gao.
+KB-VLP: Knowledge based vision and language pretrain-
+ing. In Proceedings of the 38 th International Conference
+on Machine Learning, 2021.
+[143]
+ M. Tsimpoukelli, J. Menick, S. Cabi, S. M. Ali Eslami, O.
+Vinyals,  F.  Hill.  Multimodal  few-shot  learning  with
+[144]
+frozen language models. In Proceedings of the 35th Con-
+ference on Neural Information Processing Systems,
+pp. 200–212, 2021.
+ A. Fan, E. Grave, A. Joulin. Reducing transformer depth
+on  demand  with  structured  dropout.  In  Proceedings of
+the 8th International Conference on Learning Represent-
+ations, Addis Ababa, Ethiopia, 2020.
+[145]
+ V. Sanh, L. Debut, J. Chaumond, T. Wolf. DistilBERT, a
+distilled  version  of  BERT:  Smaller,  faster,  cheaper  and
+lighter.  [Online],  Available:  https://arxiv.org/abs/1910.
+01108, 2019.
+[146]
+ O.  Zafrir,  G.  Boudoukh,  P.  Izsak,  M.  Wasserblat.
+Q8BERT: Quantized 8Bit BERT. In Proceedings of the
+5th Workshop on Energy Efficient Machine Learning and
+Cognitive 
+Computing, 
+IEEE, 
+Vancouver, 
+Canada,
+pp. 36–39,  2019.  DOI:  10.1109/EMC2-NIPS53020.2019.
+00016.
+[147]
+ Z.  Y.  Fang,  J.  F.  Wang,  X.  W.  Hu,  L.  J.  Wang,  Y.  Z.
+Yang, Z. C. Liu. Compressing visual-linguistic model via
+knowledge distillation. In Proceedings of IEEE/CVF In-
+ternational Conference on Computer Vision,  IEEE,
+Montreal,  Canada,  pp. 1428–1438,  2021.  DOI:  10.1109/
+ICCV48922.2021.00146.
+[148]
+ Y. G. Li, F. Liang, L. C. Zhao, Y. F. Cui, W. L. Ouyang,
+J.  Shao,  F.  W.  Yu,  J.  J.  Yan.  Supervision  exists  every-
+where:  A  data  efficient  contrastive  language-image  pre-
+training  paradigm.  In  Proceedings of the 10th Interna-
+tional Conference on Learning Representations, 2022.
+[149]
+ C. Saharia, W. Chan, S. Saxena, L. L. Li, J. Whang, E.
+Denton,  S.  K.  S.  Ghasemipour,  B.  K.  Ayan,  S.  S.  Mah-
+davi,  R.  G.  Lopes,  T.  Salimans,  J.  Ho,  D.  J.  Fleet,  M.
+Norouzi.  Photorealistic  text-to-image  diffusion  models
+with  deep  language  understanding.  [Online],  Available:
+https://arxiv.org/abs/2205.11487, 2022.
+[150]
+ X.  L.  Li,  J.  Thickstun,  I.  Gulrajani,  P.  Liang,  T.  B.
+Hashimoto. Diffusion-LM improves controllable text gen-
+eration.  [Online],  Available:  https://arxiv.org/abs/2205.
+14217, 2022.
+[151]
+ W. Z. Chen, X. Han, Y. K. Lin, H. X. Zhao, Z. Y. Liu, P.
+Li, M. S. Sun, J. Zhou. Fully hyperbolic neural networks.
+In Proceedings of the 60th Annual Meeting of the Associ-
+ation for Computational Linguistics,  Dublin,  Ireland,
+pp. 5672–5686,  2022.  DOI:  10.18653/v1/2022.acl-long.
+389.
+[152]
+ M.  M.  Bronstein,  J.  Bruna,  T.  Cohen,  P.  Veličković,  P.
+Geometric deep learning: Grids, groups, graphs, geodesics,
+and  gauges.  [Online],  Available:  https://arxiv.org/abs/
+2104.13478, 2021.
+[153]
+ W. Maass. Networks of spiking neurons: The third gener-
+ation of neural network models. Neural Networks, vol. 10,
+no. 9, pp. 1659–1671, 1997. DOI: 10.1016/S0893-6080(97)
+00011-7.
+[154]
+ D. Z. Zhang, T. L. Zhang, S. C. Jia, Q. Y. Wang, B. Xu.
+Recent advances and new frontiers in spiking neural net-
+works.  In  Proceedings of the 31st International Joint
+Conference on Artificial Intelligence,  Vienna,  Austria,
+2022.
+[155]
+ D.  Z.  Zhang,  T.  L.  Zhang,  S.  C.  Jia,  X.  Cheng,  B.  Xu.
+Population-coding  and  dynamic-neurons  improved  spik-
+ing  actor  network  for  reinforcement  learning.  [Online],
+Available: https://arxiv.org/abs/2106.07854, 2021.
+[156]
+ 
+F. L. Chen et al. / VLP: A Survey on Vision-language Pre-training
+55 
+ 
+
+Fei-Long  Chen  received  the  B. Sc.  de-
+gree in computer sciences from Hefei Uni-
+versity of Technology, China in 2018. He is
+currently a Ph. D. degree candidate in pat-
+tern  recognition  and  intelligent  system  at
+Institute  of  Automation,  Chinese  Aca-
+demy  of  Sciences  and  University  of  Chin-
+ese Academy of Sciences, China.
+     His research interests include theoretic-
+al  research  on  vision-language  pre-training,  multi-modal  ques-
+tion answering and dialog.
+     E-mail: chenfeilong2018@ia.ac.cn
+     ORCID iD: 0000-0002-4860-8483
+ 
+Du-Zhen  Zhang,  received  the  B. Sc.  de-
+gree  in  software  engineering  from  Shan-
+dong University, China in 2019. He is cur-
+rently a Ph.D. degree candidate in pattern
+recognition and intelligent system at Insti-
+tute  of  Automation,  Chinese  Academy  of
+Sciences  and  University  of  Chinese  Aca-
+demy of Sciences, China.
+     His research interests include theoretic-
+al  research  on  reinforcement  learning,  natural  language  pro-
+cessing, and spiking neural networks.
+     E-mail: zhangduzhen2019@ia.ac.cn
+ 
+Ming-Lun  Han  received  the  B. Sc.  de-
+gree  in  electronic  and  information  engin-
+eering  from  Harbin  Institute  of  Techno-
+logy, China in 2018. He is a Ph. D. degree
+candidate in pattern recognition and intel-
+ligent  system  at  Institute  of  Automation,
+Chinese Academy of Sciences and the Uni-
+versity  of  Chinese  Academd  of  Sciences,
+China.
+     His research interests include speech recognition, speech syn-
+thesis, and speech chain.
+     E-mail: hanminglun2018@ia.ac.cn
+ 
+Xiu-Yi Chen received the B. Sc. degree in
+automation  from  Department  of  Control
+Science and Engineering, Jilin University,
+China  in  2017,  and  the  Ph. D.  degree  in
+pattern recognition and intelligent system
+from  Institute  of  Automation,  Chinese
+Academy of Sciences, China in 2022.
+     His  research  interests  include  cross-
+modal retrieval, multimodal learning, dia-
+logue system, knowledge-grounded generation and speech separ-
+ation.
+     E-mail: chenxiuyi2017@ia.ac.cn
+ 
+Jing  Shi  received  the  B. Sc.  degree  in
+automation  from  School  of  Instrumenta-
+tion  and  Optoelectronic  Engineering  from
+Beihang  University,  China  in  2012,  and
+the  Ph. D.  degree  in  pattern  recognition
+and  intelligent  system  from  Institute  of
+Automation,  Chinese  Academy  of  Sci-
+ences, China in 2021. He is a research as-
+sistant in Institute of Automation, Chinese
+Academy of Sciences, China.
+     His interests include cross-modal modeling, multimodal learn-
+ing, dialogue system, speech recognition and speech separation.
+     E-mail: shijing2014@ia.ac.cn
+ 
+Shuang Xu received the B. Sc. and M. Sc.
+degrees in measuring and testing technolo-
+gies  and  instruments  from  Yanshan  Uni-
+versity,  China  in  2001  and  2004,  respect-
+ively, and the Ph.D. degree in pattern re-
+cognition  and  intelligent  system  from  In-
+stitute  of  Automation,  Chinese  Academy
+of Sciences, China in 2009. She is a profess-
+or in Institute of Automation, Chinese Aca-
+demy of Sciences, China.
+     Her  research  interests  include  natural  language  processing
+and understanding, human-AI hybird intelligence.
+     E-mail: shuang.xu@ia.ac.cn
+ 
+Bo  Xu  received  the  B. Sc.  degree  in  elec-
+trical  engineering  from  Zhejiang  Uni-
+versity, China in 1988, and the M. Sc. and
+Ph. D.  degrees  in  pattern  recognition  and
+intelligent  system  from  Institute  of  Auto-
+mation,  Chinese  Academy  of  Sciences,
+China in 1992 and 1997, respectively. He is
+a  professor,  the  director  of  Institute  of
+Automation,  Chinese  Academy  of  Sci-
+ences, China, and also deputy director of the Center for Excel-
+lence  in  Brain  Science  and  Intelligence  Technology,  Chinese
+Academy of Sciences, China.
+     His  research  interests  include  brain-inspired  intelligence,
+brain-inspired cognitive models, natural language processing and
+understanding, brain-inspired robotics.
+     E-mail: xubo@ia.ac.cn (Corresponding author)
+     ORCID iD: 0000-0002-1111-1529
+ 56
+Machine Intelligence Research 20(1), February 2023

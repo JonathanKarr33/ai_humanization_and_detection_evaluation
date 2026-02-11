@@ -1,0 +1,1369 @@
+TransMOT: Spatial-Temporal Graph Transformer for Multiple Object Tracking
+Peng Chu1
+Jiang Wang1
+Quanzeng You1
+Haibin Ling2
+Zicheng Liu1
+1Microsoft
+2Stony Brook University
+{pengchu, jiangwang, quanzeng.you, zliu}@microsoft.com, hling@cs.stonybrook.edu
+Abstract
+Tracking multiple objects in videos relies on modeling
+the spatial-temporal interactions of the objects. In this pa-
+per, we propose a solution named TransMOT, which lever-
+ages powerful graph transformers to efﬁciently model the
+spatial and temporal interactions among the objects. Trans-
+MOT effectively models the interactions of a large number
+of objects by arranging the trajectories of the tracked ob-
+jects as a set of sparse weighted graphs, and constructing a
+spatial graph transformer encoder layer, a temporal trans-
+former encoder layer, and a spatial graph transformer de-
+coder layer based on the graphs. TransMOT is not only
+more computationally efﬁcient than the traditional Trans-
+former, but it also achieves better tracking accuracy. To
+further improve the tracking speed and accuracy, we pro-
+pose a cascade association framework to handle low-score
+detections and long-term occlusions that require large com-
+putational resources to model in TransMOT. The proposed
+method is evaluated on multiple benchmark datasets includ-
+ing MOT15, MOT16, MOT17, and MOT20, and it achieves
+state-of-the-art performance on all the datasets.
+1. Introduction
+Robust tracking of multiple objects in video is criti-
+cal for many real-world applications, ranging from vision-
+based surveillance to autonomous driving vehicles. Most of
+the recent state-of-the-art Multiple Object Tracking (MOT)
+methods use the tracking-by-detection strategy, where tar-
+get candidates proposed by an object detector on each
+frame are associated and connected to form target trajec-
+tories [3, 15, 21, 33, 37, 49, 52]. There are two core tasks in
+this framework: accurate object detection and robust target
+association. In this paper, we focus on building models for
+robust target association, where successfully modeling the
+temporal history and appearance of the targets, as well as
+their spatial-temporal relationships plays an important role.
+Traditional models of spatial-temporal relationships usu-
+ally rely on manually designed association rules, such as
+social interaction models or spatial exclusion models [28].
+The recent advances in deep learning inspire us to explore
+to learn the spatial-temporal relationships using deep learn-
+ing. In particular, the success of Transformer suggests a
+new paradigm of modeling temporal dependencies through
+the powerful self-attention mechanism.
+Recent studies
+in [30, 44] have proved the feasibility of directly modeling
+spatial-temporal relationships with transformers. However,
+the tracking performance of transformer-based tracker is not
+state-of-the-art for several reasons. First, a video contains a
+large number of objects. Modeling the spatial temporal rela-
+tionships of these objects with a general Transformer is in-
+effective, because it does not take the spatial-temporal struc-
+ture of the objects into consideration. Second, it requires
+a lot of computation resources and data to learn a trans-
+former to model long term temporal dependencies. Third,
+DETR-based object detector used in these works is still not
+the state-of-the-art for MOT.
+In this paper, we propose a novel spatial-temporal graph
+Transformer for MOT (TransMOT) to resolve all these is-
+sues. In TransMOT, the trajectories of all the tracked tar-
+gets are arranged as a series of sparse weighted graphs that
+are constructed using spatial relationships of the targets.
+Based on these sparse graphs, TransMOT builds a spatial
+graph transformer encoder layer, a temporal transformer
+encoder layer, and a spatial transformer decoder layer to
+model the spatial temporal relationships of the objects. It
+is more computationally efﬁcient during training and infer-
+ence because of the sparsity of the weighted graph repre-
+sentation. It is also a more effective model than regular
+transformer because it exploits the structure of the objects.
+We also propose a cascade association framework to han-
+dle low-score detections and long-term occlusions. By in-
+corporating TransMOT into the cascade association frame-
+work, we do not need to learn to associate a large number
+of low-score detections or model long-term temporal rela-
+tionships. TransMOT can also be combined with different
+object detectors or visual feature extraction sub-networks to
+form a uniﬁed end-to-end solution so that we can exploit the
+arXiv:2104.00194v2  [cs.CV]  3 Apr 2021
+
+Spatial Graph 
+Transformer Encoder 
+Layer
+Temporal 
+Transformer Encoder 
+Layer
+Spatial Graph 
+Transformer Decoder 
+Layer
+Spatial-Temporal Graph Transformer Encoder
+TransMOT
+Spatial Graph Transformer Decoder
+Embedding
+Embedding
+Virtual 
+Sink
+Virtual 
+Source
+Occlusion/Entering 
+Handling
+Extended 
+Assignment Matrix
+Tracked Targets Graph Series
+Candidates Graph
+t
+t-1
+t-2
+t-3
+t-4
+Figure 1. Overview of the proposed TransMOT pipeline for online MOT. The trajectories graph series Ξt−1 till frame t −1 and detection
+candidates graph Θt at frame t serve as the source and target inputs, respectively, to the spatial-temporal graph transformer.
+state-of-the-art object detectors for MOT. Extensive experi-
+ments on MOT15, MOT16, MOT17, and MOT20 challenge
+datasets demonstrate that the proposed approach achieves
+the best overall performance and establishes new state-of-
+the-art in comparison with other published works.
+In summary, we make following contributions:
+• We propose a spatial-temporal graph Transformer
+(TransMOT) for effective modeling of the spatial-
+temporal relationship of the objects for MOT.
+• We design a cascade association framework that
+can improve TransMOT and other transformer-based
+trackers by handling low-score detections and long-
+term occlusion.
+2. Related Works
+Most of the recent Multiple Object Tracking (MOT)
+trackers are based on the tracking-by-detection framework.
+Tracking-by-detection framework generates tracklets by as-
+sociating object detections in all the frames using match-
+ing algorithms such as Hungarian algorithm [6, 16, 20],
+network ﬂow [14, 56, 57], and multiple hypotheses track-
+ing [10,22]. Many works solve the association problem by
+building graphs of object detections across all the frames,
+such as multi-cuts [21,46] and lifting edges [47]. However,
+these methods need to perform computationally expensive
+global optimization on large graphs, which limits their ap-
+plication to online tracking.
+Recently, deep learning-based association algorithm is
+gaining popularity in MOT [62]. In [34] and [32], recur-
+rent neural networks (RNN) is explored to solve the associ-
+ation problem using only the motion information. In [11], a
+power iteration layer is introduced in the rank-1 tensor ap-
+proximation framework [43] to solve the multi-dimension
+assignment in MOT. [4] and [61] combine object detection
+and target association that directly predict target locations in
+the current frame. In [53], a differentiable MOT loss is pro-
+posed to learn deep Hungarian Net for association. In [8],
+graph convolutional neural network is adopted as a neural
+solver for MOT, where a dense graph connecting every pair
+of nodes in different frames is constructed to infer the asso-
+ciation. The proposed TransMOT also constructs a spatial
+graph for the objects within the same frame, but it exploits
+the Transformer networking architecture to jointly learn the
+spatial and temporal relationship of the tracklets and candi-
+dates for efﬁcient association.
+Transformer has achieved great success in various com-
+puter vision tasks, such as detection [9] and segmenta-
+tion [26]. In [55], Transformer is adopted for trajectory pre-
+diction. The studies in [30,44] are the pioneer investigations
+in applying Transformer in MOT. Both methods use DETR
+for detection and feature extraction, and model the spatial-
+temporal relationship of the tracklets and detections using
+Transformer. The proposed TransMOT framework utilizes
+spatial graph transformer to model spatial relationship of
+the tracklets and detections, and it factorizes the spatial and
+temporal transformer encoder for model efﬁcient modeling.
+3. Overview
+We aim at joint detection and tracking multiple objects in
+videos in an online fashion. Fig. 1 illustrates our framework
+built upon tracking-by-detection framework.
+The frame-
+work maintains a set of Nt−1 tracklets, each of which rep-
+resents a tracked object. Each tracklet Lt−1
+i
+maintains a
+set of states, such as its past locations
+
+ˆxI
+t′
+	t−1
+t′=t−T and
+appearance features
+ ˆf I
+t′
+	t−1
+t′=t−T on the previous T image
+frames. Given a new image frame It, the online tracking
+algorithm eliminates the tracklets whose tracked object ex-
+its the scene, determines whether any tracked objects are
+occluded, computes new locations for the existing tracklets
+ˆXt =
+
+ˆxt
+i
+	Nt
+i=1, and generates new tracklets for new objects
+that enter the scene.
+As shown in Fig. 1, our framework contains two major
+parts: the detection and feature extraction sub-networks,
+and spatial temporal graph transformer association sub-
+network. At each frame, the detection and feature extrac-
+tion sub-networks generate Mt candidate object detection
+
+proposals Ot =
+
+ot
+j
+	Mt
+j=1, as well as visual features for
+each proposal. The spatial-temporal graph transformer ﬁnds
+the best candidate proposal for each tracklet and models the
+special events, such as entering, exiting, or occlusion.
+For each tracklet Lt−1
+i
+, the best matching is ob-
+tained through selecting the oj
+t maximizing the afﬁnity
+φ(Lt−1
+i
+, ot
+j), where φ(·) is a scoring function that computes
+the afﬁnity of the tracklet state and the candidate. Taking all
+tracklets into consideration, the problem can be formulated
+as a constrained optimization problem as
+max
+At=(at
+ij)
+Nt−1
+X
+i=1
+Mt
+X
+j=1
+at
+ijφ(Lt−1
+i
+, ot
+j),
+(1)
+s.t.
+
+
+
+P
+i at
+ij = 1,
+∀i = 1, . . . , Nt−1
+P
+j at
+ij = 1,
+∀j = 1, . . . , Mt
+at
+ij ∈{0, 1},
+∀i = 1, . . . , Nt−1; j = 1, . . . , Mt
+(2)
+where At = (at
+ij) indicates the association between track-
+lets Lt−1 = {Lt−1
+i
+}Nt
+i=1 and detected candidates Ot. Eq. 2
+is used to enforce the assignment constraints.
+In order to more effectively model the spatial-temporal
+relationship between all the tracklets and candidates, the
+proposed framework rewrites Eq. 1 and Eq. 2 into a single
+function At = Φ(Lt−1, Ot), where Lt−1 and Ot consist of
+all the tracklets and candidates, respectively.
+To model the spatial-temporal object correlation, we
+build a weighted spatial graph Θt for the proposals at the
+current frame, and a set of weighted spatial graphs Ξt−1 =
+{ξt−T , ξ2, . . . , ξt−1} of the tracked objects at the previ-
+ous T frames. The spatial-temporal graph neural network
+utilizes these graphs to build an efﬁcient spatial-temporal
+graph transformer that models the relationship between the
+tracked objects and newly generated proposals. It gener-
+ates an assignment matrix ¯At to track the objects and model
+the special events, such as entering, exiting, or occlusion,
+as shown in Fig. 1. The assignment matrix is used to up-
+date the tracked target while the special events are handled
+by the post-processing module, which will be explained in
+Sec. 4.4.
+The details of the spatial-temporal graph Transformer
+will be explained in Sec. 4.1 and Sec. 4.2. The two types
+of training losses to train TransMOT will be elaborated in
+Sec. 4.3.
+4. TransMOT
+Spatial-temporal graph Transformer for MOT (Trans-
+MOT) uses the graphs Ξt−1 and Θt to learn a mapping
+Φ(·) that models the spatial-temporal correlations, and gen-
+erates an assignment/mapping matrix ¯At. It contains three
+parts: a spatial graph transformer encoder layer, a temporal
+transformer encoder layer, and a spatial graph transformer
+decoder layer. We propose graph multi-head attention to
+Add & Norm
+Feed Forward
+Add & Norm
+Graph Conv
+Linear
+Linear
+Collect Feat.
+Collect Feat.
+Graph Multi-Head 
+Attention
+  
+   
+Figure 2. The spatial graph transformer encoder layer.
+model spatial relationship of the tracklets and candidates
+using the self-attention mechanism. It is crucial for both
+the spatial graph transformer encoder layer and the spatial
+graph transformer decoder layer.
+4.1. Spatial-Temporal Graph Transformer Encoder
+The spatial-temporal graph encoder consists of a spatial-
+temporal graph transformer encoder layer to model the spa-
+tial correlation among tracklets, and a temporal transformer
+encoder layer to further fuse and encode the spatial and tem-
+poral information of the tracklets. We ﬁnd that by factoring
+the transformer into spatial and temporal transformers, it
+makes the model both more accurate and computationally
+efﬁcient.
+4.1.1
+Spatial Graph Transformer Encoder Layer
+The input of spatial-temporal graph encoder layer is the
+states of the tracklets for the past T frames. The track-
+let state features are arranged using a sequence of track-
+let graphs Ξt−1
+=
+{ξt−T , ξt−T +1, . . . , ξt−1} , where
+ξt−1 = G({xt−1
+i
+}, Et−1
+X , wt−1
+X ) is the spatial graph1 of the
+tracklets at frame t −1. At frame t −1, the graph node
+xt−1
+i
+represents the status of i-th tracklet at this frame, two
+nodes are connected by an edge in Et−1
+X
+if their corre-
+sponding bounding boxes have IoU larger than 0, and the
+edge weight in wt−1
+X
+is set to the IoU. The weight matrix
+wt−1
+X
+∈RNt−1×Nt−1 is a sparse matrix, whose (i, j) entry
+is the weight of the edge connecting node i and node j, or 0
+if they are not connected.
+The node features for the tracklets are ﬁrst embedded
+through a source embedding layer (a linear layer) indepen-
+dently for each node. All the node features are arranged into
+a feature tensor Fs ∈RNt−1×T ×D, where D is the dimen-
+sion of the source embedding layer. It is passed into the spa-
+tial graph transformer encoder layer together with the graph
+1We use G(·) to denote a graph.
+
+series as shown in Fig. 2. Inside the layer, a multi-head
+graph attention module is utilized to generate self-attention
+for the input graph series. This module takes feature tensor
+Fs and the graph weights wt−1
+X
+to generate self-attention
+weights for the i-th head:
+FAW
+i
+= softmax
+h
+ϕ(Fs, W Q
+i , W K
+i ) ◦wt−1
+X
+i
+,
+(3)
+where ϕ(·) is the regular scaled dot-product to obtain atten-
+tion weights as in [48], and ◦is the element-wise product.
+It can be understood as computing the spatial graph self-
+attention for each timestamp independently.
+The multi-head graph attention utilizes the graph weights
+wt−1
+X
+to generate non-zero attention weights only for the
+tracklets that have spatial interactions, because the tracklets
+that are far way from each other usually have very little in-
+teraction in practice. By focusing its attention on a much
+smaller subset, the spatial graph transformer encoder layer
+models the interactions more effectively, and runs faster
+during training and inference.
+We also apply graph convolution instead of the linear
+layer to aggregate information from neighboring nodes. Af-
+ter the graph convolution layer, the node features are col-
+lected to form a value tensor FV
+i . Combined with the at-
+tention weights in Eq. 3, the graph multi-head attention
+weighted feature tensor can be written as
+Fen
+att = Concate({FAW
+i
+⊗FV
+i }) ⊗W O,
+where {·} iterates and aggregates the outputs from all the
+attention heads, ⊗is the tensor mode product2
+The attention weighted feature tensor is projected
+through a linear feed forward and a normalization layer to
+get the ﬁnal output of the spatial graph transformer encoder
+layer.
+4.1.2
+Temporal Transformer Encoder Layer
+The features of the tracklets are further encoded by a tem-
+poral transformer encoder layer. The temporal transformer
+encoder layer transposes the ﬁrst two dimension of the out-
+put tensor from the spatial graph transformer encoder, re-
+sulting in a tensor Fen
+tmp ∈RT ×Nt−1×D. The temporal
+transformer encoder layer employs a standard Transformer
+encoder layer over the temporal dimension for each track-
+lets independently. It calculates the self-attention weights
+along the temporal dimension, and computes the temporal
+attention-weighted feature tensor for the tracklets.
+The output of the temporal transformer encoder layer is
+the ﬁnal output of the spatial-temporal graph transformer
+encoder Fen
+out.
+Graph Muti-
+Head Attention
+Add & Norm
+Add Virtual 
+Source
+Muti-Head Cross 
+Attention
+Duplicate
+Add 
+Virtual 
+Sink
+Spatial Graph 
+Transformer Decoder
+Figure 3. Illustration of the spatial graph transformer decoder.
+4.2. Spatial Graph Transformer Decoder
+The spatial graph transformer decoder produces ex-
+tended assignment matrix ¯At from the candidate graph
+Θt = G({ot
+j}, Et
+O, wt
+O) and the output of the spatial-
+temporal transformer encoder Fen
+out. The candidate graph
+is constructed similarly to the tracklet graphs in Sec. 4.1.
+Each node ot
+j represents a candidate in frame t. Two nodes
+are connected only if their bounding box’s IoU is larger than
+zero, and the weight of the edge is set to the IoU. Besides the
+nodes representing the real candidates, a virtual sink node
+is added to the graph. The virtual sink node is responsible
+for exiting or occlusion events of any tracklet in the current
+frame. In particular, a node with a set of learnable embed-
+ding fsnk ∈RD is added to the Θt. The virtual sink node
+is connected to all the other nodes with weight 0.5.
+Similar as the encoder in Sec. 4.1, the candidate node
+features of input graph are embedded and collected. The
+fsnk is appended to the embedded feature set such that
+Fde
+tgt ∈R(Mt+1)×1×D.
+The spatial graph decoder ﬁrst
+uses graph multi-head attention to encode the node features
+that is similar to the one Sec. 4.1, shown in Fig. 3. We
+denote the attention weighted candidate node features as
+Fde
+att ∈R(Mt+1)×1×D.
+For the tracklet embedding Fen
+out generated by the
+spatial-temporal graph transformer encoder, we add a vir-
+tual source to handle the candidates that initiate a new
+tracklet in the current frame t to form an extended track-
+let embedding Fen′
+out ∈RT ×(Nt−1+1)×D. The embedding
+of the virtual source is a learnable parameter. Note that
+we only add one virtual source node compared to multi-
+2It performs matrix product of each slice of right and left tensors along
+the dimension sharing the same length.
+
+ple virtual source nodes in Transform-based MOT track-
+ers, because we ﬁnd adding one virtual source node yields
+comparable performance as adding multiple virtual source
+nodes while achieving better computational efﬁciency. Fde
+att
+is duplicated Nt−1 + 1 times such that Fde
+att →Fde′
+att ∈
+R(Mt+1)×(Nt−1+1)×D. Multi-head cross attention is cal-
+culated for Fde′
+att and Fen′
+out to generate unnormalized atten-
+tion weights. The output is passed through a feed forward
+layer and a normalization layer to generate the output ten-
+sor R(Mt+1)×(Nt−1+1)×D that corresponds to the matching
+between the tracklets and the candidates.
+The output of the spatial graph decoder can be passed
+through a linear layer and a Softmax layer to generate the
+assignment matrix ¯At ∈R(Mt+1)×(Nt−1+1).
+4.3. Training
+The TransMOT is trained end-to-end with the guidance
+of the groundtruth extended assignment matrix. The con-
+straints in Eq. 2 need to be relaxed to allow efﬁcient opti-
+mization. We relax the constraints so that a detection candi-
+date is always associated with a tracklet or a virtual source,
+while a tracklet can be associated with multiple candidates.
+In this way, Eq. 2 can be relaxed as:
+s.t.
+Nt−1+1
+X
+j
+¯at
+ij = 1, i ∈[1, Mt], ¯at
+ij ∈{0, 1}.
+As a result, a row of the assignment matrix can be treated as
+a probability distribution over a total of Nt−1+1 categories,
+and we use the cross-entropy loss to optimize the network.
+In each training iteration, a continuous sequence of T +1
+frames are randomly sampled from the training set. The
+bounding boxes and their corresponding IDs are collected
+from each frame.
+The groundtruth bounding boxes are
+then replaced by the bounding boxes generated from the
+object detector by matching their IoUs. In this way, the
+TransMOT will be more robust to detection noise.
+For
+all bounding boxes in a frame, their IDs are remapped to
+{0, 1, · · · , Nt−1} indicating whether they are matched to a
+tracklet or a virtual source.
+For the rows that correspond to actual tracklets, a cross-
+entropy loss is utilized, as mentioned above. The last row
+of ¯At represents the virtual sink, and it may be matched to
+multiple tracklets. Thus, a multi-label soft margin loss is
+employed to optimize this part separately.
+In summary, the overall training loss can be written as
+L = −1
+Mt
+Mt
+X
+m=1
+ymlog(¯am)
++
+λ
+Nt−1
+Nt−1
+X
+n=1
+ysnk
+n
+log
+
+1
+1 + e−a′n
+
++
+λ
+Nt−1
+Nt−1
+X
+n=1
+(1 −ysnk
+n
+)log
+
+e−a′
+n
+1 + e−a′n
+
+,
+Tracked 
+Targets
+Matching 
+with Motion
+TransMOT
+Expire 
+Targets
+Duplicate 
+Detection 
+Removing
+Long-term 
+Occlusion 
+Handling
+Associated Targets
+Detection
+Low Score 
+Detection
+Figure 4. Illustration of the cascade association framework based
+tracking system.
+where ym and ysnk
+n
+are IDs of the detection candidates and
+the virtual sink respectively, ¯am is the row element of ¯At,
+¯aMt+1 = {a′
+n}, and λ is a weighting coefﬁcient.
+4.4. Cascade Association Framework
+Although the spatial-temporal graph transformer net-
+work can effectively model the spatial-temporal relation-
+ship between tracklets and object candidates, we can
+achieve better inference speed and tracking accuracy by in-
+corporating it in a three-stage cascade association frame-
+work. The illustration of the cascade association framework
+is shown in Fig. 4.
+The ﬁrst stage matches and ﬁlters the low conﬁdence
+candidate boxes using motion information. In particular,
+a Kalman Filter predicts the bounding boxes of the robustly
+tracked tracklets in the current frames. These tracklets must
+be successfully and continuously associated on the past Kr
+frames. The IoU between the predicted bounding boxes and
+the candidate boxes are utilized as the association score. We
+match the predicted boxes and the candidate boxes with
+Hungarian algorithm.
+Only the matched pairs with IoU
+larger than τM are associated. The rest of the candidate
+boxes whose conﬁdence scores are lower than a threshold
+is ﬁltered. This stage is mainly a speed optimization, be-
+cause it removes the candidate boxes and tracklets that can
+be easily matched or ﬁltered, and leaves the more challeng-
+ing tracklets and candidate boxes for TransMOT for further
+association.
+In the second stage, TransMOT calculates the extended
+assignment matrix for the rest of the tracklets and candi-
+dates. The upper left part of the extended assignment matrix
+¯At denotes as ˆA ∈RMt×Nt−1 determines the matching of
+actual tracklets and candidate boxes. Since the elements of
+ˆA ∈[0, 1] is a soft assignment, we apply bipartite matching
+algorithm to generate the actual matching. Similarly, only
+the pairs with assignment scores larger than a threshold will
+be matched at this stage. After the matching, the unresolved
+candidate boxes will be matched again to recover occlusion
+or initiate new targets in the third stage.
+The third stage is the Long-Term Occlusion and Dupli-
+cated detection handling module in Fig. 4. Since Trans-
+MOT only models the tracklets of the previous T frames,
+
+Method
+IDF1 MOTA
+MT
+ML↓
+FP↓
+FN↓
+IDS↓
+DMT [23]
+49.2
+44.5
+34.7% 22.1%
+8,088 25,335
+684
+TubeTK [35]
+53.1
+58.4
+39.3% 18.0%
+5,756 18,961
+854
+CDADDAL [3] 54.1
+51.3
+36.3% 22.2%
+7,110 22,271
+544
+TRID [29]
+61.0
+55.7
+40.6% 25.8%
+6,273 20,611
+351
+RAR15 [16]
+61.3
+56.5
+45.1% 14.6%
+9,386 16,921
+428
+GSDT [50]
+64.6
+60.7
+47.0% 10.5% 7,334 16,358
+477
+Fair [59]
+64.7
+60.6
+47.6% 11.0%
+7,854 15,785
+591
+TransMOT
+66.0
+57.0
+64.5% 17.8% 12,454 13,725
+244
+Table 1. Tracking Performance on the MOT15 benchmark test set
+private detection track. Best in bold.
+Method
+IDF1 MOTA
+MT
+ML↓
+FP↓
+FN↓
+IDS↓
+IoU [7]
+46.9
+57.1
+23.6% 32.9% 5,702 70,278 2,167
+CTracker [36] 57.2
+67.6
+32.9% 23.1% 8,934 48,305 1,897
+LMCNN [2]
+61.2
+67.4
+38.2% 19.2% 10,109 48,435
+931
+DeepSort [51] 62.2
+61.4
+32.8% 18.2% 12,852 56,668
+781
+FUFET [41]
+68.6
+76.5
+52.8% 12.3% 12,878 28,982 1,026
+LMP [47]
+70.1
+71.0
+46.9% 21.9% 7,880 44,564
+434
+CSTrack [25]
+73.3
+75.6
+42.8% 16.5% 9,646 33,777 1,121
+TransMOT
+76.8
+76.7
+56.5% 19.2% 14,999 26,967
+517
+Table 2. Tracking Performance on the MOT16 benchmark test set
+private detection track. Best in bold.
+the tracklets that are occluded in the previous T frames are
+not matched. For these tracklets, we store their visual fea-
+tures and the bounding box coordinates at the latest frame
+when they were visible, and use them to calculate the as-
+sociation cost of a tracklet and a candidate detection. The
+association cost is deﬁned as the addition of the Euclidean
+distance of the visual features and the normalized top dis-
+tance of the occluded tracklets and candidate boxes.
+Dtop =
+
+
+ui + wi
+2 −uj −wj
+2 , vi −vj
+
+.
+hi,
+where [u, v] indicates the left upper corner of the bounding
+box and [w, h] indicates its size3.
+Duplicate detection handling removes the unmatched de-
+tection candidates that might be duplicate of the detections
+that are already matched to a tracklet. In this step, the un-
+associated candidates are matched to all the associated can-
+didates. The association cost for this step is the bound-
+ing box intersection between the associated box and un-
+associated box over the area of the un-associated candi-
+dates. This cost is chosen so that a candidate box that is
+a sub-box of a matched candidate is removed, because it is
+very likely that this box is a duplicate detection. All the
+matched candidate detection at this step will be removed
+directly.
+Finally, each of the remaining candidates is initialized as
+a new tracklet, and the unresolved tracklets that have not
+been updated for more than Kp frames are removed. The
+tracklets that are not updated for less than Kp frames are
+set to “occluded” state.
+3The notation w should not be confused with the weight w in Sec. 4.1.
+5. Experiments
+We conduct extensive experiments on four standard
+MOT challenge datasets for pedestrian tracking: MOT15
+[24], MOT16, MOT17, and MOT20 [31]. The proposed
+TransMOT based tracking framework is evaluated on both
+public and private detection tracks.
+5.1. Experiment Setting and Implementation De-
+tails
+The proposed approach is implemented in PyTorch, and
+the training and inference are performed on a machine with
+a 10 cores CPU@3.60GHz and an Nvidia Tesla V100 GPU.
+We set the number of frames for tracklets T = 5, the feature
+embedding dimension D = 1024, and the number of heads
+for all the multi-headed attention in spatial and temporal
+transformers to 8. For graph multi-head attention module, a
+single layer of ChebConv from [13] with neighboring dis-
+tance of 2 is adopted. The node features for an object at a
+frame are the concatenation of its visual features and nor-
+malized bounding box coordinates. During training, we use
+vanilla SGD with an initial learning rate of 0.0015. For
+all the experiments in Sec. 5.2, we use the training dataset
+from [27] to train our TransMOT model. During inference,
+τM is set to 0.75 for selecting conﬁdent associations. Kr
+and Kp are set to 15 and 50 respectively.
+We trained a YOLOv5 [1] detector model with 407 lay-
+ers for 300 epochs on the combination of CrowdHuman
+dataset [42] and the training sets of MOT17/MOT20. The
+SiamFC network [40] pretrained on the ILSVRC15 dataset
+is adopted as our visual feature extraction sub-network. The
+maximum input image dimension of the tracking pipeline is
+set to 1920. The detector runs at 15.4 fps on our machine,
+while the TransMOT and visual feature extraction sub-
+network run at 24.5 fps. The whole tracking pipeline runs at
+9.6 fps. We also experimented with using TransTrack [44]
+as our detection and feature extraction sub-network, as well
+as other visual features. These comparisons will be com-
+pared in the MOT16/17 and ablation parts of Sec. 5.2.
+To evaluate the performance of the proposed method,
+the standard ID score metrics [39] and CLEAR MOT met-
+rics [5] are reported. ID score metrics calculate the tra-
+jectory level ID precision (IDP), ID recall (IDR), and the
+IDF1 scores. CLEAR MOT metrics include multiple object
+tracking precision (MOTP) and multiple object tracking ac-
+curacy (MOTA) that combine false positives (FP), false neg-
+atives (FN) and the identity switches (IDS). The percentage
+of mostly tracked targets (MT) and the percentage of mostly
+lost targets (ML) are also reported.
+5.2. Evaluation Results
+MOT15. MOT15 [24] contains 22 different indoor and out-
+door scenes for pedestrian tracking. The 22 sequences are
+collected from several public and private datasets, and they
+
+Method
+IDF1 MOTA MT
+ML↓
+FP↓
+FN↓
+IDS↓
+Public Detection
+TrctrD [53]
+53.8
+53.7 19.4% 36.6% 11,731 247,447 1,947
+Tracktor [4]
+55.1
+56.3 21.1% 35.3%
+8,866 235,449 1,987
+CTTrack [61]
+59.6
+61.5 26.4% 31.9% 14,076 200,672 2,583
+TrackFormer [30] 59.8
+61.8 35.4% 21.1% 35,226 177,270 2,982
+MPNTrack [8]
+61.7
+58.8 28.8% 33.5% 17,413 213,594 1,185
+LifT [19]
+65.6
+60.5 27.0% 33.6% 14,966 206,619 1,189
+MAT [18]
+69.2
+67.1 38.9% 26.4% 22,756 161,547 1,279
+TransMOT-P
+72.2
+68.7 33.5% 31.0%
+8,078 167,602 1,014
+Private Detection
+DAN [45]
+49.5
+52.4 21.4% 30.7% 25,423 234,592 8,431
+TransTrack [44] 56.9
+65.8 32.2% 21.8% 24,000 163,683 5,355
+TubeTK [35]
+58.6
+63.0 31.2% 19.9% 27,060 177,483 5,727
+CTTrack [61]
+64.7
+67.8 34.6% 24.6% 18,498 160,332 6,102
+Fair [59]
+72.3
+73.7 43.2% 17.3% 27,507 117,477 8,073
+TransMOT-D
+66.9
+68.8 35.8% 31.7% 26,670 147,690 1,797
+TransMOT
+75.1
+76.7 51.0% 16.4% 36,231 93,150 2,346
+Table 3. Tracking Performance on the MOT17 benchmark test set.
+Best in bold.
+Method
+IDF1 MOTA MT
+ML↓
+FP↓
+FN↓
+IDS↓
+Public Det.
+SORT* [6]
+45.1
+42.7 16.7% 26.2%
+27,521 264,694 4,470
+Tracktor [4] 52.7
+52.6 29.4% 26.7%
+6,930
+236,680 1,648
+MPNTrack [8] 59.1
+57.6 38.2% 22.5%
+16,953 201,384 1,210
+LPCMOT [12] 62.5
+56.3 34.1% 25.2%
+11,726 213,056 1,562
+TransMOT-P 74.3
+73.1 54.3% 14.6% 12,366 125,665 1,042
+Private Det.
+MLT [58]
+54.6
+48.9 30.9% 22.1%
+45,660 216,803 2,187
+GSDT [50]
+67.5
+67.1 53.1% 13.2%
+31,913 135,409 3,131
+Fair [59]
+67.3
+61.8 68.8%
+7.6%
+103,440 88,901 5,243
+CSTrack [25] 68.6
+66.6 50.4% 15.5%
+25,404 144,358 3,196
+TransMOT 75.2
+77.5 70.7%
+9.1%
+34,201
+80,788 1,615
+Table 4. Tracking Performance on the MOT20 benchmark test set.
+Best in bold. Method marked with * in public detection track does
+not use public detection ﬁltering mechanism. It might achieve bet-
+ter tracking accuracy if the mechanism is employed.
+were recorded with different camera motion, camera an-
+gles and imaging conditions. The dataset is equally split for
+training and testing. We report the quantitative results of the
+proposed method on the private detection track in Tab. 1,
+and the visualizations of the tracking results on selected
+videos are shown in Fig. 5. TransMOT achieves state-of-
+the-art performance in metrics IDF1, MT, FN, and IDS. The
+relatively lower MOTA score on this dataset is caused by the
+high FP rate, because not all the objects are exhaustively an-
+notated for some testing sequences.
+MOT16/17. MOT16 and MOT17 [31] contain the same
+14 videos for pedestrians tracking. MOT17 has more accu-
+rate ground truth annotations compared to MOT16 dataset.
+MOT17 also evaluates the effect of object detection qual-
+ity on trackers, by providing three pretrained object detec-
+tors using DPM [17], Faster-RCNN [38] and SDP [54]. We
+report the performance and comparisons with the state-of-
+the-art methods on the private detection track of MOT16
+in Tab. 2. Our approach outperforms all other published
+trackers using the private detector in both IDF1 and MOTA
+metrics.
+In MOT17, for a more complete comparison, we conﬁg-
+ure TransMOT as two additional settings: TransMOT-P and
+TransMOT-D. TransMOT-P uses the public detection re-
+sults, and it follows the ﬁltering mechanism adopted by [4]
+and [61]. A new trajectory is initialized only if its bounding
+box at the current frame overlaps a public detection with
+IoU larger than 0.5. We compare TransMOT-P with other
+trackers adopting the same ﬁltering mechanism on the pub-
+lic detection track of MOT17 in Tab. 3. Compared with
+regular Transformer-based tracker [30], TransMOT outper-
+forms it in IDF1, MOTA, and IDS by a large margin. Trans-
+MOT also achieves the best IDF1 and MOTA scores among
+all published trackers, which demonstrates the robustness of
+TransMOT against detection quality variations.
+TransMOT-D adopts the DETR framework as detection
+and visual feature extraction sub-networks. TransMOT-D
+takes the detection outputs of pretrained TransTrack [44]
+and their Transformer embedding as visual features. For a
+fair comparison, the pretrained model of TransTrack is not
+ﬁne-tuned in TransMOT-D. We compare TransMOT-D and
+TransMOT with state-of-the-art trackers on MOT17 private
+detection track in Tab. 3. The performance of TransMOT-D
+is better than TransTrack [44] by 10.0% and 3.0% in IDF1
+and MOTA metrics respectively. This shows that our Trans-
+MOT framework can better model the spatial-temporal rela-
+tionship of the tracklets and detections than standard Trans-
+former. TransMOT-D achieves the lowest IDS among all
+the methods, because it generates fewer tracklets than other
+methods.
+Our TransMOT framework achieves the best
+IDF1 and MOTA metrics. It is also ranked as the top tracker
+in terms of IDF1 and FN on the private detector track of
+MOT17 challenge leaderboard when the paper is submitted.
+MOT20. MOT20 consists of eight sequences for pedestrian
+tracking. MOT20 video sequences are more challenging
+because they have much higher object density, e.g. 170.9
+vs 31.8 in the test set. We report the experimental results
+of the proposed TransMOT and the comparison with the
+other methods in Tab. 4. Our method establishes state-of-
+the-art in most metrics among all submissions. In partic-
+ular, TransMOT achieves 6.6% higher IDF1 than CStrack,
+which ranked second in the leaderboard. In public detec-
+tion setting, TransMOT-P also demonstrates its robustness
+to detection noise. Compared with the private detector set-
+ting, the MOTA decreases 4.4%, but IDF1 score only drops
+0.9%. The experiments on both public and private detec-
+tion settings demonstrate that the capability of TransMOT
+of modeling a large number of tracklets and detections in
+crowd scenes as shown in Fig. 5.
+5.3. Ablation
+We study the signiﬁcance of different modules in the pro-
+posed method through ablation study as shown in Tab. 5.
+The ablations are conducted on the MOT17 training set. To
+avoid overﬁtting, the object detector used in the ablation
+
+MOT15: Venice-1
+MOT15: AVG-TownCentre
+MOT16-03
+MOT16-07
+MOT17-08
+MOT17-14
+MOT20-04
+MOT20-06
+Figure 5. Results visualization of selected sequences in MOT15, MOT16, MOT17, and MOT20.
+study is trained on only the CrowdHuman dataset.
+We ﬁrst evaluate the settings that remove the Match
+with Motion module or the Long-Term Occlusion Handling
+module from the cascade association framework, noted as
+TransMOT−MwM and TransMOT−LTOH in Tab. 5. The
+MOTA score decreases signiﬁcantly without MwM because
+the TransMOT cannot handle low score detection candi-
+dates well. It also leads to a slower speed, because Trans-
+MOT needs to handle more tracklets and detection can-
+didates that were handled by MwM. Dropping the LTOH
+module results in more fragmented tracklets because the
+tracklets that are occluded for more than T frames are not
+linked in this case. It dramatically increases the number of
+tracklets, reduces the IDF1 score, and increases the infer-
+ence speed.
+The major hyper-parameters of the tracker are also stud-
+ied. We test TransMOT running at a reduced input image
+resolution at maximum width of 1280 (TransMOT@1280
+in Tab. 5) (The default setting uses a maximum width of
+1920). We ﬁnd that lower resolution input causes the tracker
+to miss small targets at the far end of the scene. The choice
+of the temporal history length T is investigated by choos-
+ing T = 1, T = 10, and T = 20 (T is set to 5 in default
+setting). Compared with T = 1 where no temporal history
+is included, T > 1 can improve the association accuracy.
+However, since increasing T also adds more tracklets for
+association, it increases the complexity of the association
+task, and makes the learning harder under a limited number
+of training data for MOT. In addition, a lot of the tracklets
+that can be matched by increasing T are already handled by
+the long-term occlusion handling module. Thus increasing
+L beyond 5 has no performance gain and makes inference
+slower. T = 5 is used in all the other experiments.
+Finally, in addition to SiamFC and DETR features, we
+evaluate other shallow and deep visual features, including
+color histogram and ReID feature DGNet [60]. Beneﬁt-
+ing from the fully trainable Transformer, even using sim-
+Conﬁguration
+IDF1
+MOTA
+FPS
+TransMOT−MwM
+76.0
+73.6
+9.2
+TransMOT−LTOH
+76.5
+74.6
+7.8
+TransMOT@1280
+75.3
+72.9
+13.8
+TransMOT@T = 1
+77.8
+74.7
+9.8
+TransMOT@T = 10
+78.0
+74.8
+9.3
+TransMOT@T = 20
+77.8
+74.7
+8.5
+TransMOT+DGNet
+77.5
+74.7
+6.0
+TransMOT+Histogram
+77.5
+74.9
+12.3
+TransMOT+SiamcFC(Ours)
+78.1
+74.8
+9.6
+Table 5. Ablations on the MOT17 benchmark training set. FPS
+indicates the inference speed of the full tracker that includes the
+detection and feature sub-net.
+ple color histogram features, TransMOT can achieve simi-
+lar performance with the one using deep ReID features and
+runs at a much faster inference speed. On the other hand,
+SiamcFC features perform better than both color histogram
+and ReID features, because it is trained on a large scale
+video dataset.
+6. Conclusion
+We proposed a novel Spatial-Temporal Graph Trans-
+former for multi-object tracking (TransMOT) with Trans-
+formers. By formulating the tracklets and candidate detec-
+tions as a series of weighted graphs, the spatial and temporal
+relationships of the tracklets and candidates are explicitly
+modeled and leveraged. The proposed TransMOT not only
+achieves higher tracking accuracy, but also is more compu-
+tationally efﬁcient than the transitional Transformer-based
+methods. Additionally, we developed the cascade associa-
+tion framework to further optimize the speed and accuracy
+of TransMOT by ﬁltering low score candidates, recovering
+the tracklets that are occluded for a long time, and remove
+duplicate detections.
+Experiments on MOT15, MOT16,
+MOT17, and MOT20 challenge datasets show that the pro-
+posed approach achieves state-of-the-art performance on all
+the benchmark datasets.
+
+References
+[1] Yolov5.
+https://github.com/ultralytics/
+yolov5. 6
+[2] Maryam Babaee, Zimu Li, and Gerhard Rigoll. A dual cnn–
+rnn for multiple people tracking. Neurocomputing, 368:69–
+83, 2019. 6
+[3] Seung-Hwan Bae and Kuk-Jin Yoon. Conﬁdence-based data
+association and discriminative deep appearance learning for
+robust online multi-object tracking. TPAMI, 2018. 1, 6
+[4] Philipp Bergmann, Tim Meinhardt, and Laura Leal-Taixe.
+Tracking without bells and whistles. In Proceedings of the
+IEEE/CVF International Conference on Computer Vision,
+pages 941–951, 2019. 2, 7
+[5] Keni Bernardin and Rainer Stiefelhagen. Evaluating multiple
+object tracking performance: the clear mot metrics. JIVP,
+2008. 6
+[6] Alex Bewley, Zongyuan Ge, Lionel Ott, Fabio Ramos, and
+Ben Upcroft. Simple online and realtime tracking. In ICIP,
+2016. 2, 7
+[7] Erik Bochinski, Volker Eiselein, and Thomas Sikora. High-
+speed tracking-by-detection without using image informa-
+tion. In AVSS, 2017. 6
+[8] Guillem Bras´o and Laura Leal-Taix´e.
+Learning a neu-
+ral solver for multiple object tracking.
+In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 6247–6257, 2020. 2, 7
+[9] Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nicolas
+Usunier, Alexander Kirillov, and Sergey Zagoruyko. End-to-
+end object detection with transformers. In European Confer-
+ence on Computer Vision, pages 213–229. Springer, 2020.
+2
+[10] Jiahui Chen, Hao Sheng, Yang Zhang, and Zhang Xiong. En-
+hancing detection model for multiple hypothesis tracking. In
+CVPRw, 2017. 2
+[11] Peng Chu and Haibin Ling. Famnet: Joint learning of fea-
+ture, afﬁnity and multi-dimensional assignment for online
+multiple object tracking. In Proceedings of the IEEE/CVF
+International Conference on Computer Vision, pages 6172–
+6181, 2019. 2
+[12] Peng Dai, Renliang Weng, Wongun Choi, Changshui Zhang,
+Zhangping He, and Wei Ding. Learning a proposal classiﬁer
+for multiple object tracking. In CVPR, 2021. 7
+[13] Micha¨el Defferrard,
+Xavier Bresson,
+and Pierre Van-
+dergheynst. Convolutional neural networks on graphs with
+fast localized spectral ﬁltering. In NIPS, 2016. 6
+[14] Afshin Dehghan, Yicong Tian, Philip HS Torr, and Mubarak
+Shah. Target identity-aware network ﬂow for online multiple
+target tracking. In CVPR, 2015. 2
+[15] Lo¨ıc Fagot-Bouquet, Romaric Audigier, Yoann Dhome, and
+Fr´ed´eric Lerasle.
+Improving multi-frame data association
+with sparse representations for robust near-online multi-
+object tracking. In ECCV, 2016. 1
+[16] Kuan Fang, Yu Xiang, Xiaocheng Li, and Silvio Savarese.
+Recurrent autoregressive networks for online multi-object
+tracking. In WACV, 2018. 2, 6
+[17] Pedro F Felzenszwalb, Ross B Girshick, David McAllester,
+and Deva Ramanan. Object detection with discriminatively
+trained part-based models. TPAMI, 2010. 7
+[18] Shoudong Han, Piao Huang, Hongwei Wang, En Yu,
+Donghaisheng Liu, Xiaofeng Pan, and Jun Zhao.
+Mat:
+Motion-aware
+multi-object
+tracking.
+arXiv
+preprint
+arXiv:2009.04794, 2020. 7
+[19] Andrea Hornakova, Roberto Henschel, Bodo Rosenhahn,
+and Paul Swoboda.
+Lifted disjoint paths with application
+in multiple object tracking. In International Conference on
+Machine Learning, pages 4364–4375. PMLR, 2020. 7
+[20] Chang Huang, Bo Wu, and Ramakant Nevatia. Robust object
+tracking by hierarchical association of detection responses.
+In ECCV, 2008. 2
+[21] Margret Keuper, Siyu Tang, Bjorn Andres, Thomas Brox,
+and Bernt Schiele. Motion segmentation & multiple object
+tracking by correlation co-clustering. TPAMI, 2018. 1, 2
+[22] Chanho Kim, Fuxin Li, Arridhana Ciptadi, and James M
+Rehg. Multiple hypothesis tracking revisited. In ICCV, 2015.
+2
+[23] Han-Ul Kim and Chang-Su Kim. Cdt: Cooperative detection
+and tracking for tracing multiple objects in video sequences.
+In European Conference on Computer Vision, pages 851–
+867. Springer, 2016. 6
+[24] Laura Leal-Taix´e, Anton Milan, Ian Reid, Stefan Roth, and
+Konrad Schindler. MOTChallenge 2015: Towards a bench-
+mark for multi-target tracking. arXiv:1504.01942, 2015. 6
+[25] Chao Liang, Zhipeng Zhang, Yi Lu, Xue Zhou, Bing Li,
+Xiyong Ye, and Jianxiao Zou. Rethinking the competition
+between detection and reid in multi-object tracking. arXiv
+preprint arXiv:2010.12138, 2020. 6, 7
+[26] Justin Liang, Namdar Homayounfar, Wei-Chiu Ma, Yuwen
+Xiong, Rui Hu, and Raquel Urtasun. Polytransform: Deep
+polygon transformer for instance segmentation. In Proceed-
+ings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, pages 9131–9140, 2020. 2
+[27] Weiyao Lin, Huabin Liu, Shizhan Liu, Yuxi Li, Guo-Jun Qi,
+Rui Qian, Tao Wang, Nicu Sebe, Ning Xu, Hongkai Xiong,
+et al. Human in events: A large-scale benchmark for human-
+centric video analysis in complex events.
+arXiv preprint
+arXiv:2005.04490, 2020. 6
+[28] Wenhan Luo, Junliang Xing, Anton Milan, Xiaoqin Zhang,
+Wei Liu, and Tae-Kyun Kim. Multiple object tracking: A
+literature review. Artiﬁcial Intelligence, page 103448, 2020.
+1
+[29] Santiago Manen, Michael Gygli, Dengxin Dai, and Luc
+Van Gool. Pathtrack: Fast trajectory annotation with path
+supervision. In Proceedings of the IEEE International Con-
+ference on Computer Vision, pages 290–299, 2017. 6
+[30] Tim Meinhardt, Alexander Kirillov, Laura Leal-Taixe, and
+Christoph Feichtenhofer. Trackformer: Multi-object track-
+ing with transformers.
+arXiv preprint arXiv:2101.02702,
+2021. 1, 2, 7
+[31] A. Milan,
+L. Leal-Taix´e,
+I. Reid,
+S. Roth,
+and K.
+Schindler. MOT16: A benchmark for multi-object tracking.
+arXiv:1603.00831, 2016. 6, 7
+
+[32] Anton Milan, Seyed Hamid Rezatoﬁghi, Anthony R Dick,
+Ian D Reid, and Konrad Schindler. Online multi-target track-
+ing using recurrent neural networks. In AAAI, 2017. 2
+[33] Anton Milan, Konrad Schindler, and Stefan Roth.
+Multi-
+target tracking by discrete-continuous energy minimization.
+TPAMI, 2016. 1
+[34] Peter Ondruska and Ingmar Posner. Deep tracking: Seeing
+beyond seeing using recurrent neural networks.
+In AAAI,
+2016. 2
+[35] Bo Pang, Yizhuo Li, Yifan Zhang, Muchen Li, and Cewu Lu.
+Tubetk: Adopting tubes to track multi-object in a one-step
+training model. In Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition (CVPR), June
+2020. 6, 7
+[36] Jinlong Peng, Changan Wang, Fangbin Wan, Yang Wu,
+Yabiao Wang, Ying Tai, Chengjie Wang, Jilin Li, Feiyue
+Huang, and Yanwei Fu. Chained-tracker: Chaining paired at-
+tentive regression results for end-to-end joint multiple-object
+detection and tracking. In European Conference on Com-
+puter Vision, pages 145–161. Springer, 2020. 6
+[37] Hamed Pirsiavash, Deva Ramanan, and Charless C Fowlkes.
+Globally-optimal greedy algorithms for tracking a variable
+number of objects. In CVPR, 2011. 1
+[38] Shaoqing Ren, Kaiming He, Ross Girshick, and Jian Sun.
+Faster r-cnn: towards real-time object detection with region
+proposal networks. In NIPS, 2015. 7
+[39] Ergys Ristani, Francesco Solera, Roger Zou, Rita Cucchiara,
+and Carlo Tomasi. Performance measures and a data set for
+multi-target, multi-camera tracking. In European conference
+on computer vision, pages 17–35. Springer, 2016. 6
+[40] Amir Sadeghian, Alexandre Alahi, and Silvio Savarese.
+Tracking the untrackable: Learning to track multiple cues
+with long-term dependencies. arXiv:1701.01909, 2017. 6
+[41] Chaobing Shan, Chunbo Wei, Bing Deng, Jianqiang Huang,
+Xian-Sheng Hua, Xiaoliang Cheng, and Kewei Liang.
+Fgagt: Flow-guided adaptive graph tracking. arXiv preprint
+arXiv:2010.09015, 2020. 6
+[42] Shuai Shao, Zijian Zhao, Boxun Li, Tete Xiao, Gang Yu,
+Xiangyu Zhang, and Jian Sun.
+Crowdhuman: A bench-
+mark for detecting human in a crowd.
+arXiv preprint
+arXiv:1805.00123, 2018. 6
+[43] Xinchu Shi, Haibin Ling, Junliang Xing, and Weiming Hu.
+Multi-target tracking by rank-1 tensor approximation.
+In
+CVPR, 2013. 2
+[44] Peize Sun, Yi Jiang, Rufeng Zhang, Enze Xie, Jinkun Cao,
+Xinting Hu, Tao Kong, Zehuan Yuan, Changhu Wang, and
+Ping Luo. Transtrack: Multiple-object tracking with trans-
+former. arXiv preprint arXiv:2012.15460, 2020. 1, 2, 6, 7
+[45] ShiJie Sun, Naveed Akhtar, HuanSheng Song, Ajmal Mian,
+and Mubarak Shah. Deep afﬁnity network for multiple object
+tracking. IEEE transactions on pattern analysis and machine
+intelligence, 43(1):104–119, 2019. 7
+[46] Siyu Tang, Bjoern Andres, Mykhaylo Andriluka, and Bernt
+Schiele. Multi-person tracking by multicut and deep match-
+ing. In ECCVw, pages 100–111. Springer, 2016. 2
+[47] Siyu Tang, Mykhaylo Andriluka, Bjoern Andres, and Bernt
+Schiele. Multiple people tracking by lifted multicut and per-
+son re-identiﬁcation. In CVPR, 2017. 2, 6
+[48] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-
+reit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and Illia
+Polosukhin. Attention is all you need. In NIPS, 2017. 4
+[49] Xinchao Wang, Engin T¨uretken, Francois Fleuret, and Pascal
+Fua. Tracking interacting objects using intertwined ﬂows.
+TPAMI, 2016. 1
+[50] Yongxin Wang, Xinshuo Weng, and Kris Kitani. Joint detec-
+tion and multi-object tracking with graph neural networks.
+arXiv preprint arXiv:2006.13164, 2020. 6, 7
+[51] Nicolai Wojke, Alex Bewley, and Dietrich Paulus. Simple
+online and realtime tracking with a deep association metric.
+In 2017 IEEE international conference on image processing
+(ICIP), pages 3645–3649. IEEE, 2017. 6
+[52] Yu Xiang, Alexandre Alahi, and Silvio Savarese. Learning
+to track: Online multi-object tracking by decision making.
+In ICCV, 2015. 1
+[53] Yihong Xu, Aljosa Osep, Yutong Ban, Radu Horaud, Laura
+Leal-Taix´e, and Xavier Alameda-Pineda. How to train your
+deep multi-object tracker. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+pages 6787–6796, 2020. 2, 7
+[54] Fan Yang, Wongun Choi, and Yuanqing Lin. Exploit all the
+layers: Fast and accurate cnn object detector with scale de-
+pendent pooling and cascaded rejection classiﬁers. In CVPR,
+2016. 7
+[55] Cunjun Yu, Xiao Ma, Jiawei Ren, Haiyu Zhao, and Shuai Yi.
+Spatio-temporal graph transformer networks for pedestrian
+trajectory prediction. In European Conference on Computer
+Vision, pages 507–523. Springer, 2020. 2
+[56] Amir Roshan Zamir, Afshin Dehghan, and Mubarak Shah.
+Gmcp-tracker: Global multi-object tracking using general-
+ized minimum clique graphs. In ECCV. 2012. 2
+[57] Li Zhang, Yuan Li, and Ramakant Nevatia. Global data as-
+sociation for multi-object tracking using network ﬂows. In
+CVPR, 2008. 2
+[58] Yang Zhang, Hao Sheng, Yubin Wu, Shuai Wang, Wei Ke,
+and Zhang Xiong. Multiplex labeling graph for near-online
+tracking in crowded scenes. IEEE Internet of Things Journal,
+7(9):7892–7902, 2020. 7
+[59] Yifu Zhang, Chunyu Wang, Xinggang Wang, Wenjun Zeng,
+and Wenyu Liu. Fairmot: On the fairness of detection and
+re-identiﬁcation in multiple object tracking. arXiv e-prints,
+pages arXiv–2004, 2020. 6, 7
+[60] Zhedong Zheng, Xiaodong Yang, Zhiding Yu, Liang Zheng,
+Yi Yang, and Jan Kautz. Joint discriminative and genera-
+tive learning for person re-identiﬁcation. In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 2138–2147, 2019. 8
+[61] Xingyi Zhou, Vladlen Koltun, and Philipp Kr¨ahenb¨uhl.
+Tracking objects as points. In European Conference on Com-
+puter Vision, pages 474–490. Springer, 2020. 2, 7
+[62] Ji Zhu, Hua Yang, Nian Liu, Minyoung Kim, Wenjun Zhang,
+and Ming-Hsuan Yang. Online multi-object tracking with
+dual matching attention networks. In ECCV, 2018. 2

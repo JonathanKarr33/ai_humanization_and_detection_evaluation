@@ -1,0 +1,4336 @@
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+doi:10.5194/gmd-8-3071-2015
+© Author(s) 2015. CC Attribution 3.0 License.
+ECCO version 4: an integrated framework for non-linear inverse
+modeling and global ocean state estimation
+G. Forget1, J.-M. Campin1, P. Heimbach1,2,3, C. N. Hill1, R. M. Ponte4, and C. Wunsch5
+1Dept. of Earth, Atmospheric and Planetary Sciences, Massachusetts Institute of Technology, Cambridge, MA 02139, USA
+2Institute for Computational Engineering and Sciences, The University of Texas at Austin, Austin, TX 78712, USA
+3Jackson School of Geosciences, The University of Texas at Austin, Austin, TX 78712, USA
+4Atmospheric and Environmental Research, Inc., Lexington, MA 02421, USA
+5Dept. of Earth and Planetary Sciences, Harvard University, Cambridge, MA 02139, USA
+Correspondence to: G. Forget (gforget@mit.edu)
+Received: 25 February 2015 – Published in Geosci. Model Dev. Discuss.: 5 May 2015
+Revised: 24 August 2015 – Accepted: 17 September 2015 – Published: 6 October 2015
+Abstract. This paper presents the ECCO v4 non-linear in-
+verse modeling framework and its baseline solution for the
+evolving ocean state over the period 1992–2011. Both com-
+ponents are publicly available and subjected to regular, au-
+tomated regression tests. The modeling framework includes
+sets of global conformal grids, a global model setup, im-
+plementations of data constraints and control parameters, an
+interface to algorithmic differentiation, as well as a grid-
+independent, fully capable Matlab toolbox. The baseline
+ECCO v4 solution is a dynamically consistent ocean state
+estimate without unidentiﬁed sources of heat and buoyancy,
+which any interested user will be able to reproduce accu-
+rately. The solution is an acceptable ﬁt to most data and has
+been found to be physically plausible in many respects, as
+documented here and in related publications. Users are being
+provided with capabilities to assess model–data misﬁts for
+themselves. The synergy between modeling and data synthe-
+sis is asserted through the joint presentation of the model-
+ing framework and the state estimate. In particular, the in-
+verse estimate of parameterized physics was instrumental in
+improving the ﬁt to the observed hydrography, and becomes
+an integral part of the ocean model setup available for gen-
+eral use. More generally, a ﬁrst assessment of the relative
+importance of external, parametric and structural model er-
+rors is presented. Parametric and external model uncertain-
+ties appear to be of comparable importance and dominate
+over structural model uncertainty. The results generally un-
+derline the importance of including turbulent transport pa-
+rameters in the inverse problem.
+1
+Introduction
+The history of inverse modeling in oceanography goes back
+at least 4 decades (see Wunsch, 2006, for a general pre-
+sentation). The canonical oceanographic inverse problem
+as implemented by Wunsch (1977) consisted in estimating
+the time mean absolute ocean circulation from synoptic,
+ship-based, hydrography transects. The physical model com-
+bined thermal-wind shear (diagnosed from observations) and
+a continuity equation. The model parameter to be estimated
+(i.e., the control vector) was the “reference level velocity”.
+Least squares provide an adequate formulation to this inverse
+problem and a practical method to avoid misinterpreting geo-
+physical noise (synoptic eddies, internal waves, etc.) for time
+mean ocean circulation features (Wunsch, 1977).
+The original implementation has been extended substan-
+tially over subsequent decades, and some of the key techni-
+cal developments are worth recalling (see also Wunsch and
+Heimbach, 2013a, for a review of the state of the art), as
+they provide the context for the present work. Non-linearities
+were introduced (Mercier, 1986) to incorporate optimal inter-
+polation of hydrographic data in the inverse problem. While
+diapycnal and horizontal diffusion were also introduced early
+on (Schott and Zantopp, 1980; Olbers et al., 1985), the need
+for extending the inversion problem to parameterized advec-
+tive eddy transports (Gent and Mcwilliams, 1990) was not
+fully appreciated until the study of Ferreira et al. (2005).
+Time dependency and the use of Lagrange multipliers (i.e.,
+the adjoint method) were ﬁrst introduced in ocean inverse
+Published by Copernicus Publications on behalf of the European Geosciences Union.
+
+3072
+G. Forget et al.: ECCO version 4
+Figure 1. Three possible approaches to gridding the globe. (Left) LL maps the earth to a single rectangular array (one face). (Center) CS (six
+faces). (Right) LLC (ﬁve faces). The faces of CS and LLC are color-coded; LL is only split four ways for rendering. Acronyms are deﬁned
+in Sect. 2.
+modeling by Thacker and Long (1988) and Holland and
+Malanotte-Rizzoli (1989) and applied to general circulation
+models by Tziperman and Thacker (1989) and Tziperman
+et al. (1992a, b). Later on, algorithmic differentiation (AD)
+was introduced, making the use of Lagrange multipliers more
+practical (Griewank, 1992; Giering and Kaminski, 1998). Its
+application (Marotzke et al., 1999; Heimbach et al., 2002,
+2005) to the Massachusetts Institute of Technology general
+circulation model (MITgcm; Marshall et al., 1997; Adcroft
+et al., 2004b) allowed for implementation of the time-varying
+non-linear inverse problem, as envisioned by Wunsch and
+Minster (1982) and Wunsch (1984), to the case of actual data
+(Stammer et al., 2002; Ferron and Marotzke, 2003).
+The MITgcm AD capabilities remain exceptional amongst
+general circulation models. Over the last decade, in the con-
+text of the Estimating the Circulation and Climate of the
+Ocean (ECCO) project, the MITgcm non-linear inverse mod-
+eling framework (using the adjoint method and algorithmic
+differentiation) has become a common tool for data synthe-
+sis, applied by many investigators to derive ocean state esti-
+mates (Stammer et al., 2004; Wunsch et al., 2007; Köhl et al.,
+2007; Köhl and Stammer, 2008; Forget et al., 2008b; Wunsch
+and Heimbach, 2009; Hoteit et al., 2009; Forget, 2010; Ma-
+zloff et al., 2010; Köhl et al., 2012; Speer and Forget, 2013;
+Köhl, 2014; Losch et al., 2014; Dail and Wunsch, 2014).
+General circulation models implement the primitive equa-
+tions, which extend far beyond the physics and numerics
+used in common inverse box models. On the one hand, they
+readily provide a versatile tool for dynamical interpolation
+of virtually all types of observations. On the other hand, nu-
+merical modeling has to be regarded as an integral part of
+non-linear inverse modeling, and as a primary responsibility
+of groups carrying ocean state estimation. Indeed, the qual-
+ity of the model and the adequacy of its settings determine
+the physical consistency of ocean state estimates. Hence the
+state estimation group at MIT has become a main contribu-
+tor of MITgcm code including but not limited to the imple-
+mentation of the estimation framework. Furthermore, the de-
+velopment of the new ECCO version 4 (ECCO v4) estimate
+described here started with an extensive revisit of MITgcm
+settings.
+These considerations prompt the joint depiction of forward
+model setup and estimation framework developments as part
+of ECCO v4, and of the baseline solution of the non-linear
+inverse model. The overarching goal, which is essential to
+the oceanographic community, is the uniﬁcation of the two
+pillars of science, namely observations (the emphasis here
+is on data of global coverage) and theory (of which general
+circulation models are a vehicle). Thus, the synergy between
+data analysis and modeling is a guiding thread of this paper.
+As a complement to this paper, and a number of associated
+publications, the setup and baseline solution of ECCO v4 are
+thoroughly documented by an extended suite of diagnostics
+(the “standard analysis” provided as the Supplement) that
+users can readily download or reproduce. Daily and monthly
+regression tests are run for, respectively, a few time steps
+and 20 years. This will allow, for the foreseeable future, any
+user to generate additional output that may be needed for ex-
+tended data and model analyses. Thus, the authors aim to
+provide ECCO v4 as a fully integrated non-linear inverse
+modeling framework, including its baseline time-dependent
+solution, that any interested user can readily analyze and/or
+accurately re-run.
+The foundation of the ECCO v4 model setup is a set of
+global grids of the earth’s surface (Sect. 2). The design, im-
+plementation and speciﬁcation of the forward model setup
+and of the estimation framework are presented in Sects. 3 and
+4, respectively. The baseline ECCO v4 solution (the ECCO
+v4, release 1 state estimate) is the subject of Sect. 5, which is
+followed by conclusions and perspectives (Sect. 6).
+2
+Global grids
+The most visible grid improvement, as compared with earlier
+ECCO conﬁgurations, is the extension of the gridded domain
+to the Arctic. This limitation of ECCO estimates produced
+until 2008 was due to the use of a latitude–longitude grid
+(LL; left panel of Fig. 1) that simply follows straight lines
+in spherical-polar projection, and requires an exponentially
+decreasing time step when approaching the North Pole.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3073
+Figure 2. Average grid spacing for LLC90 (in km) computed as the square root of grid cell area. LLC90 denotes the LLC grid with 90 grid
+points as the common face dimension (i.e., along one-quarter of the earth’s circumference at the Equator).
+The cubed-sphere grid (CS; center panel in Fig. 1) has
+been successfully used in various MITgcm calculations (e.g.,
+Menemenlis et al., 2005; Marshall et al., 2007b) resolving the
+Arctic. The CS grid is a conformal mapping of a sphere to
+a cube surface, such that each face contains one-sixth of the
+earth gridded (Ranˇci´c et al., 1996; Purser and Ranˇci´c, 1998).
+At its eight vertices (cube corners), CS grid lines converge
+exponentially as resolution increases, but more slowly than
+for LL at geographic poles.
+However, a number of shortcomings of CS have been
+noted. First, loss of orthogonality near the cube corners is
+exacerbated when increasing horizontal resolution. Second,
+some of the vertices have to be placed on ocean-covered ar-
+eas, and have an exceedingly high resolution, requiring un-
+necessarily small time steps. Third, such grids represent an
+obstacle for new users who were accustomed to latitude–
+longitude grids. These considerations led to the design of the
+Lat-Lon-Cap grid (LLC; right panel in Fig. 1) such that
+1. the grid reverts to a simple LL sector between 70◦S and
+57◦N;
+2. grid vertices are located over land; and
+3. grid heterogeneities remain acceptable at
+1
+48
+◦resolu-
+tion.
+At mid-latitudes, within the LL sector, the LLC grid is locally
+isotropic, with grid spacing varying in cos(ϕ), where ϕ de-
+notes latitude. At low latitudes, LLC is reﬁned in the merid-
+ional direction to better resolve the tropical system of zonal
+currents1. Grid scaling properties are shown in more detail in
+Figs. 2 and 3. The LL sector mesh derives from a simple ana-
+lytic formulation based on geographic latitude and longitude.
+Users who may not be particularly invested in high-latitude
+research may skip over the rest of this section, and simply
+extract the LL sector (70◦S and 57◦N) out of global LLC
+ﬁelds (see “Code availability” section).
+Poleward of 57◦N, LLC is topologically equivalent to CS
+minus one cube face (Fig. 1). Details of the grid generation
+1An alternative version of LLC that remains locally isotropic in
+the tropics is also available.
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+0
+20
+40
+60
+80
+100
+120
+Figure 3. Grid spacing details for LLC90 as a function of latitude, in
+km. Between 70◦S and 57◦N, blue and red curves show meridional
+and zonal grid spacing, respectively. Poleward of 70◦S and 57◦N,
+grid lines deviate from meridians and parallels, and LLC becomes
+zonally asymmetric (see Fig. 2), leading to the depicted grid spacing
+ranges.
+method are reported in Appendix A. The vertices of the Arc-
+tic cap are placed at a latitude of 67◦N and in a speciﬁc
+orientation such that they all fall over land (Fig. 2, middle
+panel)2. Between the LL sector and the Arctic cap, the grid
+makes a gradual, conformal transition that is evident in Fig. 3
+between 57 and 67◦N. To the south of 70◦S, LLC has two
+vertices that are again placed over land at a latitude of 80◦S
+and away from the Ross and Weddell ice shelves (Fig. 2, right
+panel).
+Looking beyond the immediate need for a truly global
+coarse-resolution grid, we chose to generate a parent
+1
+48
+◦
+global grid3. The main advantages of this approach are that
+a full suite of lower-resolution grids readily descend from the
+parent grid, and that the entire suite of commensurate grids
+share grid lines. Thus, in principle, one can easily nest back
+and forth between grids of different resolution. These global
+grids are being used in a number of model setups at 1◦reso-
+lution (Danabasoglu et al., 2014; Marshall et al., 2014; Köhl,
+2014) and at full resolution (D. Menemenlis, personal com-
+munication, 2014).
+2For any given Arctic face dimension, LLC has the added ad-
+vantage of an increased resolution in the Arctic as compared with
+CS, which has vertices at 45◦N.
+3The resolution along the Equator is quoted as 1
+48
+◦(see Fig. 3
+for details).
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3074
+G. Forget et al.: ECCO version 4
+The parent
+1
+48
+◦global grid has 17 280 longitudinal grid
+cells. It is labelled “LLC4320” since the common face di-
+mension (i.e., the number of points along one-quarter of the
+earth’s circumference at the Equator) is 4320. This grid size
+was chosen to maximize the number of integer factors avail-
+able for coarsening the parent grid and for partitioning the
+computational domain in parallel computer environments4.
+It has 64 whole-integer factors in total, so that the
+1
+48
+◦grid
+can readily, accurately, be coarsened to, e.g.,
+1
+24,
+1
+16,
+1
+12, 1
+8,
+1
+6, 1
+4, 1
+3, 1
+2, 1, 2, or 4◦. This is a desirable property for a long-
+term project such as ECCO, in which spatiotemporal res-
+olution is expected to increase in the future as computing
+capability and the observational database will keep increas-
+ing. A high degree of factorization also provides a conve-
+nient basis for downscaled regional computations that em-
+ploy boundary conditions from the state estimate (Sect. 5).
+Advanced gridding has clear advantages from the stand-
+point of numerical ocean modeling. It can however put addi-
+tional burdens on users of ocean model output, who may ﬁnd
+themselves coding the same diagnostics over and over again
+to accommodate different grids. One common approach is to
+distribute ﬁelds that were interpolated to a simpler grid (e.g.,
+LL). This approach, however, tends to introduce sizable er-
+rors (e.g., in areal integrals and transports). A different and
+simple approach to the analysis of model output is chosen
+here that does not alter the results but alleviates the burden of
+grid speciﬁcs when analyzing model output – the gcmfaces
+analysis framework that mimics the gridded earth decompo-
+sition of general circulation models in Matlab (Appendix C).
+3
+Model conﬁguration
+The model conﬁguration presented below is the ECCO v4
+setup used in state estimation (Sects. 4 and 5) and based on
+the LLC90 grid (Sect. 2). Variants of the ECCO v4 setup
+are also used in un-optimized model simulations (Danaba-
+soglu et al., 2014; Marshall et al., 2014). The setup uses fully
+supported options of MITgcm software, is archived and reg-
+ularly subjected to regression testing (Appendix F), and is
+freely available along with the MITgcm itself (“Code avail-
+ability” section).
+The MITgcm, as conﬁgured in ECCO v4, solves the hy-
+drostatic, Boussinesq equations (Marshall et al., 1997) us-
+ing the z∗rescaled height vertical coordinate (Adcroft and
+Campin, 2004) and the vector-invariant form of the momen-
+tum equation (Adcroft et al., 2004a). This latter choice yields
+a discretized momentum equation without metric terms,
+which simpliﬁes the handling of elaborate grids such as
+LLC90 (Sect. 2). This section summarizes the model equa-
+tions, settings, and new MITgcm features (MITgcm Group,
+4Number 17 280 is known as the compositorial of 10, i.e., the
+product of composite numbers less than or equal to 10 (see Wells,
+2011).
+2002; Adcroft et al., 2004b) used in ECCO v4. The novelty
+here largely resides in additions of forward model features to
+the body of adjointed codes (Sect. 4) and in their use in the
+state estimate (Sect. 5). Table 1 provides a list of basic model
+settings.
+The relative importance of various model settings gen-
+erally depends on the ocean state characteristic of inter-
+est. Here, a selection of ocean state characteristics is made
+amongst squared model–data distances (see Sect. 4), monthly
+time series of global mean quantities, and time-averaged
+meridional transports (Table 2). The selected characteris-
+tics in Table 2 are representative of the multi-faceted nature
+of ocean state estimation. These characteristics are used to
+gauge perturbations of 20-year solutions to various model
+settings (Table 3) and to estimated model parameter adjust-
+ments (see Sects. 4 and 5). They are also used to verify state
+estimate re-runs (ﬁrst three rows of Table 3; Appendix F).
+3.1
+Basic equations
+For a water column that extends from the bottom at z = −H
+to the free surface at z = η, the z∗vertical coordinate is de-
+ﬁned as z = η + s∗z∗with the scaling factor s∗= 1 + η/H.
+In this section, the notation ∇z∗indicates the nabla operator
+at constant z∗, i.e., in a plane of constant z∗value. The z∗
+coordinate set of equations was introduced by Adcroft and
+Campin (2004) (their Eqs. 9–11 and 13). Written in vector-
+invariant formulation, they read as
+∂v
+∂t + (f + ζ)ˆk × v + ∇z∗KE + w ∂v
+∂z + g∇z∗η + ∇h8′
+= Dz∗,v + D⊥,v + Fv,
+(1)
+∂8′
+∂z = g ρ′
+ρc
+,
+(2)
+1
+H
+∂η
+∂t + ∇z∗(s∗v) + ∂w
+∂z∗= s∗F,
+(3)
+∂(s∗θ)
+∂t
++ ∇z∗(s∗θvres) + ∂(θwres)
+∂z∗
+= s∗(Fθ + Dσ,θ + D⊥,θ),
+(4)
+∂(s∗S)
+∂t
++ ∇z∗(s∗Svres) + ∂(Swres)
+∂z∗
+= s∗(FS + Dσ,S + D⊥,S),
+(5)
+where v is the horizontal velocity, w∗= w/s∗is the vertical
+velocity in z∗coordinates5, ˆk is the vertical unity vector, f
+and ζ = ∇×v are the planetary and relative vorticity vertical
+component, KE is the horizontal kinetic energy, g is gravity,
+ρ′ is the density anomaly relative to the constant Boussinesq
+density ρc (ρ = ρc+ρ′), 8′ is the pressure anomaly scaled by
+5For practical reasons, the vertical velocity calculated by the
+model (w per Eq. 3) is neither the z∗vertical velocity w∗nor the
+true vertical velocity that would contain additional contributions
+(Adcroft and Campin, 2004, see their Eq. 4).
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3075
+Table 1. Selected interior and boundary model parameters. A more exhaustive list of model parameter settings is available within the model
+standard output (text ﬁle). For each group of parameters, the ﬁle where it is deﬁned at run-time is indicated in square brackets in the last
+column. Parameters reported as “ﬁrst guess” are further adjusted as part of state estimation (see Sects. 4 and 5).
+Description
+Value
+MITgcm parameter name
+(Momentum equation)
+[data]
+Time step
+3600 s
+deltaTmom
+Harmonic vertical viscosity
+5 × 10−5 m2 s−1
+viscAr
+Harmonic horizontal viscosity (see text)
+2 × 10−2
+viscAhGrid
+(Tracer equations)
+[data, data.gmredi]
+Time step
+3600 s
+deltaTracer
+First-guess GM intensity
+103 m2 s−1
+GM_background_K
+First-guess diapycnal diffusivity
+10−5 m2 s−1
+diffKrT,diffKrS
+First-guess isopycnal diffusivity
+103 m2 s−1
+GM_isopycK
+(Sea ﬂoor boundary)
+[data]
+Quadratic bottom drag
+10−3
+bottomDragQuadratic
+(Open-ocean surface boundary)
+[data.exf]
+Ocean albedo
+0.10
+exf_albedo
+(Ice-covered surface boundary)
+(data.seaice)
+Ice albedo (αi)
+0.66 < αi < 0.84
+αi = SEAICE_*IceAlb*
+Snow albedo (αs)
+0.70 < αi < 0.90
+αi = SEAICE_*SnowAlb*
+Maximum ice concentration
+0.95
+SEAICE_area_max
+constant density (8′ = p′/ρc), θ and S are the potential tem-
+perature and salinity, Dz∗,D⊥,Dσ are subgrid-scale (SGS)
+processes parameterized as mixing horizontally, vertically
+or along iso-neutral surfaces, and Fv, F, Fθ, FS are the
+forcing terms that are generally concentrated at the surface.
+Fields θ and S are advected (in Eqs. 4 and 5) by the residual-
+mean velocity ﬁeld (vres,wres) = (v,w) + (vb,wb) where
+(vb,wb) is the bolus velocity parameterizing the effect of un-
+resolved eddies (Gent and Mcwilliams, 1990, GM hereafter).
+The z∗coordinate formulation introduces a major differ-
+ence into the continuity equation (Eq. 3) as compared to the
+z coordinate. Thus, even in the absence of freshwater input
+(F = 0), the divergence of the three-dimensional ﬂow ﬁeld
+(u,v,w) is no longer zero. Then, within the continuity equa-
+tion, the rate of change of sea-surface elevation (the ﬁrst
+term in Eq. 3) is uniformly distributed along the water col-
+umn (as denoted by the 1/H scaling). The vertical velocity
+component w is obtained diagnostically from the continu-
+ity equation (Eq. 3). Furthermore, the horizontal momentum
+equation (Eq. 1) differs from the z coordinate case by the
+expression of the horizontal pressure gradient (Adcroft and
+Campin, 2004, Eq. 15):
+∇h8′ = ∇z∗8′ + g ρ′
+ρc
+∇z∗
+
+η
+
+1 + z∗
+H
+
+,
+(6)
+where the second term represents the effect of gravity act-
+ing on the slope of the constant z∗surface. The verti-
+cal momentum equation (Eq. 2) is reduced to the hydro-
+static balance and sea-water density ρ is evaluated using
+the Jackett and McDougall (1995) equation of state in which
+pressure is assumed to be a function of only depth (p =
+−ρcgz∗) so that any compressible effect is completely re-
+moved.
+Apart from the horizontal grid and the vertical coordinate
+z∗, the choice of time-stepping options used in ECCO v4 rep-
+resents another major change compared to previous ECCO
+conﬁgurations. The time-discretized version of Eqs. (1)–(5)
+is reported in Appendix B, which is particularly important
+to understand budget and other diagnostics (Appendix C).
+In summary, the staggered time-step approach is used, along
+with Adams–Bashforth 3 (AB-3) time-stepping for momen-
+tum advection and the Coriolis term, third-order Direct Space
+Time tracer advection (DST-3; a multi-dimensional scheme),
+and third-order implicit tracer vertical advection (uncondi-
+tionally stable). These options improve the model stabil-
+ity, allowing for a longer time step. Thus, the time-step re-
+striction due to the Coriolis term in the Arctic is alleviated
+by the use of AB-3 (1t = 1 h was unstable with AB-2 and
+ϵAB ∼0.1). Also, the chosen combination of staggered time-
+stepping and tracer advection schemes increases the stabil-
+ity limit related to internal-wave speed. With these choices
+a time step of 1t = 1 h is used with the LLC90 grid (Ta-
+ble 1).
+3.2
+Volume and tracer conservation
+ECCO v4 uses a non-linear free surface combined with real
+freshwater ﬂux forcing and the z∗coordinate. This approach
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3076
+G. Forget et al.: ECCO version 4
+Table 2. Ocean state characteristics used to verify 20-year model
+solutions (Appendix F) and gauge their sensitivity (Tables 3 and 8;
+Figs. 7, 8 and 11). The top seven rows list squared model–data dis-
+tances deﬁned in Sect. 4. The corresponding data sets are indicated
+under “Description”, where T , S, SST, SSS, SLA, and MDT, re-
+spectively, stand for potential temperature, salinity, sea surface tem-
+perature, sea surface salinity, sea level anomaly, and mean dynamic
+topography. The bottom six rows list model diagnostics where T , S,
+η + ηips, and V , respectively, stand for potential temperature, salin-
+ity, free surface height (including ηips; the weight of sea ice plus
+snow per unit area divided by ρc; see Campin et al., 2008), and vol-
+ume. Global averages and meridional transports of T , S, and V are
+computed over the entire water column.
+Name
+Description
+jT
+2008–2010 Argo T
+jS
+2008–2010 Argo S
+jTs
+1992–2011 Reynolds SST
+jSs
+1992–2011 climatological SSS
+jIs
+1992–2011 ice-cover fraction
+jHa
+1992–2011 large-scale SLA
+jHm
+1992–2011 MDT
+mH
+Monthly global mean η + ηips
+mT
+Monthly global mean T
+mS
+Monthly global mean S
+tV
+2008–2010 meridional V transport
+tT
+2008–2010 meridional T transport
+tS
+2008–2010 meridional S transport
+allows one to include material exchanges through the free
+surface in a physically intuitive way (Campin et al., 2008)
+and to achieve exact tracer conservation, both locally and
+globally (Campin et al., 2004). To illustrate this point, it is
+useful to start from the vertical integral of Eqs. (3)–(5), which
+is
+∂η
+∂t + ∇·
+η
+Z
+−H
+v dz = PmE
+ρc
+,
+(7)
+∂
+∂t ((η + H)θ) + ∇·
+η
+Z
+−H
+θ vres dz = Qnet
+ρcCp
++
+η
+Z
+−H
+Dσ,θ dz,
+(8)
+∂
+∂t ((η + H)S) + ∇·
+η
+Z
+−H
+S vres dz = Sﬂux
+ρc
++
+η
+Z
+−H
+Dσ,S dz, (9)
+where the overbar denotes vertical averaging according to
+ϕ =
+1
+(η+H)
+R η
+−Hϕ dz.
+The forcing terms F, Fθ, and FS in Eqs. (3)–(5) are con-
+centrated at or near the surface (unless geothermal heating at
+the bottom is active) and have been replaced by their integral
+form in Eqs. (7)–(9), namely the net freshwater input at the
+surface (PmE, in kgm−2 s−1), the net heat ﬂux into the wa-
+ter column (Qnet, in Wm−2) and the salt ﬂux at the surface
+(Sﬂux, in gm−2 s−1), which is zero in the absence of sea ice
+and salinity relaxation (see Sect. 3.5).
+With the non-linear free surface, the water column thick-
+ness varies as the free surface goes up and down (as is ap-
+parent in Eqs. 7–9). With the z∗coordinate, this variation is
+distributed vertically over all grid cells6. The fact that η en-
+ters the continuity equation (Eq. 7) also through
+R η
+−H dz ren-
+ders the free surface non-linear; furthermore, time-dependent
+grid-cell thickness introduces many more non-linearities that
+required code modiﬁcations to ensure efﬁcient adjoint code
+generation via AD (Sect. 4.2).
+Earlier ECCO conﬁgurations relied on the linear free-
+surface method (LFS), where column thickness and grid-cell
+thickness are ﬁxed in time. The LFS version of Eqs. (7) and
+(9) is
+∂η
+∂t + ∇·
+0
+Z
+−H
+v dz = ϵFW
+PmE
+ρc
+,
+(10)
+∂
+∂t (HS) + PmE
+ρc
+eS + ∇·
+0
+Z
+−H
+S vres dz
+= Sﬂux
+ρc
++
+0
+Z
+−H
+Dσ,S dz.
+(11)
+The Goldsbrough–Stommel circulation (Stommel, 1984) can
+be accounted for by setting ϵFW = 1 (virtual freshwater) or
+ignored (ϵFW = 0). However, since grid-cell thickness is held
+ﬁxed with LFS, the dilution effect due to surface freshwater
+ﬂux needs to be represented explicitly as a virtual salt ﬂux
+(second term in Eq. 11) using either the local surface salin-
+ity S or a constant So as eS, with drawbacks in both cases
+(see, e.g., Campin et al., 2008). By contrast, the non-linear
+free-surface formulation incorporates the dilution effect very
+naturally, within the time derivative of the water-column salt
+content (ﬁrst term in Eq. 9).
+The symmetry between continuity (Eq. 7) and tracer
+(Eqs. 8 and 9) equations allows for strict tracer conserva-
+tion (Campin et al., 2004) when discretized consistently (Ap-
+pendix B). In contrast, in the LFS case, this symmetry is lack-
+ing (∂η/∂t in Eq. 10 has no counterpart in Eq. 11), resulting
+in artiﬁcial tracer loss or gain (unless a global correction is
+added).
+3.3
+Tracer transports
+Ocean tracers are advected by the residual mean velocity
+vres,wres (Eqs. 4 and 5). The present ECCO v4 uses the third-
+order DST scheme in the horizontal, and the implicit third-
+6Each z∗= −αH level is a moving z surface; z = z∗+(1−α)η;
+z = η at z∗= 0; z = −H at z∗= −H.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3077
+Table 3. Regression testing of (top three rows; Appendix F) and sensitivity experiments conducted with (subsequent rows) the 20-year state
+estimate. The sensitivity experiments pertain to discrete switches in tracer advection, momentum, and boundary layer schemes (details are
+reported in Sect. 3). Ocean state characteristics that are used to gauge the sensitivity of ocean simulations are listed in Table 2. Departures in
+each characteristic are computed relative to the state estimate and normalized by the baseline result (for jT, . . . , jHm) or its standard deviation
+(for mH, . . . , tS). Positive numbers denote percentages (for differences above 1 %), whereas parenthesized negative numbers are powers of
+10 (for differences below 1 %).
+Experiment
+jT
+jS
+jTs
+jSs
+jIs
+jHa
+jHm
+mH
+mT
+mS
+tV
+tT
+tS
+Computer update
+(−6)
+(−6)
+(−7)
+(−6)
+(−5)
+(−6)
+(−7)
+(−5)
+(−5)
+(−5)
+(−6)
+(−6)
+(−5)
+Model update (65 g)
+(−7)
+(−6)
+(−6)
+(−5)
+(−6)
+(−4)
+(−4)
+(−5)
+(−5)
+(−5)
+(−6)
+(−6)
+(−5)
+24 proc. clusters
+(−6)
+(−8)
+(−6)
+(−5)
+(−5)
+(−4)
+(−4)
+(−4)
+(−5)
+(−5)
+(−6)
+(−6)
+(−5)
+Explicit vert. DST-3
+(−3)
+(−2)
+(−3)
+(−2)
+(−3)
+(−3)
+(−2)
+60
+50
+37
+(−3)
+(−2)
+4
+Third-order upwind
+(−4)
+(−3)
+(−3)
+(−3)
+(−4)
+(−4)
+(−3)
+(−2)
+(−2)
+(−2)
+(−4)
+(−3)
+(−3)
+Flux-limited DST-3
+3
+6
+1
+(−2)
+(−3)
+(−2)
+13
+98
+93
+62
+1
+3
+22
+C-D scheme
+40
+52
+17
+7
+2
+25
+64
+69
+13
+56
+2
+5
+53
+Added viscosity
+6
+7
+2
+6
+(−2)
+3
+6
+40
+28
+31
+(−2)
+1
+22
+Added bottom visc.
+4
+5
+1
+6
+(−2)
+2
+3
+18
+11
+16
+(−2)
+1
+17
+KPP instead of GGL
+4
+11
+7
+10
+11
+4
+3
+148
+149
+95
+(−2)
+(−2)
+22
+Added geo. heating
+(−3)
+(−3)
+(−3)
+(−3)
+(−4)
+(−3)
+(−3)
+(−2)
+47
+(−2)
+(−3)
+(−2)
+1
+order upwind scheme in the vertical. Previous ECCO conﬁg-
+urations used the explicit third-order upwind scheme in all
+directions. Flux-limited advection schemes are also available
+in forward mode, although they are not used in the state esti-
+mate (Sect. 5), since they are not yet in the body of adjointed
+codes (Sect. 4). Choices of advection schemes are a con-
+cern in ocean state estimation, since their structural proper-
+ties cannot generally be controlled by continuous parameters,
+and since numerical diffusion and advective overshoots could
+preclude an adequate ﬁt to observations. Their importance
+can be gauged from Table 3. Thus, activating ﬂux limiters has
+a sizable inﬂuence over 20 years, which is generally smaller
+than the impact of activating the C-D scheme (deﬁned in the
+next section), but exceeds the impact of activating geother-
+mal heating for example (Table 3; see next section). Global
+mean times series often show an exceptionally high sensitiv-
+ity to a variety of model settings, and to surface boundary
+layer settings in particular (Table 3).
+Diffusion includes diapycnal and isopycnal components,
+the GGL mixed-layer turbulence closure (Gaspar et al.,
+1990), and simple convective adjustment. The latter (GGL
+and convective adjustment) are used instead of the KPP ver-
+tical mixing scheme (Large et al., 1994) that was used in
+earlier ECCO conﬁgurations. The rationale for this choice
+and its impact on the 20-year solution is further dis-
+cussed in Sect. 5. Time-invariant three-dimensional ﬁelds of
+background diapycnal diffusivity (Kd), isopycnal diffusivity
+(Kσ), and GM intensity (Kgm) are adjusted under the data
+constraints listed in Sect. 4 starting from constant ﬁrst-guess
+values reported in Table 1. The estimated parameter maps for
+these highly uncertain coefﬁcients become an integral part of
+the ECCO v4 model setup. In Sect. 5, the sensitivity to these
+parameter adjustments is evaluated and compared with the
+results in Table 3. The geography of Kgm, Kσ, and Kd, their
+impact on stratiﬁcation, and their observability by means of
+Argo are further assessed in Forget et al. (2015).
+3.4
+Momentum discretization
+Parameters of the momentum Eq. (1) currently used in ECCO
+v4 are provided in Table 1. Lateral eddy viscosity is harmonic
+and dependent on grid spacing, with a coefﬁcient given by
+0.25×µL2/1t, where µ = 2×10−2 (viscAhGrid in Table 1)
+is a non-dimensional scaling number, L2 is the spatially vary-
+ing grid spacing squared (Fig. 2 shows L) and 1t = 3600 s
+(deltaTmom in Table 1). The resulting viscosity varies from
+≈103 to 1.6 × 104m2 s−1, depending on location. The other
+dissipation contributions used in ECCO v4 are harmonic ver-
+tical viscosity and quadratic bottom drag (with parameters in
+Table 1) plus contributions from GGL.
+Previous ECCO conﬁgurations used the C-D scheme (Ad-
+croft et al., 1999) that interpolates the Coriolis term from the
+Arakawa C grid to a D grid and back. This scheme acts to
+reduce grid-scale noise that is otherwise seen in the vertical
+velocity ﬁelds at all timescales, and particularly in the deep
+ocean (Fig. 4). Large vertical velocities have adverse effects
+on adjoint model stability, which ECCO originally resolved
+by means of the C-D scheme. The C-D scheme does how-
+ever have a large impact on the large-scale ocean circulation
+(Fig. 4) and hydrography (Table 3).
+A comparable damping of the barotropic circulation could
+be obtained through a large increase in viscosity (not shown).
+Also, vertical velocity noise is most intense near the ocean
+ﬂoor, which led us to the inference that adding viscosity more
+selectively near topography could sufﬁce to damp the verti-
+cal velocity noise (Fig. 4, top panels) and, along with the use
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3078
+G. Forget et al.: ECCO version 4
+     
+0.50 
+1.00 
+1.50 
+2.00 
+2.50 
+3.00 
+4.00 
+5.00 
+7.00 
+10.00
+15.00
+20.00
+25.00
+35.00
+     
+     
+−1.80
+−1.60
+−1.40
+−1.20
+−1.00
+−0.80
+−0.60
+−0.40
+−0.20
+0.00 
+0.20 
+0.40 
+0.60 
+0.80 
+     
+Figure 4. Root mean squared vertical velocity at 2000 m depth (top, in mmday−1 log scale) and mean horizontal stream function for the
+vertically integrated ﬂow (bottom, in Sv) in three solutions. (Left panels) Baseline solution. (Middle panels) Same as left panels, but with
+increased horizontal viscosity near the ocean ﬂoor. (Right panels) Same as left panels, but with addition of the C-D scheme.
+of vertical implicit advection, could stabilize the adjoint. Be-
+cause the impact of this approach on the circulation (Fig. 4,
+bottom panels) and hydrography (Table 3) is more muted
+than that of the C-D scheme, the latter was abandoned in
+ECCO v4. Targeted viscosity increase near topography re-
+mains needed to stabilize adjoint solutions (Sect. 4), but it
+can be omitted in forward solutions, as is done in the state
+estimate (Sect. 5).
+3.5
+Surface boundary conditions
+Upward buoyancy, and radiative and mass ﬂuxes (latent, sen-
+sible and radiative contributions to Fθ; evaporation as part
+of F) through the free surface are computed using the bulk
+formulae of Large and Yeager (2004), and 6-hourly ERA-
+Interim re-analysis ﬁelds (Dee et al., 2011) for the near-
+surface atmospheric state (temperature, humidity, downward
+radiation, precipitation). State estimation accounts for atmo-
+spheric re-analysis ﬁeld uncertainties (Sect. 4). Downward
+shortwave radiation is allowed to penetrate, with exponential
+decay, to a depth of 200 m as part of Fθ (Eq. 4). A seasonal
+climatology of runoff, from Fekete et al. (2002), is added as
+part of F (Eq. 3).
+Earlier ECCO conﬁgurations using the virtual salt ﬂux ap-
+proach with ϵFW = 0 (Sect. 3.2) could only account for the
+dynamical impact of precipitation, evaporation and runoff as
+they affect buoyancy (see Ponte, 2006). Accordingly, they
+could only include sea ice as a levitating layer without any
+direct effect on η (Campin et al., 2008). In contrast, ECCO
+v4 uses the real freshwater ﬂux approach (Sect. 3.2) and thus
+further accounts for the dynamical effects of material ex-
+changes through the free surface (either with the atmosphere,
+land or sea ice) as shown in Campin et al. (2008).
+Open ocean rain, evaporation and runoff simply carry (ad-
+vect through the free surface) the local SST and zero salinity
+in the model. When sea ice is present, buoyancy and mass
+ﬂuxes7 are recomputed based upon the thermodynamic bal-
+ance of a fully interactive sea-ice model (Losch et al., 2010).
+In this model as conﬁgured in ECCO v4, sea ice carries 0 ◦C
+and 4 gkg−1 salinity, while snow carries 0 ◦C and zero salin-
+ity.
+The implementation of mass, buoyancy and momentum
+exchanges through the sea-ice–ocean interface in the rescaled
+z∗coordinate framework is presented in detail in Campin
+et al. (2008). A further correction was added in ECCO v4
+to ensure conservation of heat for the combined ocean+sea-
+ice+snow system. While the ocean model is conﬁgured to
+exchange freshwater at the local SST, the sea-ice model op-
+erates at constant internal heat, so it cannot freeze and melt at
+variable temperature. The added correction simply puts the
+heat differential back into the ocean. Ocean+sea-ice+snow
+budgets (as well as separate ocean, sea-ice, and snow bud-
+gets) of mass, heat, and salt are then closed to machine pre-
+cision and readily diagnosed (Appendix C).
+In centennial ocean model simulations, it is customary to
+add a Newtonian relaxation of surface salinity to a gridded
+observational product (e.g., Danabasoglu et al., 2014) as part
+of FS (Eq. 5). While this method has no clear physical basis,
+it generally adds stability to centennial simulations. In con-
+trast, the state estimate (Sect. 5) has no salinity relaxation
+term, so that FS ̸= 0 only occurs when sea ice (whose salin-
+ity is set to 4 gkg−1) melts or freezes. Salt rejected by sea-ice
+formation is distributed in the vertical using the parameteri-
+7Fθ, FS, F in Eqs. (3)–(5); PmE, Qnet, Sﬂux in Eqs. (7)–(9).
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3079
+zation of Duffy et al. (1999) and Nguyen et al. (2009) as part
+of FS.
+Wind stress, also from ERA-Interim, is applied directly as
+part of Fv (Eq. 1) in ECCO v4. A common alternative is to
+compute wind stress also through bulk formulae, which is
+available as an option of the model. This approach could be
+used to account for wind stress modiﬁcations by surface cur-
+rents that are neglected in ERA-Interim. However, comput-
+ing wind stress through bulk formulae using atmospheric re-
+analysis ﬁelds typically requires backing out adequate drag
+coefﬁcients – so that the results would approximately match
+surface stresses that, in atmospheric models, follow from
+a momentum balance rather than bulk formulae – or ad hoc
+adjustments of atmospheric variables (see, e.g., Large and
+Yeager, 2004; Risien and Chelton, 2008). Instead, state es-
+timation accounts for re-analysis wind stress uncertainty di-
+rectly (Sect. 4).
+4
+Estimation framework
+The state estimation problem is deﬁned here by a squared
+model–data distance (J) to be minimized under the con-
+straint of a dynamical model. Section 4.1 formulates the state
+estimation problem in more detail. Section 4.2 provides an
+overview of the MITgcm adjoint, which is instrumental in
+solving the state estimation problem, and its recent develop-
+ments in the context of ECCO v4. Aside from the dynamical
+model (Sects. 2 and 3), the deﬁning ingredients of state es-
+timation are data constraints and control parameters. Their
+ECCO v4 implementation and speciﬁcations are covered in
+Sect. 4.3 and 4.4.
+The state estimate (Sect. 5) is a solution of the forward
+model (Sects. 2 and 3) at an approximate minimum of J.
+The process of ﬁnding such solutions, typically through an
+iterative optimization process and using the adjoint model,
+is not a focus of this paper. A number of well-known op-
+timization methods, with third-party implementations freely
+available online, can be used to this end (see, e.g., Heimbach
+et al., 2005, and references therein).
+Note that the existence of a unique global minimum of J
+is only rigorously established for linear least squares, when
+it can be solved for in matrix form to machine precision. In
+contrast, for non-linear inverse problems8, one can only aim
+to ﬁnd at least one approximate minimum of J that is an
+acceptable ﬁt to the data (i.e., a ﬁt within speciﬁed errors).
+8The degree of non-linearity may depend on the process of inter-
+est and increases substantially upon inclusion of meso-scale eddies.
+MITgcm/pkg
+autodiﬀ
+ctrl
+ecco
+proﬁles
+smooth
+interface with
+TAF AD tool
+checkpointing,
+active ﬁles,
+MPI
+adjoint run
+settings
+uncertain
+parameters
+forward model
+adjustments
+cost function
+uncertain
+gridded data
+time-averaged
+model ﬁelds
+cost function
+uncertain ob-
+served proﬁles
+sub-sampled
+model proﬁles
+cost function
+diﬀusion-
+based
+smoother
+covariance
+modeling
+Figure 5. Organization and roles of MITgcm estimation packages.
+A more complete presentation of MITgcm packages can be found
+in the manual. The algorithmic differentiation (AD) tool currently
+being used is TAF. The handling of checkpoints and active ﬁles is
+described in Heimbach et al. (2005). The roles of ctrl, ecco, proﬁles
+and smooth in forward mode (as reported here) and in adjoint mode
+are further described in Sect. 4. In preparation for this paper, much
+redundancy was eliminated through generalization of “ecco” and
+“ctrl” features (see, e.g., Table 4). This process reduced by about
+30 % the overall volume of adjointed code in ECCO v4 (counting
+the entire ocean–sea-ice model).
+4.1
+Problem formulation
+State estimation consists in minimizing a squared distance,
+J(u), that is deﬁned as
+J(u) =
+X
+i
+αi ×
+
+dT
+i R−1
+i
+di
+
++
+X
+j
+βj ×
+
+uT
+j uj
+
+,
+(12)
+di = P(mi −oi),
+(13)
+mi = SDM(v),
+(14)
+v = Q(u),
+(15)
+u = R(u′),
+(16)
+where di denotes a set of model–data misﬁts, αi the corre-
+sponding multiplier, R−1
+i
+the corresponding weights, uj a set
+of non-dimensional controls, and βj the corresponding mul-
+tiplier. Additional symbols appearing in Eqs. (13)–(16) are
+deﬁned below. The implementation of Eqs. (12)–(16) and the
+adjoint interface within the MITgcm are charted in Fig. 5.
+Model counterparts (mi) to data (oi) derive from a set of
+adjustable model parameters (v) through the model dynam-
+ics (M), diagnostic computations (D), and subsampling or
+averaging in space and time (S), performed as the forward
+model steps through time (Eq. 14). Model–data misﬁts are
+then computed, upon completion of the forward model sim-
+ulation, in order to evaluate J(u) and provide the adjoint
+model forcing (Sect. 4.2). Raw model–data misﬁts (mi −oi)
+can be penalized directly (i.e., used in Eq. 12 in place of di).
+More generally though, as formulated in Eq. (13), misﬁts be-
+ing penalized (di in Eq. 12) derive from mi −oi through the
+generic post-processor P (Sect. 4.3).
+The control problem, as implemented in ECCO v4, is
+non-dimensional, as reﬂected by the omission of weights
+in control penalties (uT
+j uj, Eq. 12). Non-dimensional con-
+trols are scaled to physical units through multiplication by
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3080
+G. Forget et al.: ECCO version 4
+Table 4. Generic model–data comparison capabilities provided by the “ecco” package (Sect. 4.3). The corresponding terms in Eqs. (12)–(14)
+(mi, oi, D, S, P, Wi) are reported in parentheses.
+Generic capability
+MITgcm parameter
+Usage
+Variable choice (mi, D)
+gencost_barﬁle
+“m_theta_mon”, “m_salt_mon”, “m_eta_day”, etc., for
+potential temperature (“theta”), salinity
+(“salt”), sea surface height (“eta”), etc.
+gencost_is3d
+.TRUE. or.FALSE.
+Time average (mi, S)
+gencost_avgperiod
+“month”, “day”, or “step” to form monthly, daily,
+and time step averages, respectively
+Input data ﬁles (oi)
+gencost_dataﬁle
+File name root (e.g., “some_sst”) for ﬁles that may
+be yearly (e.g., “some_sst_1992” etc.) or otherwise
+Time average (P)
+gencost_preproc
+“clim” to form a climatological average misﬁt,
+gencost_preproc_i
+e.g., 12 for monthly mean climatologies
+Spatial smoother (P)
+gencost_posproc
+“smooth” to apply diffusive smoother to misﬁts,
+gencost_posproc_c
+e.g., “some_scale.bin” for the smoothing scale,
+gencost_posproc_i
+e.g., 10 for the diffusive smoother time-stepping
+Weighing (Wi)
+gencost_errﬁle
+Squared inverse is used in squared model–data distance,
+except in places where a zero value is speciﬁed.
+Masking (Wi)
+gencost_spzero
+Data points set to speciﬁed value will be omitted.
+Diagnostics
+gencost_outputlevel
+> 0 to output model data misﬁts maps to disk.
+their respective uncertainty ﬁelds, as part of the generic pre-
+processor Q (Eq. 15; Sect. 4.4). Pre-conditioner R (Eq. 16)
+does not appear in the estimation problem itself (Eq. 12), as
+it only serves to push an optimization process preferentially
+towards certain directions of the control space.
+The speciﬁcation of (always approximate) error covari-
+ances (e.g., Ri) is a key ingredient of ocean state estimation,
+and least squares in general. ECCO has contributed a large
+body of work in this respect (e.g., Forget and Wunsch, 2007;
+Ponte et al., 2007; Quinn and Ponte, 2008, 2010; Chaudhuri
+et al., 2013; Forget and Ponte, 2015). Although not a focus
+in this paper, the difﬁculty in providing accurate error covari-
+ances, and assessing their impact on the state estimate, re-
+quires careful analysis of misﬁt residuals after the fact. This
+process typically leads to another phase of state estimate pro-
+duction, and so forth.
+For problems as massive as ECCO v4 (see Tables 5–7),
+full error covariance matrices are impractical and will remain
+so for the foreseeable future. Matrix-free approaches are of
+great practical value in this context. For example, the method
+of Weaver and Courtier (2001) is used in ECCO v4 to specify
+control parameter adjustment scales (Sect. 4.4) and penalize
+large-scale model–data misﬁts (Forget and Ponte, 2015).
+Within pure linear least squares theory, under the unreal-
+istic assumption of perfect error covariance speciﬁcations,
+multipliers αi, βj should be omitted from Eq. (12). They
+are, however, adequate in practice as a means to partly com-
+pensate for error covariance approximations, and the neglect
+of Ri non-diagonal terms in particular. They also provide
+a practical means to accelerate the ﬁt to data introduced in
+J during later stages of optimization. Furthermore, uT
+j uj (in
+Eq. 12) essentially are regularization terms included to limit
+control parameter adjustments, and the βj multipliers pro-
+vide the corresponding trade-off parameters (Hansen, 1992).
+4.2
+Adjoint modeling
+The method of Lagrange multipliers (i.e., the adjoint method)
+and its application to numerical models being stepped for-
+ward in time are well documented elsewhere. In particular,
+the interested reader is referred to Thacker and Long (1988)
+for a succinct presentation, with application to the case of
+a simple wave equation. The ﬁtting of model sea level vari-
+ability to altimetry through forcing adjustments estimated by
+the adjoint method (e.g., Forget and Ponte, 2015) is analo-
+gous to the simple case treated in Thacker and Long (1988).
+A crucial advantage of this method, as used in ECCO, is that
+it avoids adding source/sink terms of unknown nature to the
+model equations9. Adjoint models have many useful appli-
+cations in their own right, and we shall list a few that are
+particularly relevant to ECCO.
+Integrating adjoint models over extended periods of time
+allows diagnosis of the sensitivity of model dynamics to vari-
+ous parameters. Two examples are provided in Fig. 6 pertain-
+9Note that this desirable property does not hold in the case of se-
+quential data assimilation schemes (whether or not using an adjoint
+model), but this is not a case of interest here. In particular, it does
+not hold in 4DVar as practiced in numerical weather prediction.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3081
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+0.005
+0.01
+std(adxx)
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+2
+4 x 10
+−4
+std(adxx)
+Figure 6. Non-dimensional adjoint sensitivity ( ∂J
+∂u per Eq. 12 with αi = 1, βj = 0) of the Argo penalty over 2008–2010 (jT + jS) to biweekly
+GM intensity (left) and Laplacian horizontal viscosity (right) at 300 m. Computations are carried out with added bottom viscosity (as done
+in Table 3) to improve stability of the adjoint. Top panels show the standard deviation (over all ocean grid points) of biweekly adjoint
+sensitivities, reﬂecting their forcing by model–data misﬁts over 2008–2010 and their propagation backward to 1992 (propagation here may
+involve persistence, advection, waves, dissipation, etc.). Middle panels show the ﬁrst biweekly period of adjoint forcing (in late 2010) and
+reﬂect the most patchy, short-term sensitivity to model parameters. The patches’ smoothness is mostly set by the Weaver and Courtier (2001)
+spatial correlation model, with a speciﬁed scale of 3 times the grid scale. Bottom panels show the total sensitivity to time mean model
+parameters, obtained by summing over all biweekly periods. Their broad patterns primarily reﬂect the aggregation of adjoint sensitivities due
+to the 20-year integration of Eqs. (1)–(5).
+ing to the tracer (left panels) and momentum (right panels)
+equations that were computed using the “autodiff” (Fig. 5;
+this section), “proﬁles”, “ctrl” and “smooth” (Fig. 5; subse-
+quent sections) MITgcm packages. Figure 6 illustrates that
+the sensitivity of model–data misﬁts (here they cover 2008–
+2010) extend far back in time (here to 1992). The ability to
+use information contained in observations backward in time
+is a powerful advantage of the adjoint method over conven-
+tional sequential assimilation methods. Such adjoint sensi-
+tivities provide a practical means to reduce spurious model
+drifts and biases, through inversion of uncertain model pa-
+rameters (e.g., Ferreira et al., 2005). In cases that are suf-
+ﬁciently linear, adjoint sensitivities to, e.g., wind stress can
+further be convolved with forcing anomalies to reconstruct
+and attribute variability in the ocean circulation (e.g., Fuku-
+mori et al., 2015).
+Unlike the simple case treated in Thacker and Long
+(1988), hand-coding the adjoint of the MITgcm would be
+a very tedious and daunting task. Algorithmic differentia-
+tion, through a source-to-source code transformation tool,
+is a powerful alternative (see Griewank and Walther, 2008).
+Computational aspects of algorithmic differentiation applied
+to the MITgcm are described in Heimbach et al. (2005).
+Since its origin, ECCO has relied on the TAMC (Tangent
+Linear and Adjoint Model Compiler; Giering and Kaminski,
+1998) and its commercial successor TAF (Transformation of
+Algorithms in Fortran; Giering et al., 2005). Open-source
+tools such as OpenAD (Utke et al., 2008) and Tapenade (Has-
+coët and Pascual, 2013) are on their way to providing alterna-
+tives for massive problems such as ECCO (Heimbach et al.,
+2011).
+During the early development stages of ECCO v4, the ad-
+joint handling of exchanges and storage was extended (partly
+hand-coded) to allow for elaborate grids such as CS and
+LLC (Fig. 1). The balancing of storage vs. recomputation
+via the checkpointing method is essential to computational
+efﬁciency (Griewank, 1992; Heimbach et al., 2005). This is
+particularly true for ECCO v4 since the non-linear free sur-
+face (see Sect. 3) expectedly increases storage requirements.
+More generally, development of efﬁcient adjoint code us-
+ing TAF largely consists in accommodating non-linearities
+of added forward model features.
+Overwhelmingly expensive recomputations of non-linear
+terms in the adjoint are treated by adding TAF storage direc-
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3082
+G. Forget et al.: ECCO version 4
+tives10. These directives take the form of Fortran comments
+(starting with “CADJ”) embedded in the forward model
+code, which TAF transforms into code for storage operations
+(for details, see Heimbach et al., 2005). The ECCO v4 setup
+involves 1458 such comments, which were all inserted man-
+ually in carefully chosen locations. Once all of the needed
+storage directives are in place, then “algorithmic differentia-
+tion” becomes the “automatic differentiation” that an ECCO
+v4 user holding a TAF license will experience.
+The non-linear free surface, the AB-3 time stepping
+scheme, and implicit vertical advection were thus added as
+adjoint capabilities as part of ECCO v4. Including the non-
+linear free surface, along with the real freshwater ﬂux bound-
+ary condition, in the ocean state estimate is regarded as a ma-
+jor improvement in physical realism. The AB-3 and implicit
+vertical advection schemes have a minor impact on the for-
+ward model solution but provide additional stability also in
+adjoint mode.
+Exactness and completeness of the adjoint is the general
+goal of the MITgcm adjoint development. Exactness can be
+of particular importance in carrying out quantitative analy-
+ses of adjoint sensitivities (e.g., Verdy et al., 2014; Fukumori
+et al., 2015). For state estimation purposes, however, it is of-
+ten advantageous, or simply convenient, to use an approxi-
+mated adjoint (see, e.g., Jiang et al., 2002). The most basic
+approximation consists in switching off forward model fea-
+tures in the adjoint, which allows one to postpone the devel-
+opment of a stable adjoint.
+In ECCO v4, the Gaspar et al. (1990), Nguyen et al.
+(2009), and Losch et al. (2010) parameterizations are thus
+omitted in the adjoint. Note that the approximated adjoint
+does take into account, e.g., the diffusivities and viscosities
+computed by GGL (Gaspar et al., 1990). It is only the para-
+metric dependency of these diffusivities and viscosities on
+the ocean state that is omitted. Until 2008, applications of the
+MITgcm adjoint were also omitting the Redi (1982) and Gent
+and Mcwilliams (1990) components, which precluded opti-
+mal control of their parameters. This situation was resolved
+by using a simple clipping scheme for large isopycnal slopes,
+and by omitting only the parametric dependency of isopyc-
+nal slopes on the ocean density ﬁeld in the adjoint, following
+a reasoning similar to that of Jiang et al. (2002). Thus, the
+parametric dependency of turbulent transports on Kgm, Kσ
+and Kd is retained in the adjoint, so that these parameters
+can be optimally controlled.
+Beyond the removal of unstable adjoint dependencies,
+other alterations of the adjoint are of practical value for op-
+timization purposes. In particular, it is common practice to
+increase viscosity parameters to add stability to MITgcm
+adjoint simulations (Hoteit et al., 2005). Despite success-
+ful adjoint simulations with particular versions of the sea-ice
+model (Heimbach et al., 2010; Fenty and Heimbach, 2013),
+10TAF adopts a “recompute-all” strategy by default; OpenAD in
+contrast uses “store-all” by default.
+the sea-ice adjoint is omitted in ECCO v4 due to persist-
+ing issues. A pseudo-sea-ice adjoint is introduced instead
+to account at least for the most basic effect of sea ice –
+the shielding of seawater from the atmosphere. The adjoint
+pseudo-component is obtained by AD of a forward pseudo-
+component. The forward pseudo-component merely tapers
+air–sea ﬂuxes to zero according to (1−a), where a is the sea-
+ice fraction computed by the actual forward sea-ice model.
+This gross, local approximation omits the thermodynamics
+and dynamics of sea ice, and is never used in forward mode.
+In the adjoint, it masks out open ocean adjoint sensitivities
+that do not apply where ice cover is present. A fraction of
+open ocean sensitivity is preserved at the ice edge, which
+is physically reasonable and avoids a discontinuity in ad-
+joint ﬁelds. The pseudo-sea-ice adjoint approach has been
+extended in the context of Arctic ice–ocean state estimation
+(A. Nguyen, personal communication, 2014).
+4.3
+Data constraints
+Ocean state estimation involves constraining ocean model
+solutions to data. Model–data comparison (i.e., computing
+Eq. 12) becomes an integral part of numerical modeling. In
+forward mode, “ecco” and “proﬁles” are diagnostic packages
+that can be used in any MITgcm run to perform model–data
+comparisons and to compute Eqs. (12)–(14). In adjoint mode,
+they take the role of providing the adjoint model forcing (see
+Fig. 6).
+In situ data are handled by the “proﬁles” package. A model
+proﬁle is computed at the time step and grid point nearest
+to each observed proﬁle (see Appendix D). Aside from the
+primary goal of carrying out state estimation, the “proﬁles”
+output permits direct and rigorous assessments of modeled
+and observed statistics (and how they may differ) based upon
+a near identical and instantaneous sampling (e.g., see For-
+get et al., 2011). To this end, it alleviates the need to output
+global ﬁelds at full temporal resolution, which becomes over-
+whelming at high spatial resolution.
+Gridded data11 are commonly based upon monthly or
+daily averaged ﬁelds and handled by the “ecco” package.
+Many features have been added to “ecco” over the course
+of the ECCO v4 development. In preparation for this pa-
+per, these features were generalized so they can immediately
+be applied, when adequate, to any gridded data set. As of
+MITgcm’s checkpoint65h, the generic “ecco” capabilities are
+those listed in Table 4.
+Model counterparts to observed variables are diagnosed
+from model state variables via operator D in Eq. (14). For
+potential temperature and salinity (“theta” and “salt” in Ta-
+ble 4), the corresponding model state variables (θ and S in
+Eqs. 4 and 5) are readily available, and D then simply de-
+notes the identity operator. In contrast, sea surface height
+11By “gridded” we mean either interpolated (e.g., for monthly sea
+surface temperature) or simply bin-averaged (e.g., for along-track
+altimetry).
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3083
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+0
+2
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+−1
+0
+1
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+−1
+0
+1
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−10
+0
+10
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−8
+−6
+−4
+−2
+0
+2
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−20
+−10
+0
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+0
+2
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+0
+2
+−80
+−60
+−40
+−20
+0
+20
+40
+60
+80
+−2
+0
+2
+1995
+2000
+2005
+2010
+0
+0.1
+0.2
+1995
+2000
+2005
+2010
+0
+0.1
+0.2
+1995
+2000
+2005
+2010
+−2
+−1
+0
+1995
+2000
+2005
+2010
+34.724
+34.726
+34.728
+1995
+2000
+2005
+2010
+34.724
+34.725
+34.726
+1995
+2000
+2005
+2010
+34.72
+34.73
+34.74
+1995
+2000
+2005
+2010
+3.55
+3.6
+3.65
+1995
+2000
+2005
+2010
+3.58
+3.6
+3.62
+1995
+2000
+2005
+2010
+3.55
+3.6
+3.65
+(mH)
+(mS)
+(mT)
+(tV)
+(tS)
+(tT)
+Figure 7. Selected ocean state characteristics (deﬁned in Table 2) for the model runs in Tables 3 and 8. The respective units are m (mH),
+g kg−1 (mS), ◦C (mT), Sv (tV), gkg−1 Sv (tS), and PW (tT). For each characteristic, the top, middle and bottom panels, respectively, depict
+regression test results (top three rows of Table 3), structural model sensitivity (bottom eight rows of Table 3), and external and parametric
+model sensitivity (Table 8). The state estimate is shown as a thick black curve. All other model runs, which are only discussed collectively,
+are shown as thin red curves. Note that mH, mS, and mT are global mean time series, whereas tV, tS, and tT are 2008–2010 averages and are
+functions of latitude.
+(“eta” in Table 4) is diagnosed as η + ηips + ηnbs, where η
+is the model free surface (see Sect. 3.1), ηips is the weight of
+sea ice plus snow per unit area divided by ρc (see Campin
+et al., 2008), and ηnbs is a global steric sea level correction
+to the Boussinesq model (see Grifﬁes and Greatbatch, 2012).
+Furthermore, for comparison of sea surface height with al-
+timetry, the time mean of mi −oi computed at each grid
+point, and the time-variable global mean of mi −oi, are fur-
+ther subtracted via post-processor P in Eq. (13) (see Forget
+and Ponte, 2015).
+The basic steps in constraining a model solution to data
+using the ecco package are the following.
+1. Mapping data (whether along satellite tracks, gridded,
+or interpolated) to the model grid, which is easily done,
+e.g., in Matlab using gcmfaces (Appendix C).
+2. Specifying error covariances (Ri in Eq. 12) of model–
+data misﬁts (di in Eq. 12). To accommodate the great
+ocean heteroscedasticity (e.g., see Forget and Wun-
+sch, 2007), spatially varying uncertainties are generally
+needed.
+3. Carrying optimization until convergence to an approxi-
+mate minimum of J(u).
+It should be stressed that all three steps are required to claim
+that a model solution has been constrained to data, and that
+the speciﬁcation of errors is the central scientiﬁc problem.
+This is also true for “proﬁles”, although the ﬁrst step is lim-
+ited to a vertical interpolation to standard levels in this case.
+The state estimate (Sect. 5) has thus been constrained to in
+situ data listed in Table 5 and gridded data listed in Table 6.
+Table 5. In situ data to which the state estimate has been con-
+strained. XBT, CTD, and ITP stand for expendable bathythermo-
+graph, conductivity–temperature–depth sensors, and ice-tethered
+proﬁlers, respectively. SEaOS is data collected by Southern Ocean
+elephant seals. The CLIMODE ﬁeld campaign focused on the North
+Atlantic subtropical gyre (Marshall et al., 2009). A grand total of
+1911983 T proﬁles (or 1 239 247 S proﬁles) were used. Note how-
+ever that only CTD proﬁles extend below 2000 m (26 285 for T ,
+26 220 for S).
+Data set
+T proﬁles
+S proﬁles
+Origin
+Argo
+833 033
+800 269
+IFREMER
+CTD
+379 012
+333 266
+NODC, WOA09
+XBT
+597 009
+0
+NODC, WOA09
+ITP
+18 033
+17 745
+Toole et al. (2011)
+SEaOS
+103 117
+87 806
+Roquet et al. (2011)
+bobbers
+7894
+0
+D. Fratantoni, CLIMODE
+CTD
+161
+161
+L. Talley, CLIMODE
+4.4
+Control parameters
+Within the MITgcm, the “ctrl” package (Fig. 5) handles ad-
+justable control parameters (u in Eq. 15). In forward mode,
+“ctrl” is a package that inﬂuences the ocean state evolution
+(Eq. 14). Activating a new control parameter only requires
+a few lines of codes to map it to corresponding model pa-
+rameters (Eq. 15). In adjoint mode, “ctrl” takes the diagnostic
+role of collecting adjoint variables and evaluating derivatives
+of Eq. (12) (see Fig. 6). A penalty can further be added to
+J(u) by setting βj > 0 accordingly (Eq. 12), which will act
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3084
+G. Forget et al.: ECCO version 4
+Table 6. Gridded data to which the state estimate has been constrained. T , S, SST, SLA, MDT, and ICF, respectively, stand for potential
+temperature, sea surface temperature, sea surface salinity, sea level anomaly, mean dynamic topography, and ice cover fraction.
+Variable
+Description
+Period
+Size
+Origin
+MDT
+DNSC08 mean SSH minus
+1993–2004
+6.2 × 104
+Andersen and Knudsen (2009),
+EGM2008 geoid model
+Pavlis et al. (2012)
+T , S
+Blended monthly climatology
+2 × 5.7 × 108
+OCCA
+2004–2006
+Forget (2010)
+WOA 2005
+Unclear
+Locarnini et al. (2006)
+PHC 3.0
+Unclear
+Updated: Steele et al. (2001)
+SLA
+Daily bin average of
+1992–2011
+7.7 × 107
+Scharroo et al. (2004)
+along-track altimetry
+SST
+Monthly maps
+1992–2011
+1.5 × 107
+Reynolds et al. (2002)
+ICF
+Monthly maps
+1992–2010
+1.4 × 107
+Comiso (1999)
+Table 7. Control parameters that have been adjusted as part of the
+state estimation.
+Description
+Frequency
+Size
+Initial condition for temperature
+N/A
+2.4 × 106
+Initial condition for salinity
+N/A
+2.4 × 106
+Diapycnal diffusivity
+Time mean
+2.4 × 106
+Isopycnal diffusivity
+Time mean
+2.4 × 106
+GM intensity
+Time mean
+2.4 × 106
+Atmospheric temperature at 2 m
+Bi-weekly
+3.2 × 107
+Speciﬁc humidity at 2 m
+Bi-weekly
+3.2 × 107
+Precipitation
+Bi-weekly
+3.2 × 107
+Downward longwave radiation
+Bi-weekly
+3.2 × 107
+Downward shortwave radiation
+Bi-weekly
+3.2 × 107
+Zonal wind stress
+Bi-weekly
+3.1 × 107
+Meridional wind stress
+Bi-weekly
+3.1 × 107
+as an adjoint forcing, to constrain the magnitude of control
+parameter adjustments.
+Most features in “ctrl” were recently generalized so they
+can readily be applied, when adequate, to any set of con-
+trols. The generic pre-processor Q (Eq. 15) may thus include
+the Weaver and Courtier (2001) spatial correlation model
+(Appendix E), the cyclic application of climatological mean
+controls and/or a rotation of (zonal, meridional) vectors to the
+model C grid. Control parameters used in the state estimate
+are reported in Table 7.
+Most generally, complete and accurate error covariance es-
+timates are lacking for control parameters. For all controls
+used in the state estimate (Table 7), the error correlation
+scale was simply speciﬁed as 3 times the grid scale using
+the “smooth” package (as part of Q; Appendix E). The esti-
+mation of an initial state that pre-dates Argo and of its uncer-
+tainty, given the sparsity of the ship-based ocean sampling,
+is a difﬁcult problem in itself that is proposed for further,
+dedicated investigation (e.g., see Forget, 2010; Lyman and
+Johnson, 2014).
+For atmospheric re-analyses ﬁelds, in the absence of for-
+mal error estimates, ad hoc speciﬁcations of Q are based
+upon the spread of available atmospheric variable estimates
+(Chaudhuri et al., 2013). Here the squared sum of time mean
+and seasonal differences between NCEP and ERA-Interim
+ﬁelds was computed, then capped to a maximum, and used
+as an ad hoc estimate of error variances in atmospheric con-
+trols.
+For Kgm, Kσ and Kd, the ﬁrst guess values were 103, 103
+and 10−5 m2 s−1, respectively. The corresponding uncertain-
+ties were set to 500., 500. and 10−4 m2 s−1. The adjusted pa-
+rameters were further imposed to stay within 102 < Kgm <
+104, 102 < Kσ < 104 and 10−6 < Kd < 5 × 10−4 m2 s−1.
+5
+State estimate
+The ECCO v4, release 1 state estimate covers the period from
+1992 to 2011 and is the baseline solution of the ECCO v4 for-
+ward model setup (Sects. 2 and 3), using control parameter
+adjustments guided by data constraints (Sect. 4). The solu-
+tion ﬁts altimetry (Forget and Ponte, 2015), SST (Buckley
+et al., 2014), and subsurface hydrography data (Sect. 5.2) at
+or close to the speciﬁed noise level. Many characteristics of
+the solution have been analyzed in some detail and found to
+be physically plausible, which warranted its public release.
+An extensive documentation of model–data misﬁts and phys-
+ical characteristics of the state estimate is publicly available
+online (the “standard analysis”; Appendix C) and provided
+as the Supplement to this paper.
+5.1
+Select characteristics
+Ocean state estimation is by deﬁnition a multi-faceted prob-
+lem, as reﬂected by the selection of ocean state characteris-
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3085
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+10
+20
+30
+l(jT) to l(mT)   :   correlation=0.252 , b.c.=0.38
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+100
+200
+l(jT) to l(tT)   :   correlation=0.884 , b.c.=0.931
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+20
+40
+l(jHa) to l(mH)   :   correlation=0.356 , b.c.=0.604
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+50
+100
+l(jHa) to l(tV)   :   correlation=0.721 , b.c.=0.871
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+100
+200
+300
+l(jHa) to l(jT)   :   correlation=0.895 , b.c.=0.949
+−0.2
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+0
+100
+200
+l(jHa) to l(jHm)   :   correlation=0.904 , b.c.=0.938
+Figure 8. Bootstrap distribution of an index of cosensitivity between ocean state characteristics. For each pair of characteristics a and b,
+the cosensitivity index is deﬁned as the correlation between log10(δa) and log10(δb) where δ indicates a perturbation. Values reported as
+negative integers in, e.g., Table 3, are examples of log10(δ). Perturbations reported in the last nine rows of Table 3 and the last six rows of
+Table 8 are used jointly (providing sets of 16 δa, δb pairs). Bootstrap resampling (500 members) yields the displayed distributions.
+Table 8. Sensitivity of ocean state characteristics (Table 2) to control parameter adjustments (Table 7). In each sensitivity experiment one
+control vector adjustment subset is reset to zero. “Internal parameters” denotes GM intensity and isopycnal and diapycnal diffusivity jointly.
+“External forcing ﬁelds” denotes freshwater ﬂux, wind stress and buoyancy ﬂux controls jointly. “Buoyancy ﬂux” denotes atmospheric
+temperature and humidity, as well as downward shortwave and longwave ﬂux controls jointly. Departures in each characteristic are computed
+relative to the state estimate, and normalized by the baseline result (for jT, .. ., jHm) or its standard deviation (for mH, . .. , tS). Positive
+numbers denote percentages (for differences above 1 %), whereas parenthesized negative numbers are powers of 10 (for differences below
+1 %).
+Experiment
+jT
+jS
+jTs
+jSs
+jIs
+jHa
+jHm
+mH
+mT
+mS
+tV
+tT
+tS
+All controls
+369
+1027
+160
+56
+17
+242
+313
+7925
+99
+5295
+46
+29
+396
+Internal parameters
+212
+317
+56
+15
+12
+72
+163
+329
+272
+233
+4
+15
+96
+External forcing ﬁelds
+63
+437
+87
+27
+17
+117
+112
+7665
+252
+5114
+44
+12
+234
+GM intensity
+121
+136
+31
+6
+14
+44
+116
+42
+27
+26
+2
+8
+70
+Isopycnal mixing
+44
+66
+6
+(−2)
+3
+9
+17
+58
+62
+36
+2
+6
+28
+Diapycnal mixing
+23
+44
+13
+4
+(−2)
+6
+6
+437
+360
+292
+2
+5
+30
+Freshwater ﬂux
+14
+182
+(−3)
+12
+3
+40
+43
+5140
+68
+3418
+38
+6
+163
+Wind stress
+13
+22
+11
+(−4)
+(−2)
+32
+26
+21
+28
+16
+2
+5
+24
+Buoyancy ﬂux
+9
+30
+69
+5
+13
+9
+16
+2553
+167
+1712
+5
+6
+50
+tics in Table 2. To shed light on the observational and cli-
+mate problems, this section assesses the sensitivity of these
+ocean state characteristics as measured within Table 3 (dis-
+crete model setting choices) and within Table 8 (control pa-
+rameter adjustments). In particular, the correlation (or lack
+thereof) between columns of Tables 3 and 8 (the two tables
+being considered jointly in this case) indicates whether dif-
+ferent ocean state characteristics are tied to each other. Given
+the limited sample size (i.e., the number of lines in Tables 3
+and 8) bootstrap distributions are shown in Fig. 8 to reﬂect
+the level of uncertainty in the presented analysis of correla-
+tions.
+The various squared model–data distances (the ﬁrst seven
+characteristics) show contrasting levels of sensitivity to con-
+trol parameter adjustments (Table 8) as well as to discrete
+model setting choices (Table 3). This behavior may reﬂect
+contrasting levels of random errors in the different data types.
+In particular, the subsurface hydrography, as constrained by
+jT and jS, appears as the most sensitive squared model–
+data distance (Tables 3 and 8). High correlations amongst
+squared model–data distances (Fig. 8 bottom panels) are sug-
+gestive of some redundancy between data sets (i.e., consis-
+tency amongst observations).
+High correlations between meridional transports and
+squared model–data distances (top and middle right pan-
+els) provide evidence that Argo and altimetry may efﬁciently
+constrain heat and freshwater transports (see also, e.g., For-
+get et al., 2008a, b). In contrast, low correlations between
+global mean time series and squared model–data distances
+are striking (Fig. 8, top and middle left panels). Given that
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3086
+G. Forget et al.: ECCO version 4
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for temperature profiles
+ 
+ 
+ECCO v4
+ECCO v2
+ECCO v3
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for temperature profiles
+ 
+ 
+ECCO v4
+JPL−ECCO
+GECCO2
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for temperature profiles
+ 
+ 
+ECCO v4
+CS510−78
+CS510−92
+CS510−95
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for salinity profiles
+ 
+ 
+ECCO v4
+ECCO v2
+ECCO v3
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for salinity profiles
+ 
+ 
+ECCO v4
+JPL−ECCO
+GECCO2
+1992
+1994
+1996
+1998
+2000
+2002
+2004
+2006
+2008
+2010
+2012
+0
+5
+10
+15
+mean cost for salinity profiles
+ 
+ 
+ECCO v4
+CS510−78
+CS510−92
+CS510−95
+Figure 9. Mean squared distance to in situ observations (Table 5; Sect. 4; Appendix D) for various solutions, for temperature (left; jT)
+and salinity (right; jS), as a function of year. In each panel the red curve shows the ECCO v4 state estimate. Also shown in top panels:
+ECCO v2 (Wunsch and Heimbach, 2007, 1992–2004) and ECCO v3 (Wunsch and Heimbach, 2009, 1992–2007); middle panels: JPL-ECCO
+(Fukumori, 2002, 1992–present) and GECCO2 (Köhl, 2014, 1948–2011); bottom panels: three ECCO2 eddying solutions using different
+forcing ﬁelds (courtesy of H. Zhang). For each solution, monthly mean output was subsampled at data locations. For solutions that do not
+extend through 2011, the state of the last full year was replicated afterwards (shown in blue). Temporal resolution in jT, jS is reduced until
+Argo reached near-global deployment (i.e., before 2005). The pre-2005 values, while still a useful indication of skill, may be characteristic
+of limited regions. The Argo period values are mostly representative of the upper 2000 m of the global ocean.
+the time-variable global mean model–data misﬁt is omitted
+in computing jHa, the low correlation between mH and jHa
+indicates that a given global mean sea level time series could
+be associated with many regional solutions with equal uncer-
+tainty. The low correlation between jT and mT may further
+reﬂect the fact that regional variations can be much larger
+than, and not necessarily related to, temporal changes in
+global mean properties. Beyond the present study, the extent
+to which Argo and altimetry, amongst others, constrain tem-
+poral changes in global mean properties remains unclear.
+A related concern is that global mean time series show out-
+standing sensitivity not only to atmospheric and oceanic con-
+trol parameters (Table 8), but also to discrete model setting
+choices (Table 3).12 Meridional heat and freshwater trans-
+ports, in particular, appear much less sensitive than corre-
+sponding global mean time series (Fig. 7). It is tempting to
+attribute the outstanding sensitivity in global mean time se-
+ries to the omission of atmospheric, continental, etc., mod-
+eling in ECCO v4 (e.g., it does not currently include any
+explicit constraint of the limited freshwater storage capacity
+12Note that mT, mS (top to bottom global means) and mH may
+react to any change in ocean model controls and settings, since
+oceanic heat and freshwater uptake is determined by bulk formu-
+lae.
+of the atmosphere and continents), although this is merely a
+working hypothesis that remains to be tested. Whether and
+how the behavior illustrated in Fig. 7 translates into simpler
+models used to quantify climate change from observations
+(as in, e.g., Purkey and Johnson, 2010; Llovel et al., 2014)
+emerges as a question of direct relevance to climate change
+monitoring.
+5.2
+Improved hydrography ﬁt
+In developing and producing the ECCO v4 state estimate,
+a primary goal was to improve the ﬁt to observed in situ
+proﬁles of T and S as compared with earlier solutions (see
+Forget, 2010). This ﬁt is depicted in Fig. 9 as a function of
+time, for the various solutions. For ECCO v4 the squared
+model–data distance is jT ≈1.5 for potential temperature
+and jS ≈1.5 for salinity (on average over all depths, loca-
+tions and times). Average values of 1 would be ideal if the
+error estimate were perfect and the state estimate were de-
+void of large scale errors (neither of which is true). It is sus-
+pected that jT and jS could be further reduced. Values of 1.5,
+however, are regarded as sufﬁciently low to justify analysis of
+the state estimate water masses (Speer and Forget, 2013) and
+stratiﬁcation (Forget et al., 2015). Furthermore, jT and jS are
+already much reduced (by a factor of 2 to 10) compared with
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3087
+Figure 10. Model–data misﬁts for salinity at 300 m depth (sample average over all times) for ECCO v4 (top left panel), ECCO v2 (top
+center), ECCO v3 (top right), JPL-ECCO (middle center), GECCO2 (middle right) and three ECCO2 simulations (bottom panels). Additional
+computational details are reported in the Fig. 9 caption, along with references for the various solutions.
+earlier ECCO estimates throughout the period from 1992 to
+2011. Amongst earlier ECCO estimates, the ECCO v3 so-
+lution comes the closest to the observed hydrography, with
+typical values of 3.
+The contrasts in jT and jS amongst solutions reﬂect large-
+scale misﬁts as illustrated in Fig. 10. This is equally true for
+ECCO2 eddying solutions (bottom panels) and for coarser
+model solutions (top and middle panels). Such broad misﬁt
+patterns typically denote spurious model drifts and biases,
+which are common symptoms of model deﬁciencies (Stam-
+mer, 2005; Ferreira et al., 2005). Similarities in misﬁt pat-
+terns amongst ECCO2 eddying solutions (using a common
+model setup, under different sets of forcing), for example,
+suggest internal ocean model deﬁciencies. So do similari-
+ties in misﬁt patterns (aside from differences in amplitudes)
+amongst the four adjoint optimized solutions of comparable
+resolution that use different adjusted forcing ﬁelds (ECCO
+v2, v3, v4 and GECCO2).
+The contrast in misﬁt amplitude between ECCO v4 and
+earlier solutions (Figs. 9 and 10) tends to be reduced near the
+sea surface (not shown), which is encouraging but not en-
+tirely surprising since surface forcing ﬁelds were already ad-
+justable control parameters in earlier solutions. Conversely,
+the contrast in misﬁt amplitude tends to increase with depth
+(not shown), where internal model error sources may pre-
+dominate.
+Within ECCO v4, jT and jS are particularly sensitive to
+estimated turbulent transport parameter adjustments and gen-
+erally less sensitive to estimated atmospheric control adjust-
+ments, with the exception of expectedly high salinity sen-
+sitivity to precipitation adjustments (see Table 8, ﬁrst two
+columns). This result is in contrast to the analysis of Liu
+et al. (2012), who suggest that parameterized physics are
+only marginally important in this regard, a suggestion con-
+sistent with the relative weakness of their turbulent transport
+parameter adjustments (see Forget et al., 2015). A plausible
+explanation for this contrast lies in the fact that Liu et al.
+(2012) only estimate the period 1992–2001, whereas ECCO
+v4 covers 1992–2011. This difference has two important im-
+plications: (1) Argo largely increased the amount of in situ
+data, and (2) slow model drifts are more prominent in longer
+unconstrained solutions. One should expect larger turbulent
+transport parameter adjustments on both counts.
+Amongst turbulent transport control parameters in ECCO
+v4, jT and jS are most sensitive to the Kgm adjustments (this
+result is in agreement with Liu et al., 2012). A caveat should
+be noted though: parameterized surface and interior ﬂuxes
+are all interactive, so that any control parameter adjustment
+can potentially affect any surface or interior ﬂux. Hence Ta-
+ble 8 should not be mistaken for a precise ranking of the im-
+portance of the various controls. It clearly shows, however,
+that turbulent transport parameter adjustments were instru-
+mental in ﬁtting observed hydrographic proﬁles in ECCO v4.
+The Kgm, Kσ and Kd adjustments within the state esti-
+mate are assessed more speciﬁcally in Forget et al. (2015). In
+summary: the estimated Kgm, Kσ and Kd adjustments have
+a strong impact on ocean stratiﬁcation; ocean stratiﬁcation
+is now well observed by the Argo program; estimated and
+observed maps of stratiﬁcation and mixed-layer depths are
+in close agreement; the Kgm, Kσ and Kd adjustment geog-
+raphy is physically plausible and exhibits close connections
+with ocean stratiﬁcation. These results are evidence that re-
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3088
+G. Forget et al.: ECCO version 4
+Table 9. Model error categories as discussed in this paper.
+– Structural: settings that are controlled by discrete choices and switches.
+– External: initial conditions, boundary conditions, and external forcing ﬁelds.
+– Parametric: other settings that are controlled by continuous parameters.
+gional turbulent transport parameter inversions have an ob-
+servational basis in Argo data.
+Comparison of Tables 3 and 8 furthermore reveals that
+estimated turbulent transport parameter adjustments have a
+larger impact on model–data distances (see Table 8) than, for
+example, choices of advection, mixed-layer and momentum
+schemes (see Table 3). Thus the estimated parameter adjust-
+ments (while in the range of values typically used in general
+circulation models) exceed what may be expected to com-
+pensate for model errors unrelated to turbulent tracer trans-
+ports. The estimated parameter map details, however, should
+be interpreted with caution, as further discussed in Forget et
+al. (2015).
+5.3
+Parametric and structural model error
+In this section, the focus is on model uncertainty and con-
+trollability, which directly impacts the possibility of ﬁtting
+a model to data. Random data errors and model representa-
+tion errors are left out of the discussion, which are compar-
+atively well studied (e.g., Forget and Wunsch, 2007; Ponte
+et al., 2007; Quinn and Ponte, 2008, 2010; Chaudhuri et al.,
+2013; Forget and Ponte, 2015). Errors associated with com-
+puting environment changes (top three rows in Table 3) are
+generally small enough to be neglected when using the MIT-
+gcm.
+The interplay of external, structural and parametric ocean
+model errors has never been tackled in any systematic and
+quantitative manner. To distinguish amongst model uncer-
+tainties associated with ECCO v4 settings, we propose the
+simple, practical category deﬁnitions in Table 9. Clearly the
+separation between these three categories leaves room for
+ambiguities. For example, selecting one of the available at-
+mospheric re-analysis products to force the model may fall
+under “structural”, while tuning bulk formula coefﬁcients
+may fall under “parametric”, and adjusting re-analyzed ﬁelds
+may fall under “external”. Nevertheless, as a starting point,
+the above deﬁnitions provide a useful frame of reference.
+A related discussion can be found in Marzocchi and Jordan
+(2014), although the focus here is on curve ﬁtting (i.e., inter-
+polation within a time period) rather than on forecasting (i.e.,
+extrapolation forward in time). Relevant discussions can also
+be found in Danabasoglu et al. (2014) and Balmaseda et al.
+(2015).
+A ﬁrst assessment of the relative importance of external,
+parametric and structural model uncertainty in ECCO v4
+can then be made from Table 3 (structural sensitivity tests)
+and Table 8 (external and parametric sensitivity tests). Struc-
+tural model uncertainty associated with choices of advec-
+tion, mixed-layer and momentum schemes are sizable over
+20 years (Table 3). Solutions perturbed by this much are suf-
+ﬁciently distinct from the state estimate to prompt further
+optimization, leading to a different state estimate. The most
+important result, however, may be that adjusted control pa-
+rameters generally have a much larger impact (Table 8) than
+switching amongst numerical schemes (Table 3).
+A ratio C of model uncertainty controlled by continuous
+parameters (external or parametric) to structural model un-
+certainty is introduced to better illustrate this result (Fig. 11).
+The adjoint method allows for reduction of parametric and
+external errors, but it does not lend itself to reduction
+of structural errors that are fundamentally discontinuous.
+Hence, C is an index of model controllability, which can be
+interpreted as a signal-to-noise ratio of sorts, but for model
+simulations rather than observations. Large values of C are
+a priori favorable to state estimation.
+It is therefore encouraging that log10(C) > 0 for all vari-
+ables considered (Fig. 11), showing that controlled model un-
+certainty exceeds the noise level set by structural model un-
+certainty. Certain ocean characteristics are particularly prone
+to structural model uncertainty, whereas others are highly
+controllable. On the one hand, squared model–data distances
+for regional sea level variability and in situ hydrography ap-
+pear most controllable with log10(C) > 1.5 (top panels). On
+the other hand, global mean temperature and sea surface
+salinity appear most prone to structural model uncertainty
+with log10(C) < 0.5. The high level of structural uncertainty
+seen in global mean heat uptake (i.e., mT) is cause for con-
+cern in the context of climate change monitoring (see also
+Sect. 5.1).
+Increasing model controllability is a priori favorable to
+state estimation. To this end, one may seek to replace dis-
+crete choices and switches with continuous parameter speci-
+ﬁcations that enable smooth state transitions13, or simply add
+adjustable parameters14. The replacement of the C-D scheme
+by optional targeted viscosity, and the replacement of KPP
+with GGL (Sect. 3.3) thus aim at increasing model controlla-
+bility. For example, KPP is a very complex and non-linear
+parameterization that involves many discrete switches and
+13At this point it is assumed, for the sake of a simple preliminary
+discussion, that an expert consensus could be reached to exclude
+certain numerical schemes (see Marzocchi and Jordan, 2014).
+14If algorithmic differentiation is the method of choice to this
+end, then schemes that have fewer discrete switches are preferable
+over other comparable schemes.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3089
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( jHa )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( jHm )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+60
+( tV )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( jS )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( jIs )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( mS )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+60
+( tS )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+10
+20
+30
+( jT )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+10
+20
+30
+( jTs )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+( mT )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+20
+40
+60
+( tT )
+0
+0.5
+1
+1.5
+2
+2.5
+0
+10
+20
+30
+( mH )
+Figure 11. Bootstrap distribution of a controllability index C for select ocean state characteristics. C is deﬁned as log10(δb,j/δb,i) where
+δb,i and δb,j denote perturbations in one ocean state characteristic b. Values reported as positive integers in Tables 3 and 8 are examples of
+δb,i and δb,j, respectively. A set of 54 values of C is computed from δb,i, δb,j pairs formed from the last 9 rows of Table 3 (providing a set
+of 9 δb,i values) and the last 6 rows of Table 8 (providing a set of 6 δb,j values). Bootstrap resampling (500 members) yields the displayed
+distributions.
+thousands of code lines. GGL yields broadly similar results
+to KPP over 20 years (Table 3) and is in contrast a very sim-
+ple code, so that a practical adjoint may be within reach.
+It is also noteworthy that activating the C-D scheme gen-
+erally trumps the impact of switching between mixed layer
+schemes, albeit with the notable exception of global mean
+characteristics (see Table 3). This result highlights the po-
+tential beneﬁts of further extending the inversion problem to
+viscosity parameters.
+5.4
+Known issues
+State estimation should aim towards universality and com-
+pleteness (see Wunsch and Heimbach, 2013a, for a review).
+Thus, its practice always warrants continuous improvement
+in many respects. In ECCO v4, without trying to be exhaus-
+tive, one can distinguish at least three types of issues.
+Firstly, the state estimate would beneﬁt from further op-
+timization, with additional data, controls, and reﬁned error
+covariance speciﬁcations. Remaining misﬁts seen in the top
+left panel of Fig. 10, for example, may point to the need for
+further optimization. The adjustment of turbulent transport
+parameters has largely reduced these misﬁts, but their spec-
+iﬁed covariances remain very imprecise. Parametric error
+in the momentum equations also deserves further attention,
+since it may limit model controllability. Error covariances be-
+tween adjustable control parameters (e.g., atmospheric vari-
+ables) are also neglected. A permanent issue is the need for
+additional observations to further constrain models, particu-
+larly in the abyss (Wunsch and Heimbach, 2014). Amongst
+available data that is not yet in ECCO v4, the growing bio-
+geochemistry data base is becoming a priority.
+Secondly, the lack of “posterior” error estimates is re-
+garded as the most outstanding issue with ECCO v4, re-
+lease 1. Producing formal error estimates, at a reasonable
+computational expense and with acceptable precision, for
+the full, evolving ocean state would be another major break-
+through. In principle, a number of methods are available to
+this end. In practice, however, most of them are intractable
+for problems of size > 108 (sizes are reported in Tables 5–
+7). One approach that is being pursued is the use of second
+derivative (Hessian) information that, under the assumption
+of Gaussian distribution, can be readily related to the poste-
+rior error covariance (see Kalmikov and Heimbach, 2014).
+Also a possibly useful estimate of uncertainty in ECCO v4
+may follow from computing the spread amongst available
+ocean data syntheses, although it is unclear how such ensem-
+ble spreads should be interpreted (Balmaseda et al., 2015).
+Thirdly, the ECCO v4 model setup could be extended
+and improved, with possibly important implications for
+the state estimate. The lack of atmospheric, land, and
+bio-geochemistry components is an obvious limitation of
+ECCO v4 at this stage. The surface boundary conditions
+and sea-ice model settings require further assessment. Issues
+such as the use of the Boussinesq approximation (in Eqs. 1–
+5), the omission of geothermal heating (Piecuch et al., 2015),
+the omission of tides, and the lack of a coastal wetting/drying
+mechanism are matters for further MITgcm development that
+are also of importance to state estimation.
+6
+Conclusion and perspectives
+This paper emphasizes the synergy between ocean modeling
+and data analysis. The entanglement of models and obser-
+vations is nothing new – Ekman (1905), Sverdrup (1947),
+Munk (1966) and Wunsch (1977) are just a few historical ex-
+amples. The synergy of ocean modeling and data analysis is
+further becoming a reality as a growing community engages
+in ocean state estimation, which in essence is the hybridiza-
+tion of ocean modeling and data analysis. What is different
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3090
+G. Forget et al.: ECCO version 4
+now merely is the level of (in)completeness, complexity, and
+diversity of the models and observations being employed in
+modern oceanographic and climate science. The scope and
+size of the ocean state estimation problem tackled in ECCO
+v4 requires collaborative research and production activities.
+This unescapable conclusion leads to this attempt at offer-
+ing ECCO v4 as a fully integrated framework for non-linear
+inverse modeling and global ocean state estimation. Along
+with the MITgcm and its adjoint capability, the ECCO v4
+framework currently includes the components listed in Ta-
+ble 10.
+Each component of the framework is being (re)designed
+to be modular and of general applicability, as they all are
+thought to provide valuable stand-alone pieces to different
+degrees. Standardized in situ data sets in particular, while
+a by-product of carrying out ECCO v4, allow for a variety
+of scientiﬁc analyses in their own right. For example, they
+are used for analyses of observed variance that is never fully
+represented in numerical model solutions (Forget and Wun-
+sch, 2007; Forget, 2015), of water mass volumetric census
+(Forget et al., 2011; Speer and Forget, 2013), and of macro
+turbulence (McCaffrey et al., 2015) and mixing (Forget et
+al., 2015). A complementary description of the standardized
+in situ observations and related ECCO v4 components is pro-
+vided in Appendix D, directed towards users of in situ obser-
+vations.
+As another example, the gcmfaces Matlab framework
+(Appendix C) is suitable for the analysis of gridded earth
+variables (whether observational or modeled) beyond the
+ECCO v4 model setup and state estimate. At this stage it has
+already been applied to analyze MITgcm simulations on var-
+ious grids, and to a variety of observations. Interfacing gcm-
+faces with output from models other than MITgcm would
+allow for rigorous model intercomparisons without the need
+to introduce errors through interpolation. As a ﬁnal example,
+any interested modeling group should be able to take advan-
+tage of the global grids.
+The state estimate and the MITgcm are highly integrated
+with each other. Beyond the few aspects of the solution that
+have been investigated in some detail, the MITgcm pro-
+vides numerous prognostic and diagnostic capabilities that
+remain to be applied to, or employed within, ECCO v4. The
+“ctrl”, “ecco” and “proﬁles” packages, are just examples of
+the many MITgcm packages. The last two diagnose model–
+data misﬁts and statistics. In contrast, the “ctrl” package de-
+ﬁnes control parameters that act upon the forward prognos-
+tic equations. It also lends itself to development of new pa-
+rameterizations. Note that the roles of these packages (diag-
+nosing or acting on the solution) are reversed in the adjoint.
+Amongst forward prognostic MITgcm packages not yet used
+in ECCO v4, biogeochemistry and simpliﬁed atmospheres
+(Dutkiewicz et al., 2005; Follows et al., 2007; Marshall et al.,
+2007a; Ferreira et al., 2011) are worth singling out, as they
+offer a great potential for extending ocean state estimation.
+The adjoint capabilities of MITgcm further allow for compu-
+tations of sensitivity, Green functions, singular value decom-
+position, mechanistic attribution of variability, and optimal
+observation design (Marotzke et al., 1999; Köhl and Stam-
+mer, 2004; Fukumori et al., 2007, 2015; Heimbach et al.,
+2011; Zanna et al., 2011).
+Furthermore, the MITgcm provides a convenient platform
+for parallel computing and variational estimation that allows
+for, but is not limited to, ocean data synthesis and analysis
+(Hoteit et al., 2013; Goldberg and Heimbach, 2013). Opti-
+mal interpolation (OI) of an individual variable, for instance,
+can readily be carried out using Eq. (12) and its adjoint with
+M = I (i.e., the identity operator) as illustrated by Forget
+(2010). In between OI and full ocean state estimation, and
+beyond, lie many interesting stages and possibilities. For in-
+stance, stand-alone bulk formula conﬁgurations (available
+at mitgcm.org, with or without sea ice) could readily al-
+low for assessment and optimization of air–sea ﬂuxes (along
+the lines of, e.g., Yu and Weller, 2007; Maze et al., 2009).
+The (re)implementation of Eq. (12) within MITgcm provides
+a versatile environment for such projects, and for variational
+estimation purposes most generally (and is complementary
+to, e.g., Moore et al., 2011; Barth et al., 2014; Wilson et al.,
+2014; Hoppe et al., 2014).
+It is expected that all of the ECCO v4 components listed in
+Table 10 will eventually be replaced. Most immediately, the
+speciﬁcs of the ocean state estimation problem (grid, forcing,
+ocean and sea-ice model settings, control parameters, data
+constraints) can all be reﬁned or substituted for improved
+components. Our continued commitment is to make every
+updated component freely and fully available online as soon
+as possible. All of the Fortran and Matlab components are al-
+ready available, and served through the CVS server of MIT-
+gcm, where they were added in real time and with free access
+over the years (“Code availability” section). The monthly
+output of the state estimate and the model–data misﬁts (data,
+model counterparts, and uncertainty) for in situ proﬁles are
+also readily available. The rest of the numerical input and
+output requires additional processing and web interfacing –
+and is for now instead made available upon email request
+(“Code availability” section).
+At the present time, taking full advantage of the ECCO
+v4 framework (Table 10) requires two third-party commer-
+cial tools that are neither free nor open source: Matlab and
+TAF. The ability to successfully generate efﬁcient adjoint
+code using alternative open-source tools, such as OpenAD
+or Tapenade, is gaining increasing priority. Despite its lim-
+itations, Matlab is one of the most portable, integrated and
+popular analysis frameworks, and it is expected to remain
+as such for the foreseeable future. However, a Python analy-
+sis framework similar to gcmfaces is in planning and should
+better handle massive output from high-resolution models
+(R. Abernathey, personal communication, 2014).
+Gridded observational products (such as hydrography cli-
+matologies, ocean state estimates, etc.) are commonly used
+as a practical shorthand to data. It should be stressed that
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3091
+Table 10. List of the ECCO v4 framework components, which are fully integrated with(in) the MITgcm and its adjoint.
+– The 2 km CS and LLC grids, as well as descending resolution grids
+– The MITgcm estimation framework implementation charted in Fig. 5
+– The model setup subjected to forward and adjoint daily regression tests
+– The state estimate output, including model–data misﬁts
+– The observational data input, including weights, to the state estimate
+– The forward model input needed to re-compute the 1992–2011 solution
+– The testreport_ecco.m tool to verify re-runs of the 1992–2011 solution
+– The gcmfaces Matlab framework to analyze global, gridded solutions
+– The MITprof Matlab framework to process and analyze in situ proﬁles
+– The solution’s standard analysis produced by gcmfaces and MITprof
+a gridded ﬁeld in itself does not provide any information
+about its errors. Therefore, and since data coverage is un-
+even and restricted to a few variables, state estimate users
+are strongly encouraged to consider the underlying data base.
+This being said, and despite the need for continued improve-
+ment, the usefulness and scientiﬁc value of the ECCO v4
+solution is by now largely documented in a number of pa-
+pers (Speer and Forget, 2013; Wunsch and Heimbach, 2013b,
+2014; Buckley et al., 2014, 2015; Forget and Ponte, 2015;
+Forget, 2015; Forget et al., 2015; Liang et al., 2015; Fuku-
+mori et al., 2015; Balmaseda et al., 2015).
+As compared with earlier ECCO solutions, the state es-
+timate beneﬁts from an extensive revisit of model settings.
+The improved ﬁt to in situ observations (Argo proﬁles of T
+and S in particular) as compared with earlier ECCO solu-
+tions may be the deﬁning characteristic of ECCO v4, release
+1. The inclusion of turbulent transport parameters in the set
+of adjustable control parameters was instrumental in achiev-
+ing that goal – their inversion guided by in situ observations
+is further assessed in Forget et al. (2015). Nevertheless, it
+should not be assumed that broad-scale model–data misﬁts
+are completely absent (e.g., see Fig. 10). Users of the state
+estimate are expected to question its realism, while being
+provided with capabilities to assess model–data misﬁts for
+themselves. More generally, it should not be assumed that all
+ocean state variables are fully constrained by available obser-
+vations. Integrated transports, global averages, etc., are not
+directly observed, and it is a priori unclear how well they can
+be constrained by available observations (see Forget et al.,
+2008a, b; Heimbach et al., 2009; Forget et al., 2015).
+Looking to the future, the need for associating formal er-
+ror estimates with the full, evolving ocean state remains of
+utmost importance. Aside from this aspect, extensions of the
+state estimation framework to include other climate compo-
+nents (atmosphere, land, cryosphere) and different variables
+(biology, chemistry) would be desirable (see, e.g., Blessing
+et al., 2014; Prinn et al., 2011). By providing ECCO v4 as
+a fully integrated framework along with a useful baseline so-
+lution that any interested investigator should be able to re-
+produce for the foreseeable future, the authors aim to stimu-
+late independent research along those lines. The very modest
+computational requirement of ECCO v4 (Appendix F) is fa-
+vorable to scientiﬁc experimentation, multi-centennial simu-
+lations and extensions to biochemistry for example (see For-
+get and Ponte, 2015; Forget et al., 2015).
+The overarching scientiﬁc problem (setting aside techni-
+calities) for data–model combination lies in the attribution of
+errors amongst the various elements of Eq. (12). We make no
+claim to having achieved the proper attribution of errors, but
+experience gathered in developing ECCO v4 suggests that
+a paradigm shift, as compared with earlier ECCO publica-
+tions, is in order. Our results indeed indicate that internal pa-
+rameters are of ﬁrst-order importance to state estimation, and
+to ﬁtting the observed hydrography in particular (Table 8).
+Our assessment is in contrast to that of Liu et al. (2012), who
+suggest that the importance of internal parameters is of or-
+der 10–20 %, depending on the model variable of interest.
+Furthermore, the inversion of parameters in the momentum
+equations, which has received comparatively little attention,
+emerges as a topic of importance as one gets closer to data,
+and is expected to gain further importance as resolution in-
+creases. To provide a frame of reference for future research
+along those lines, a ﬁrst attempt at deﬁning and gauging var-
+ious categories of model uncertainty has been presented.
+Alleviating structural model errors is a prerequisite to im-
+proved dynamical interpolation of observations. In this re-
+gard, the main improvement compared with previous ECCO
+estimates may be the extension of the gridded domain to the
+Arctic, the addition of the non-linear free surface, and the
+switch to real freshwater ﬂux (Sect. 3). These speciﬁc expert
+choices (Marzocchi and Jordan, 2014) should not be contro-
+versial. For many other model settings, the situation is not
+so clear but structural model errors are generally regarded
+as a more difﬁcult issue than parametric model errors. In-
+deed, structural model errors by deﬁnition consist of funda-
+mentally discontinuous modeling choices that cannot be op-
+timally controlled. In contrast, sensitivity to continuous pa-
+rameters can readily be probed in adjoint mode (Sect. 4.2) so
+that they can be estimated objectively under the constraint of
+ﬁtting observations (Sect. 5.2).
+Parametric and external model uncertainty (Table 8) gen-
+erally appear to dominate over structural model uncertainty
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3092
+G. Forget et al.: ECCO version 4
+(Table 3), as illustrated by Fig. 11. Such a conclusion most
+likely depends on spatial resolution, the chosen 20-year du-
+ration, and the necessarily limited array of model settings
+being considered in Tables 3 and 8. In particular, we expect
+that the choice of momentum schemes would be more impor-
+tant in eddy-resolving models, as kinetic energy overcomes
+potential energy at the meso-scale. Examples of large struc-
+tural uncertainty in eddy permitting models can be found in
+Barnier et al. (2006) and subsequent studies. Here, however,
+the estimated control parameter adjustments appear to deter-
+mine the solution beyond the level of structural model uncer-
+tainty (Sect. 5.2 and 5.3).
+Parametric model uncertainty (associated here with inte-
+rior turbulent transports) and external model uncertainty (as-
+sociated here with surface forcing ﬁelds) appear to be of
+comparable magnitude (Table 8). Depending on the charac-
+teristic of interest, one predominates over the other. Hence,
+the importance of including turbulent transport parameters in
+the control vector cannot be overstated. Much remains to be
+understood regarding these highly uncertain parameters and
+their inference from data though (see Forget et al., 2015).
+ECCO v4 will hopefully prove a useful stepping stone in that
+direction and stimulate further parameter inversion experi-
+ments.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3093
+Appendix A: Grid generation method
+At high latitude, the LLC mesh is generated numerically
+by adapting the two-dimensional conformal mapping algo-
+rithm developed by Zacharias and Ives in the 1980s (see Ives
+and Zacharias, 1989; Trefethen, 1989; Wilkin and Hedström,
+1998) to spherical geometry. The approach is similar to that
+used in the SeaGRID package (Denham, 2000), except that
+here spherical polar coordinate geometry deﬁnes sub-domain
+boundaries. The numerical mesh is generated separately for
+the Arctic cap and the transition sector. Each quarter of the
+transition sector is bounded by the 57◦N parallel (southern
+edge), two 90◦spaced meridians (eastern and western edges),
+and a small-circle arc that crosses the eastern and western
+edges at 67◦N (northern edge). The four northern edges of
+the transition sector bound the Arctic cap.
+To numerically mesh each sub-domain it is ﬁrst confor-
+mally projected onto a plane, using a polar stereographic
+transformation. The result is then conformally mapped to
+a rectangular shape by iteratively applying the so-called
+“hinge-point” or “power” transformation to each of the four
+arc segments that make up the sub-domain edges. The trans-
+formation works with points (x,y) in the complex plane
+x +iy and applies the mapping ω = (x +iy)P . The transfor-
+mation is applied iteratively to adjacent pairs of discrete line
+segments that deﬁne the sub-domain edges. The transforma-
+tion adjusts P at each iteration for successive line segment
+pairs, so that the angle between adjacent segments is adjusted
+to be π
+2 at corners and π for all intermediate segments.
+The result of the transformation is a rectangular shape in
+a new coordinate space denoted by coordinates ζ and η. The
+rectangular shape has two edges that are line segments of
+constant ζ and two edges that are lines of constant η. The
+points that deﬁne the line segments have corresponding map-
+pings to the line segment points in the original (x,y) coordi-
+nate system. A set of x and y locations that describe orthog-
+onal grid lines in the sub-domain interior can then be gener-
+ated numerically by solving two Laplace equations (Ryskin
+and Leal, 1983) of the form
+∂2X
+∂ζ 2 + ∂2X
+∂η2 = 0
+∂2Y
+∂ζ 2 + ∂2Y
+∂η2 = 0
+over the (ζ,η) rectangular shape and subject to the respective
+boundary conditions X = x and Y = y on the respective ζ =
+constant and η = constant rectangular shape edges.
+Appendix B: Time-stepping
+The time-discretized version of Eqs. (1)–(5) and (7) calcu-
+late the updated state (vn+1,wn+1, ηn+1,θn+3/2,Sn+3/2)
+at
+time
+t + 1t
+from
+the
+current
+state
+at
+time
+t
+(vn,wn,ηn,θn+1/2,Sn+1/2) following
+(8′)n+1/2 = g
+ρc
+ηn
+Z
+z
+(ρ′)n+1/2dz
+(B1)
+with (ρ′)n+1/2 = ρ(θn+1/2,Sn+1/2,−ρcgz∗) −ρc,
+vn+1 −vn
+1t
+−
+
+Gn
+v
+AB + g∇z∗ηn+1 + ∇h8′(n+1/2)
+= Dn
+z∗,v + Dn+1
+⊥,v + Fn+1/2
+v
+,
+(B2)
+ηn+1 −ηn
+1t
++ ∇·
+ηn
+Z
+−H
+vn+1dz = Fn+1/2,
+(B3)
+1
+H
+ηn+1 −ηn
+1t
++ ∇z∗(s∗nvn+1) + ∂wn+1
+∂z∗
+= s∗nFn+1/2, (B4)
+s∗n+1θn+3/2 −s∗nθn+1/2
+1t
+−A
+
+θ,un+1 + ub
+
+= s∗n 
+Fn+1
+θ
++ Dn+1/2
+σ,θ
++ Dn+3/2
+⊥,θ
+
+,
+(B5)
+s∗n+1Sn+3/2 −s∗nSn+1/2
+1t
+−A
+
+S,un+1 + ub
+
+= s∗n 
+Fn+1
+S
++ Dn+1/2
+σ,S
++ Dn+3/2
+⊥,S
+
+,
+(B6)
+where u represents the three-component velocity vector
+(u,v,w), ub the bolus velocity, and A( ) the advection term.
+Momentum advection and the Coriolis term are evaluated
+at time t from vn,wn in Gn
+v = −(f +ζ)ˆk ×v −∇z∗KE−w ∂v
+∂z
+and the resulting tendency (Gn
+v) is extrapolated forward
+in time to t + 1t/2 using the Adams–Bashforth 3 (AB-3)
+scheme:
+Gn+1/2
+v
+=
+
+Gn
+v
+AB = (1 + αAB + βAB)Gn
+v
+−(αAB + 2βAB)Gn−1
+v
++ βAB Gn−2
+v
+.
+Here we use (αAB,βAB) = (1/2,0.281105) to improve the
+stability (Shchepetkin and McWilliams, 2005) compared to
+the true third-order in time Adams–Bashforth (αAB,βAB) =
+(1/2,5/12). The precision of the scheme drops to just
+second-order accuracy with only minor consequences here
+since most of the other terms are also second-order in time
+(tracer time-stepping, internal-wave dynamics). Note that the
+precision is still improved compared to the quasi-AB-2 used
+in previous ECCO conﬁgurations, which only becomes ﬁrst-
+order accurate with the stabilization factor (ϵAB ∼0.1).
+Simple Eulerian time-stepping (ﬁrst-order, forward in
+time) is used in Dn
+z∗,v for horizontal dissipation (harmonic
+and bi-harmonic viscosity) and quadratic bottom drag. Using
+a quasi-AB-2 scheme instead (as in previous ECCO conﬁg-
+urations) would reduce the stability limit from 1 to 0.9 (for
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3094
+G. Forget et al.: ECCO version 4
+pure damping terms, with ϵAB = 0.1). AB-3 would reduce it
+even further to 0.55, and therefore was not considered here.
+Also, for stability reasons, a backward time-stepping is used
+for the other dissipation term in Eq. (B2) (i.e., Dn+1
+⊥,v ), which
+represents vertical viscosity effects in the interior, except for
+bottom friction:
+Dn+1
+⊥,v = −∂/∂z
+
+−ν⊥∂/∂z(vn+1)
+
+.
+This vertical shear term is independent of the pressure gra-
+dient contribution (g∇z∗ηn+1), so that these two operations
+commute. This allows one to ﬁnd D⊥,vn+1 even before know-
+ing ηn+1 by solving a tri-diagonal system in each water col-
+umn.
+The updated ηn+1 is found by combining Eqs. (B2) and
+(B3) to form a two-dimensional elliptic Poisson equation for
+surface pressure (pressure method) that is solved iteratively
+using the conjugate-gradient method (Marshall et al., 1997).
+The solver matrix and preconditioner are updated at each
+time step as the water column height changes due to the non-
+linear free surface (Campin et al., 2004).
+The tracer Eqs. (B5) and (B6) contain several subgrid-
+scale (SGS) terms within D⊥,Dσ that can use different
+time-stepping methods. They represent small-scale vertical
+mixing (K⊥) due to a time-invariant background diffusiv-
+ity ﬁeld (Kd; Sect. 3.3) and time-variable contributions from
+GGL (Gaspar et al., 1990), as well as isopycnal diffusion
+(Kσ; Sect. 3.3). The effect of unresolved eddies parame-
+terized as a bolus velocity (vb) advecting tracers (Gent and
+Mcwilliams, 1990) is included in A(θ,v + vb). All SGS pa-
+rameters, including vb, isopycnal slope (αx,αy) and vertical
+diffusivity and viscosity (K⊥,ν⊥) are computed at the begin-
+ning of the time step from the current state.
+Isopycnal diffusivity (Kσ) is discretized as a tensor (Redi,
+1982) where all the terms are treated explicitly (i.e., as
+a function of the θn+1/2 gradient), except for the pure verti-
+cal component ∂
+∂z(|α|2Kσ ∂(θ)
+∂z ) where |α| = (α2
+x +α2
+y)1/2 de-
+notes the magnitude of the isopycnal slope. The pure vertical
+component is combined with K⊥and applied to the future
+tracer ﬁeld (θn+3/2) using a backward time-stepping, leading
+to
+s∗n 
+Dn+1/2
+σ,θ
++ Dn+3/2
+⊥,θ
+
+= −∇σ
+
+−Kσ∇σθn+1/2
+−∂
+∂z∗
+
+−(K⊥+ |α|2Kσ)∂θn+3/2
+∂z
+
+.
+Rather than evaluating bolus advection A(θ,ub) separately
+from Eulerian advection, the three-component residual mean
+velocity un+1
+res = ub + un+1 is used to advect tracers, per
+s∗n+1θn+3/2 −s∗nθn+1/2
+1t
++ ∇z∗(s∗nθn+m/2vn+1
+res )
++ ∂(θn+3/2wn+1
+res )
+∂z∗
+= s∗nFn+1
+θ
+−∇σ
+
+−Kσ∇σθn+1/2
+−∂
+∂z∗
+
+−(K⊥+ |α|2Kσ)∂θn+3/2
+∂z
+
+.
+(B7)
+1
+20 40 60 80
+50
+100
+150
+200
+250
+2
+20 40 60 80
+50
+100
+150
+200
+250
+3
+20 40 60 80
+20
+40
+60
+80
+4
+50
+100
+150
+200
+250
+20
+40
+60
+80
+5
+50
+100
+150
+200
+250
+20
+40
+60
+80
+Figure C1. Example of a ﬁeld (ocean bathymetry) mapped to the
+LLC90 grid (Fig. 1, right panel) displayed in a way that reﬂects
+the MITgcm layout of LLC90. The ﬁve grid “faces” number are
+indicated in red, and their dimensions are shown in black. See also
+Table C1.
+Horizontal advection (second term in Eq. B7) uses the third-
+order direct space and time (DST-3) advection scheme (MIT-
+gcm Group, 2002; Adcroft et al., 2004b) with the direction-
+splitting method (also called multi-dimensional advection) as
+described in Adcroft et al. (2004b). The tracer ﬁeld (m = 2)
+obtained after applying one-dimensional advection (in the X
+or Y direction) on the current tracer (m = 1) is used to com-
+pute the advective ﬂuxes in the other direction (Y or X) and
+ensures second-order accuracy in space and time. Regarding
+vertical advection, the backward time-stepping (uncondition-
+ally stable) is applied with a third-order advection scheme;
+this involves solving a penta-diagonal system (with some ad-
+ditional contributions from vertical mixing to the three main
+diagonals) for each column. This choice in particular allevi-
+ates adjoint stability restrictions.
+Appendix C: Diagnostics
+The MITgcm “diagnostics” package is generally used to gen-
+erate binary output for ofﬂine analysis of the solutions. In the
+case of the LLC90 grid, a two-dimensional ﬁeld is thus out-
+put as an array of size 90×1170. It can easily be re-organized
+according to Table C1 to match the MITgcm layout of the
+LLC90 grid (Fig. C1). The state estimate output is made
+available online in a tiled netcdf format (nctiles) where each
+tile is a 90 × 90 subdivision of a face (i.e., of f1, f2, f3, f4 or
+f5 in Table C1) and is written to an individual netcdf ﬁle.
+The need for nctiles ﬁles stems from the fact that there is
+no simple, robust and general way to re-arrange global model
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3095
+Table C1. Gridded earth variable (two-dimensional) represented in
+Matlab as a gcmfaces object (a set of connected arrays) when the
+LLC90 grid is used. See also Fig. C1.
+ﬂd =
+nFaces:
+5
+f1:
+[90 × 270 double]
+f2:
+[90 × 270 double]
+f3:
+[90 × 90 double]
+f4:
+[270 × 90 double]
+f5:
+[270 × 90 double]
+output in a single two-dimensional map. For LLC ﬁelds, it is
+only the LL sector that can readily be re-assembled as a sin-
+gle two-dimensional array. To this end a simple Matlab script
+is provided (eccov4_lonlat.m; see Sect. “Code availability”).
+It is mainly intended for users of earlier non-global ECCO
+estimates that may want to re-use their old analysis codes.
+ECCO v4 users are generally advised against interpolating,
+which introduces errors, and often precludes accurate trans-
+port computations. Instead, mimicking the gridded earth de-
+composition of general circulation models is regarded as the
+most convenient, robust and general way to carry out ofﬂine
+analyses of the solutions.
+This approach is readily implemented in Matlab by the
+gcmfaces toolbox. It deﬁnes a class of objects (the gcmfaces
+class depicted in Table C1) that is a natural extension to the
+common array class. Basic operators (such as “+”) are read-
+ily overloaded (i.e., re-deﬁned) for the gcmfaces class. For
+example, the addition of two gcmfaces objects can simply be
+written in the compact and general “ﬂd1 + ﬂd2” form – ex-
+actly as if ﬂd1 and ﬂd2 were two array objects. Note that the
+grid-speciﬁc internal organization of gcmfaces objects (e.g.,
+Table C1) does not appear in “ﬂd1 + ﬂd2” , so that this com-
+pact code is immediately applicable to all supported grids
+(Fig. 1).
+Transport and budget computations are coded with the
+same degree of generality within gcmfaces. Hard-coding ar-
+ray sizes or exploiting speciﬁc grid symmetries (e.g., the
+zonal symmetry of the LL grid) is excluded, in order to avoid
+having to re-code the same diagnostics on different grids.
+Two basic elements are instrumental to the generality of gcm-
+faces codes, which are worth noting here. First, any trans-
+port is computed following a grid line path, as illustrated in
+Fig. C2. Three types of paths are readily treated in a general
+fashion: small circles of constant latitude, great circles de-
+ﬁned by two points (as shown in Fig. C2), and the edge of
+a speciﬁed subdomain. Second, the familiar mechanism15 by
+which rows and columns of neighboring faces are appended
+at the edges of an array (e.g., to f1, f2, f3, f4 or f5 in Table C1)
+is readily implemented. This yields general code to compute
+15It is commonly called exchanges in the parallel computing ter-
+minology.
+30
+35
+40
+45
+50
+55
+60
+30
+35
+40
+45
+50
+55
+60
+Figure C2. Example of a grid line path (in red) that approximates
+a great circle between 45◦E, 85◦N and 135◦W, 85◦N (a meridian
+crossing the North Pole) in the central part of face 3 (see Fig. C1).
+Shading: ocean bottom depth. Blue lines: grid cell edges.
+gradients, rotationals, divergences, etc. that is immediately
+applicable to all supported grids (Fig. 1).
+From the state estimate output made available online, users
+can readily re-compute the gcmfaces standard analysis. The
+standard analysis document serves as a general documenta-
+tion of the state estimate, and allows for a direct comparison
+with other MITgcm simulations regardless of grid speciﬁcs.
+It proceeds in two steps:
+diags_driver
+(’release1/’,’release1/mat/’,
+1992:2011);
+diags_driver_tex
+(’release1/mat/’,{},
+’release1/tex/standardAnalysis’);
+The computational loop (i.e., diags_driver.m) uses model
+output in “release1/nctiles/” and results are stored to ﬁles in
+“release1/mat/”. The display phase (i.e., diags_driver_tex.m)
+then generates “release1/tex/standardAnalysis.tex”.
+Diagnosing mass, heat, and salt budgets requires snapshots
+of the ocean + sea-ice + snow model state (to compute the
+tendency terms), as well as time-averaged ﬂuxes between
+snapshots (to match the tendency terms). The MITgcm ﬂux
+output accounts for variations of layer thicknesses in the z∗
+coordinate. Tendency terms are computed after the fact using
+snapshots of, e.g., η and θ (Sect. 3.1). The assembled mass,
+heat and salt budgets are provided online in the extensive
+form (in kg s−1, J s−1, and g s−1, respectively) and in nctiles
+format (monthly, three-dimensional). The budget residuals
+are less than 10−6 times the budget magnitude (a Euclidean
+norm is used). Here “mass budget” simply denotes the con-
+stant Boussinesq density ρc times volume – in contrast to the
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3096
+G. Forget et al.: ECCO version 4
+hydrostatic pressure budget that is most directly relevant to
+diagnosis of sea level variability (Forget and Ponte, 2015).
+The full speciﬁcation of the MITgcm “diagnostics” pack-
+age (“data.diagnostics”) are available online for ECCO v4,
+along with the gmfaces (Matlab) codes that assemble the
+budgets and compute the standard analysis. They can be
+readily applied to re-runs of the state estimates, or to most
+perturbation experiments. Re-running the state estimate after
+editing “data.diagnostics” is the re-commended method for
+users that desire output that is not readily online.
+Appendix D: Proﬁles
+The MITgcm “proﬁles” package subsamples the model solu-
+tion, while it is being computed, at the locations and times of
+observed in situ proﬁles. It uses input ﬁles in the “MITprof”
+format described below. At model initialization, observed
+proﬁle dates and locations are read from ﬁle and each proﬁle
+is allocated to the processor corresponding to its sub-domain
+tile. The latter is generally facilitated by a pre-processing
+step: observed proﬁles are collocated with grid points using
+gcmfaces (see Appendix C) and grid locations added to the
+MITgcm input ﬁles. During model integration, proﬁles are
+sampled at time steps and locations closest to observations,
+vertically interpolated to the MITprof depth levels, and writ-
+ten to ﬁle. At the end of the forward model integration, these
+proﬁles are re-read from ﬁle along with observed and weight
+proﬁles, and the squared distance between modeled and ob-
+served proﬁles is computed (see Sect. 4).
+MITprof ﬁles contain in situ proﬁles (prof_T and prof_S)
+as well as corresponding state estimate proﬁles (prof_Testim
+and prof_Sestim) and least square weights (prof_Tweight
+and prof_Sweight) as illustrated in Fig. D1. Weights are set
+according to the method of Forget and Wunsch (2007), al-
+beit with updated variance ﬁelds. The squared model–data
+distance (Eq. 12; Sect. 4.3) is thus readily computed as
+jT = (prof_Testim-prof_T)2 · prof_Tweight,
+jS = (prof_Sestim-prof_S)2 · prof_Sweight,
+(D1)
+from the content of any MITprof ﬁle. The intention is to
+eventually distribute all data constraints used in ECCO (e.g.,
+altimetry and SST) in a similarly self-sufﬁcient and practi-
+cal format (i.e., data, model counterparts and weights all to-
+gether).
+The MITprof format contains a limited amount of ancil-
+lary information: proﬁle locations, dates, and an identifying
+code (prof_descr). This choice, along with the use of stan-
+dard depth levels, yields data sets that are both more com-
+pact and simpler than most data center formats (e.g., the Argo
+format), providing easy access to vast collections of proﬁles
+of various origins (Table 5). The identifying code may be
+a cruise ID (e.g., for shipboard CTDs) or an instrument ID
+(e.g., for Argo proﬁles). They are informative of the data ori-
+gin, and used for analyses of transects or time series.
+netcdf argo_feb2013_2008_to_2010 {
+...
+double prof_T(iPROF, iDEPTH) ;
+prof_T:long_name = "potential temperature" ;
+prof_T:units = "degree C" ;
+double prof_Tweight(iPROF, iDEPTH) ;
+prof_Tweight:long_name = "least-square weight" ;
+prof_Tweight:units = "(degree C)^-2" ;
+double prof_Testim(iPROF, iDEPTH) ;
+prof_Testim:long_name = "pot. temp. estimate" ;
+prof_Testim:units = "degree C" ;
+...
+double prof_depth(iDEPTH) ;
+double prof_YYYYMMDD(iPROF) ;
+double prof_HHMMSS(iPROF) ;
+double prof_lon(iPROF) ;
+double prof_lat(iPROF) ;
+char prof_descr(iPROF, lTXT) ;
+prof_descr:long_name = "profile description" ;
+...
+}
+Figure D1. Netcdf ﬁle header illustrating the MITprof format used
+in MITgcm/pkg/proﬁles.
+As part of the MITprof Matlab toolbox, the pre-processing
+of in situ proﬁles consists of four basic steps: (1) applying
+relevant data quality ﬂags, if provided by the data center,
+(2) converting in situ to potential temperature or pressure
+to depth, if needed, (3) interpolating to standard depth lev-
+els16, (4) resetting weights to 0 for standard levels that are not
+closest neighbors to observed levels, for S outside the 25–42
+range, and when jT (resp. jS) exceeds 50 (i.e., seven stan-
+dard errors) when computed for an Argo-based atlas (Forget,
+2010). Zero weights thus indicate suspicious data points that
+users are advised to discard.
+Appendix E: Smooth
+The MITgcm “smooth” package is an implementation of
+recipes presented in detail by Weaver and Courtier (2001).
+At the core of this method, a diffusion equation is time-
+integrated to smooth a ﬁeld. Applying the smoother directly
+(without additional factors) to model–data misﬁts (as part of
+P in Eq. 13) yields a practical method to omit scales at which
+data and model are not expected to be consistent with each
+other. This approach is useful, for example, to constrain ed-
+dying models to coarse-grained climatological ﬁelds, or to
+constrain models with along-track altimetric data (Forget and
+Ponte, 2015).
+When the smoother is applied to uncorrelated grid-
+scale noise, the resulting ﬁelds have a Gaussian correla-
+16An option also exists to interpolate to standard density levels,
+which was used in McCaffrey et al. (2015), although the corre-
+sponding option is lacking in MITgcm.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3097
+Figure E1. Diffusion applied to grid-scale noise (set to unit vari-
+ance) introduces correlation (contours, drawn for select points) and
+yields a reduced noise variance (color shading). The smoothing
+scale was set to three grid points.
+tion (Fig. E1) with an e-folding scale L determined by the
+joint speciﬁcation of integration time and diffusivity. The
+noise amplitude reduction by the smoother (Fig. E1, color
+scale) can be computed exactly or approximately (Weaver
+and Courtier, 2001). Normalizing the smoother to account for
+this effect yields a spatial correlation operator that conserves
+variance (in the case of uncorrelated noise). A spatial covari-
+ance operator is then immediately obtained by further mul-
+tiplying the normalized smoother by a speciﬁed error ﬁeld,
+and grid-cell areas or volumes are used as a preconditioner
+(in two- and three-dimensional cases, respectively), follow-
+ing Weaver and Courtier (2001).
+This method is used for all control parameter covariances
+(see Sect. 4.4; Q in Eq. 15). Key advantages of this method
+are that it is matrix free, naturally handles coastlines, and
+easily accommodates a variety of grids. In practice, “smooth”
+also damps grid-scale noise that can arise from the adjoint
+model, and it thus facilitates optimization.
+Appendix F: Regression tests
+While MITgcm evolves continuously its results are subjected
+to regression testing (Myers et al., 2011) on a daily ba-
+sis, with a variety of compilers, on a variety of computing
+platforms. The tests not-only evaluate strict bit-wise repro-
+ducibility, but also examine the magnitude of the deviation
+in numerical metrics from reference calculations and com-
+pare it to acceptable limits. This allows partially automated
+testing in the context of numerical innovations and computer
+platform variations.
+Automated daily regression tests are carried out using the
+“CVS” and “testreport” capabilities for short runs (a few time
+steps), on a small number of processors (or just one), and
+exclude optimization by compilers. This design is suited to
+detect mistakes in code revisions and distinguish them from
+truncation errors. The ECCO v4 model setup (Sects. 2 and 3)
+takes full advantage of that framework, which makes it both
+portable and stable (“Code availability” section).
+Advanced usage of ECCO v4 may include re-running for-
+ward model solutions (the state estimate in particular) or its
+adjoint. Computational requirements are modest – the 20-
+year forward model integration typically takes between 6 and
+12 h on 96 processors. ECCO v4 users can thus easily re-run
+the state estimate solution to generate additional output and
+carry out analyses that may not already be covered by the
+publicly distributed material. Running the adjoint model al-
+lows for analyses of processes and mechanisms (e.g., Fuku-
+mori et al., 2015) as well for the possibility of further opti-
+mization of the state estimate.
+While the “testreport” tool is very useful and practical, it
+does not directly apply to the state estimate, but rather to
+the underlying model code and setup. An extension to the
+regression testing framework is therefore proposed that is
+suited for the full state estimate solution. It is implemented
+as a self-contained Matlab routine (testreport_ecco.m). It re-
+lies upon squared model–data distances and monthly mean
+model output (Table 2). It provides a simple mechanism that
+allows users to verify that their 20-year solution is accept-
+ably close to the released state estimate. The ﬁrst three lines
+of Table 3 are reﬂective of small differences that user should
+expect when re-running the state estimate using a different
+computer or an updated MITgcm code. Such slight changes
+typically result from compiler optimization of slightly differ-
+ent codes and slightly different arithmetic and MPI libraries.
+For any given model run, squared model–data distances
+are simply read from a summary text ﬁle (typically named
+cost function0011) that MITgcm generates at the end of
+the model integration. Reference values are then read from
+a Matlab ﬁle (typically name testreport_release1.mat) and
+relative differences are reported as shown in Table 3. The
+other tests are slightly more computationally intensive as
+they read binary output of model ﬁelds – a subset of the ﬁelds
+that are distributed online as nctiles ﬁles (Appendix C). It
+was chosen to focus on integrated quantities (global means
+and transports) that are known to be model sensitive (e.g.,
+see Table 3) and of common interest to ECCO users. Com-
+putations of monthly global mean free surface height, tem-
+perature and salinity illustrate usage of grid cell surfaces and
+volumes. If gcmfaces is activated in Matlab (see Appendix C
+and the “Code availability” section), then integrated trans-
+ports can also be tested.
+Appendix G: Solution history
+The ECCO v4, release 1 state estimate was produced in sev-
+eral phases over the course of the ECCO v4 development.
+In total, 45 iterations were performed, and a summary of the
+different phases is provided below. We should stress that the
+documented solution history reﬂects the progressive develop-
+ment of ECCO v4 – as opposed to a systematic or advocated
+approach to the optimization of model solutions.
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3098
+G. Forget et al.: ECCO version 4
+The ﬁrst series of 14 adjoint iterations was carried (with
+the MITgcm’s checkpoint62k) using a non-synchronous time
+step (3 h for tracers, and 20 min for momentum), sea surface
+salinity relaxation to climatological values, and the linear
+free surface method. Revision 1 was the switch to the 1 h
+time step (for both tracers and momentum) and to the non-
+linear free surface, followed by 14 adjoint iterations (with
+checkpoint62y).
+In revision 2, the Duffy et al. (1999) parameterization
+as implemented for the MITgcm by Nguyen et al. (2009)
+was added, the solution was extended through 2011, and
+13 more adjoint iterations were carried out (with check-
+point63g). In revision 3, the surface salinity relaxation was
+removed and its effect replaced by an adjustment of precip-
+itation controls, followed by three adjoint iterations (with
+checkpoint63r). The resulting solution is used in Speer and
+Forget (2013), Wunsch and Heimbach (2013a), Wunsch and
+Heimbach (2013b), Buckley et al. (2014), and Balmaseda
+et al. (2015). In revision 4, the adjustment of precipitation
+from revision 3 was removed, followed by eight adjoint iter-
+ations (with checkpoint64f).
+Up to this point (revision 4, iteration 8), time-variable
+global mean sea level had been omitted from the altimetry
+constraint – letting the other data constraints, primarily from
+in situ hydrography, SST and regional altimetry, determine
+the solution variability. Then, revision 4 iteration 9 consisted
+in estimating a time-variable global mean precipitation ad-
+justment under the sole constraint of ﬁtting the time-variable
+global mean altimetry. This operation had very little inﬂu-
+ence on the rest of the model–data misﬁts – consistent with
+the analysis presented in Sect. 5.1. This solution is used in
+Forget and Ponte (2015).
+Revision 4 iteration 10 consisted in a trimming of atmo-
+spheric control parameter adjustments to reduce irregulari-
+ties in the forcing that had appeared during adjoint iterations.
+To this end, the four leading empirical orthogonal functions
+were subtracted from atmospheric control parameter adjust-
+ments. To further reduce dynamical imbalances during the
+ﬁrst years of integration, the initial state of 1 January 1992
+as adjusted during the adjoint iterations was replaced with
+the state of 1 January 1995. This solution is used in Wunsch
+and Heimbach (2014). Finally, revision 4 iteration 11 con-
+sisted in a reduction of vertical viscosity to 5 × 10−5m2 s−1
+to reduce a low bias in the Equatorial Undercurrent velocity,
+albeit with little impact on model–data misﬁts.
+Revision 4 iteration 11 is the ECCO v4, release 1 state es-
+timate, which originally ran with MITgcm’s checkpoint64t.
+For regression testing purposes (Appendix F), the 20-year so-
+lution is re-run once a month with the up-to-date MITgcm.
+As of MITgcm’s checkpoint65i, it matches the original solu-
+tion within the precision seen in Table 3 (top three rows).
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3099
+Code availability
+The MITgcm is developed and maintained within the Con-
+current Versions System (CVS). This framework allows users
+to download frozen versions of the model code (checkoint65i
+at the time of writing) or to keep their local copy up to date.
+The evolving code is subjected to regression tests on a daily
+basis using the “testreport” capability (Appendix F). Docu-
+mentation for the MITgcm itself, the CVS framework, and
+the “testreport” capability can, respectively, be found at
+– http://mitgcm.org/public/r2_manual/latest/online_
+documents/manual.pdf
+– http://mitgcm.org/public/using_cvs.html
+– http://mitgcm.org/public/devel_HOWTO/devel_
+HOWTO.pdf
+The ECCO v4 model setup (Sects. 2 and 3) exploits the
+MITgcm CVS and testreport capabilities, to allow any in-
+terested user to obtain the up-to-date setup and re-run the
+short ECCO v4 benchmark (Appendix F). Results of the au-
+tomated daily regression tests are reported at
+– http://mitgcm.org/public/testing.html
+The Matlab analysis framework (gcmfaces and MITprof;
+see Appendices C and D) is also developed and maintained
+within CVS. The ECCO v4 model setup, gcmfaces, and MIT-
+prof can be found, along with their respective documenta-
+tions, at
+– http://mitgcm.org/viewvc/MITgcm/MITgcm_contrib/
+gael/veriﬁcation/
+– http://mitgcm.org/viewvc/MITgcm/MITgcm_contrib/
+gael/matlab_class/
+– http://mitgcm.org/viewvc/MITgcm/MITgcm_contrib/
+gael/proﬁlesMatlabProcessing/
+The state estimate monthly output, proﬁle output, budget out-
+put, and the standard analysis (see Appendices C and D) can
+be found at
+– http://mit.ecco-group.org/opendap/ecco_for_las/
+version_4/release1/
+that also provides ancillary data (e.g., grid ﬁles), and
+the stand-alone Matlab routine (eccov4_lonlat.m) that ex-
+tracts the LL sector out of global LLC ﬁelds. The ecco-
+support@mit.edu mailing list provides for collaborative user
+support (analogous to mitgcm-support@mitgcm.org).
+The Supplement related to this article is available online
+at doi:10.5194/gmd-8-3071-2015-supplement.
+Acknowledgements. Major support for this work was provided
+through NASA’s Physical Oceanography Program. The bulk of the
+calculations was performed on the NASA Advanced Supercomput-
+ing (NAS) division’s Pleiades supercomputer at NASA/ARC. The
+authors wish to acknowledge the various groups that carry out and
+promote ocean state estimation, at IFM-UH, SIO and JPL in partic-
+ular. The authors also wish to give much credit to John Marshall for
+his leadership of, and continued commitment to, the development
+of the MITgcm; Detlef Stammer for his leadership of the German
+ECCO project, and his continued commitment to, and promotion
+of the MITgcm state estimation framework; Fastopt for provid-
+ing the TAF algorithmic differentiation tool, and the support that
+was provided to facilitate adjointing the exch2 package in particular.
+Edited by: J. Annan
+References
+Adcroft, A. and Campin, J.: Rescaled height coordinates for ac-
+curate representation of free-surface ﬂows in ocean circulation
+models, Ocean Model., 7, 269–284, 2004.
+Adcroft, A., Hill, C., and Marshall, J.: A new treatment of the Corio-
+lis terms in C-grid models at both high and low resolutions, Mon.
+Weather Rev., 127, 1928–1936, 1999.
+Adcroft, A., Campin, J.-M., Hill, C., and Marshall, J.: Implemen-
+tation of an atmosphere-ocean general circulation model on the
+expanded spherical cube, Mon. Weather Rev., 132, 2845–2863,
+doi:10.1175/MWR2823.1, 2004a.
+Adcroft, A., Hill, C., Campin, J.-M., Marshall, J., and Heimbach, P.:
+Overview of the formulation and numerics of the MITGCM,
+in: Proceedings of the ECMWF Seminar Series on Numeri-
+cal Methods, Recent Developments in Numerical Methods for
+Atmosphere and Ocean Modelling, 139–149, ECMWF, avail-
+able at: http://mitgcm.org/pdfs/ECMWF2004-Adcroft.pdf (last
+access: 29 April 2015), 2004b.
+Andersen, O. B. and Knudsen, P.: DNSC08 mean sea surface and
+mean dynamic topography models, J. Geophys. Res.-Oceans,
+114, C11001, doi:10.1029/2008JC005179, 2009.
+Balmaseda, M. A., Hernandez, F., Storto, A., Palmer, M., Shi, L.,
+Smith, G., Toyoda, T., Valdivieso, M., Alves, O., Barnier, B.,
+Boyer, T., Chang, Y.-S., Chepurin, G. A., Ferry, N., Forget, G.,
+Fujii, Y., Good, S., Guinehut, S., Haines, K., Ishikawa, Y., Kee-
+ley, S., Köhl, A., Lee, T., Martin, M., Masina, S., Masuda, S.,
+Meyssignac, B., Mogensen, K., Parent, L., Peterson, D., Yin,
+Y., Vernieres, G., Wang, X., Waters, J., Wedd, R., Wang, O.,
+Xue, Y., Chevallier, M., Lemieux, J.-F., Dupont, F., Kuragano,
+T., Kamachi, M., Awaji, T., Cantalbiano, A., Wilmer-Becker, K.,
+and Gaillard, F.: The Ocean Reanalyses Intercomparison Project
+(ORA-IP), Proceedings of the Institute of Marine Engineering,
+Science, and Technology, J. Operational Oceanogr., 8, 80–97,
+doi:10.1080/1755876X.2015.1022329, 2015.
+Barnier, B., Madec, G., Penduff, T., Molines, J.-M., Treguier, A.-
+M., Le Sommer, J., Beckmann, A., Biastoch, A., Böning, C.,
+Dengg, J., Derval, C., Durand, E., Gulev, S., Remy, E., Talandier,
+C., Theetten, S., Maltrud, M., McClean, J., and De Cuevas, B.:
+Impact of partial steps and momentum advection schemes in
+a global ocean circulation model at eddy-permitting resolution,
+Ocean Dynam., 56, 543–567, 2006.
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3100
+G. Forget et al.: ECCO version 4
+Barth, A., Beckers, J.-M., Troupin, C., Alvera-Azcárate, A., and
+Vandenbulcke, L.: divand-1.0: n-dimensional variational data
+analysis for ocean observations, Geosci. Model Dev., 7, 225–241,
+doi:10.5194/gmd-7-225-2014, 2014.
+Blessing, S., Kaminski, T., Lunkeit, F., Matei, I., Giering, R.,
+Köhl, A., Scholze, M., Herrmann, P., Fraedrich, K., and Stam-
+mer, D.: Testing variational estimation of process parameters and
+initial conditions of an earth system model, Tellus A, 66, 22606,
+doi:10.3402/tellusa.v66.22606, 2014.
+Buckley, M. W., Ponte, R. M., Forget, G., and Heimbach, P.: Low-
+frequency SST and upper-ocean heat content variability in the
+North Atlantic, J. Climate, 27, 4996–5018, 2014.
+Buckley, M. W., Ponte, R. M., Forget, G., and Heimbach, P.: Deter-
+mining the origins of advective heat transport convergence vari-
+ability in the North Atlantic, J. Climate, 28, 3943–3956, 2015.
+Campin, J., Adcroft, A., Hill, C., and Marshall, J.: Conservation of
+properties in a free surface model, Ocean Model., 6, 221–244,
+2004.
+Campin, J.-M., Marshall, J., and Ferreira, D.: Sea ice–ocean cou-
+pling using a rescaled vertical coordinate, Ocean Model., 24, 1–
+14, 2008.
+Chaudhuri, A. H., Ponte, R. M., Forget, G., and Heimbach, P.:
+A comparison of atmospheric reanalysis surface products over
+the ocean and implications for uncertainties in air–sea boundary
+forcing, J. Climate, 26, 153–170, 2013.
+Comiso, J.: Bootstrap sea ice concentrations for NIMBUS-7 SMMR
+and DMSP SSM/I, Digital Media, National Snow and Ice Data
+Center, doi:10.5067/J6JQLS9EJ5HU, 1999.
+Dail, H. and Wunsch, C.: Dynamical reconstruction of upper-ocean
+conditions in the Last Glacial Maximum Atlantic, J. Climate, 27,
+807–823, doi:10.1175/JCLI-D-13-00211.1, 2014.
+Danabasoglu,
+G.,
+Yeager,
+S.
+G.,
+Bailey,
+D.,
+Behrens,
+E.,
+Bentsen, M., Bi, D., Biastoch, A., Böning, C., Bozec, A.,
+Canuto, V. M., Cassou, C., Chassignet, E., Coward, A. C.,
+Danilov, S., Diansky, N., Drange, H., Farneti, R., Fernandez, E.,
+Fogli, P. G., Forget, G., Fujii, Y., Grifﬁes, S. M., Gusev, A.,
+Heimbach, P., Howard, A., Jung, T., Kelley, M., Large, W. G.,
+Leboissetier, A., Lu, J., Madec, G., Marsland, S. J., Masina, S.,
+Navarra, A., Nurser, A. G., Pirani, A., Salas y Mélia, D.,
+Samuels, B. L., Scheinert, M., Sidorenko, D., Treguier, A.-M.,
+Tsujino, H., Uotila, P., Valcke, S., Voldoire, A., and Wang, Q.:
+North Atlantic simulations in Coordinated Ocean-ice Reference
+Experiments phase {II} (CORE-II). Part I: Mean states, Ocean
+Model., 73, 76–107, doi:10.1016/j.ocemod.2013.10.005, 2014.
+Dee, D. P., Uppala, S. M., Simmons, A. J., Berrisford, P., Poli,
+P., Kobayashi, S., Andrae, U., Balmaseda, M. A., Balsamo, G.,
+Bauer, P., Bechtold, P., Beljaars, A. C. M., van de Berg, L., Bid-
+lot, J., Bormann, N., Delsol, C., Dragani, R., Fuentes, M., Geer,
+A. J., Haimberger, L., Healy, S. B., Hersbach, H., Hólm, E. V.,
+Isaksen, L., Kållberg, P., Köhler, M., Matricardi, M., McNally,
+A. P., Monge-Sanz, B. M., Morcrette, J.-J., Park, B.-K., Peubey,
+C., de Rosnay, P., Tavolato, C., Thépaut, J.-N., and Vitart, F.: The
+ERA-Interim reanalysis: conﬁguration and performance of the
+data assimilation system, Q. J. Roy. Meteor. Soc., 137, 553–597,
+2011.
+Denham, C. R.: Seagrid orthogonal grid maker for matlab, US Ge-
+ological Survey, 384, available at: http://woodshole.er.usgs.gov/
+staffpages/cdenham/public_html/seagrid/seagrid.html (last ac-
+cess: 29 April 2015) 2000.
+Duffy, P., Eby, M., and Weaver, A.: Effects of sinking of salt rejected
+during formation of sea ice on results of an ocean–atmosphere-
+sea ice climate model, Geophys. Res. Lett., 26, 1739–1742, 1999.
+Dutkiewicz, S., Sokolov, A. P., Scott, J., and Stone, P. H.: A Three-
+Dimensional Ocean-Seaice-Carbon Cycle Model and its Cou-
+pling to a Two-Dimensional Atmospheric Model: Uses in Cli-
+mate Change Studies, MIT Joint Program on the Science and
+Policy of Global Change, available at: http://hdl.handle.net/1721.
+1/18091 (last access: 29 April 2015), 2005.
+Ekman, V. W.: On the inﬂuence of the earth’s rotation on ocean
+currents, Ark. Mat. Astron. Fys., 2, 1–53, 1905.
+Fekete, B. M., Vörösmarty, C. J., and Grabs, W.: High-resolution
+ﬁelds of global runoff combining observed river discharge and
+simulated water balances, Global Biogeochem. Cy., 16, 15.1–
+15.10, doi:10.1029/1999GB001254, 2002.
+Fenty, I. and Heimbach, P.: Coupled sea ice–ocean-state estimation
+in the Labrador Sea and Bafﬁn Bay, J. Phys. Oceanogr., 43, 884–
+904, 2013.
+Ferreira, D., Marshall, J., and Heimbach, P.: Estimating eddy
+stresses by ﬁtting dynamics to observations using a residual-
+mean ocean circulation model and its adjoint, J. Phys. Oceanogr.,
+35, 1891–1910, doi:10.1175/JPO2785.1, 2005.
+Ferreira, D., Marshall, J., and Rose, B.: Climate determinism revis-
+ited: multiple equilibria in a complex climate model, J. Climate,
+24, 992–1012, 2011.
+Ferron, B. and Marotzke, J.: Impact of 4D-variational assimilation
+of WOCE hydrography on the meridional circulation of the In-
+dian Ocean, Deep-Sea Res. Pt. II, 50, 2005–2021, 2003.
+Follows, M. J., Dutkiewicz, S., Grant, S., and Chisholm, S. W.:
+Emergent biogeography of microbial communities in a model
+ocean, Science, 315, 1843–1846, 2007.
+Forget, G.: Mapping ocean observations in a dynamical framework:
+a 2004–06 ocean atlas, J. Phys. Oceanogr., 40, 1201–1221, 2010.
+Forget, G.: The observed abyssal variability puzzle, Geophys. Res.
+Lett., in preparation, 2015.
+Forget, G. and Ponte, R.: The partition of regional sea level variabil-
+ity, Prog. Oceanogr., 137, 173–195, 2015.
+Forget, G. and Wunsch, C.: Estimated global hydrographic variabil-
+ity, J. Phys. Oceanogr., 37, 1997–2008, 2007.
+Forget, G., Ferron, B., and Mercier, H.: Combining Argo proﬁles
+with a general circulation model in the North Atlantic. Part 1:
+Estimation of hydrographic and circulation anomalies from syn-
+thetic proﬁles, over a year, Ocean Model., 20, 1–16, 2008a.
+Forget, G., Mercier, H., and Ferron, B.: Combining Argo proﬁles
+with a general circulation model in the North Atlantic. Part 2:
+Realistic transports and improved hydrography, between spring
+2002 and spring 2003, Ocean Model., 20, 17–34, 2008b.
+Forget, G., Maze, G., Buckley, M., and Marshall, J.: Estimated sea-
+sonal cycle of North Atlantic eighteen degree water volume, J.
+Phys. Oceanogr., 41, 269–286, 2011.
+Forget, G., Ferreira, D., and Liang, X.: On the observability of
+turbulent transport rates by Argo: supporting evidence from
+an inversion experiment, Ocean Sci. Discuss., 12, 1107–1143,
+doi:10.5194/osd-12-1107-2015, 2015.
+Fukumori, I.: A partitioned Kalman ﬁlter and smoother, Mon.
+Weather Rev., 130, 1370–1383, 2002.
+Fukumori, I., Menemenlis, D., and Lee, T.: A near-uniform basin-
+wide sea level ﬂuctuation of the Mediterranean Sea, J. Phys.
+Oceanogr., 37, 338–358, 2007.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3101
+Fukumori, I., Wang, O., Llovel, W., Fenty, I., and Forget, G.: A near-
+uniform ﬂuctuation of ocean bottom pressure and sea level across
+the deep ocean basins of the Arctic Ocean and the Nordic Seas,
+Prog. Oceanogr., 134, 152–172, 2015.
+Gaspar, P., Grégoris, Y., and Lefevre, J.-M.: A simple eddy kinetic
+energy model for simulations of the oceanic vertical mixing: tests
+at station papa and long-term upper ocean study site, J. Geophys.
+Res., 95, 16179–16193, 1990.
+Gent, P. and Mcwilliams, J.: Isopycnal mixing in ocean circulation
+models, J. Phys. Oceanogr., 20, 150–155, 1990.
+Giering, R. and Kaminski, T.: Recipes for adjoint code construction,
+ACM T. Math. Software, 24, 437–474, 1998.
+Giering, R., Kaminski, T., and Slawig, T.: Generating efﬁcient
+derivative code with TAF: adjoint and tangent linear Euler ﬂow
+around an airfoil, Future Gener. Comp. Sy., 21, 1345–1355,
+2005.
+Goldberg, D. N. and Heimbach, P.: Parameter and state estima-
+tion with a time-dependent adjoint marine ice sheet model, The
+Cryosphere, 7, 1659–1678, doi:10.5194/tc-7-1659-2013, 2013.
+Griewank, A.: Achieving logarithmic growth of temporal and
+spatial complexity in reverse automatic differentiation, Optim.
+Method. Softw., 1, 35–54, 1992.
+Griewank, A. and Walther, A.: Evaluating Derivatives: Prin-
+ciples and Techniques of Algorithmic Differentiation, Soci-
+ety for Industrial and Applied Mathematics, Philadelphia, PA,
+doi:10.1137/1.9780898717761, 2008.
+Grifﬁes, S. and Greatbatch, R.: Physical processes that impact the
+evolution of global mean sea level in ocean climate models, J.
+Marine Syst., 51, 37–72, 2012.
+Hansen, P. C.: Analysis of discrete ill-posed problems by means of
+the L-curve, SIAM Rev., 34, 561–580, 1992.
+Hascoët, L. and Pascual, V.: The Tapenade automatic differentiation
+tool: principles, model, and speciﬁcation, ACM T. Math. Soft-
+ware, 39, 20.1–20.43, doi:10.1145/2450153.2450158, 2013.
+Heimbach, P., Hill, C., and Giering, R.: Automatic generation of ef-
+ﬁcient adjoint code for a parallel Navier–Stokes solver, in: Com-
+putational Science – ICCS 2002, Springer, 1019–1028, 2002.
+Heimbach, P., Hill, C., and Giering, R.: An efﬁcient exact adjoint of
+the parallel MIT general circulation model, generated via auto-
+matic differentiation, Future Gener. Comp. Sy., 21, 1356–1371,
+2005.
+Heimbach, P., Forget, G., Ponte, R., Wunsch, C., Balmaseda, M.,
+Awaji, T., Baehr, J., Behringer, D., Carton, J., Ferry, N., Fischer,
+A., Fukumori, I., Giese, B., Haines, K., Harrison, E., Hernan-
+dez, F., Kamachi, M., Keppenne, C., Köhl, A., Lee, T., Mene-
+menlis, D., Oke, P., Remy, E., Rienecker, M., Rosati, A., Smith,
+D., Speer, K., Stammer, D., and Weaver, A.: Observational re-
+quirements for global-scale ocean climate analysis: lessons from
+ocean state estimation, in: Proceedings of the OceanObs09 Con-
+ference: Sustained Ocean Observations and Information for So-
+ciety, Venice, Italy, Vol. 2, doi:10.5270/OceanObs09.cwp.42,
+2009.
+Heimbach, P., Menemenlis, D., Losch, M., Campin, J.-M., and
+Hill, C.: On the formulation of sea-ice models. Part 2: Lessons
+from multi-year adjoint sea-ice export sensitivities through the
+Canadian Arctic Archipelago, Ocean Model., 33, 145–158, 2010.
+Heimbach, P., Wunsch, C., Ponte, R. M., Forget, G., Hill, C., and
+Utke, J.: Timescales and regions of the sensitivity of Atlantic
+meridional volume and heat transport: toward observing system
+design, Deep-Sea Res. Pt. II, 58, 1858–1879, 2011.
+Holland, W. R. and Malanotte-Rizzoli, P.: Assimilation of altimeter
+data into an ocean circulation model: space versus time resolu-
+tion studies, J. Phys. Oceanogr., 19, 1507–1534, 1989.
+Hoppe, C. M., Elbern, H., and Schwinger, J.: A variational data
+assimilation system for soil–atmosphere ﬂux estimates for the
+Community Land Model (CLM3.5), Geosci. Model Dev., 7,
+1025–1036, doi:10.5194/gmd-7-1025-2014, 2014.
+Hoteit, I., Cornuelle, B., Köhl, A., and Stammer, D.: Treating strong
+adjoint sensitivities in tropical eddy-permitting variational data
+assimilation, Q. J. Roy. Meteor. Soc., 131, 3659–3682, 2005.
+Hoteit, I., Cornuelle, B., Kim, S., Forget, G., Köhl, A., and Ter-
+rill, E.: Assessing 4D-VAR for dynamical mapping of coastal
+high-frequency radar in San Diego, Dynam. Atmos. Oceans, 48,
+175–197, 2009.
+Hoteit, I., Hoar, T., Gopalakrishnan, G., Collins, N., Anderson, J.,
+Cornuelle, B., Köhl, A., and Heimbach, P.: A MITgcm/DART
+ensemble analysis and prediction system with application to the
+Gulf of Mexico, Dynam. Atmos. Oceans, 63, 1–23, 2013.
+Ives, D. C. and Zacharias, R. M.: Conformal mapping and orthogo-
+nal grid generation, J. Propul. Power, 5, 327–333, 1989.
+Jackett, D. R. and McDougall, T. J.: Minimal adjustment of hy-
+drographic proﬁles to achieve static stability, J. Atmos. Ocean.
+Tech., 12, 381–389, 1995.
+Jiang, Z., Hui, W., and Kamachi, M.: The improvement made by
+a modiﬁed TLM in 4DVAR with a geophysical boundary layer
+model, Adv. Atmos. Sci., 19, 563–582, 2002.
+Kalmikov, A. G. and Heimbach, P.: A Hessian-based method for
+uncertainty quantiﬁcation in global ocean state estimation, SIAM
+J. Sci. Comput., 36, S267–S295, 2014.
+Köhl, A.: Evaluation of the GECCO2 ocean synthesis: transports of
+volume, heat and freshwater in the Atlantic, Q. J. Roy. Meteor.
+Soc., 141, 166–181, doi:10.1002/qj.2347, 2014.
+Köhl, A. and Stammer, D.: Optimal observations for variational data
+assimilation, J. Phys. Oceanogr., 34, 529–542, 2004.
+Köhl, A. and Stammer, D.: Decadal sea level changes in the
+50-Year GECCO Ocean Synthesis, J. Climate, 21, 1876–1890,
+doi:10.1175/2007JCLI2081.1, 2008.
+Köhl, A., Stammer, D., and Cornuelle, B.: Interannual to decadal
+changes in the ECCO global synthesis., J. Phys. Oceanogr., 37,
+529–542, doi:10.1175/2513.1, 2007.
+Köhl, A., Siegismund, F., and Stammer, D.: Impact of as-
+similating
+bottom
+pressure
+anomalies
+from
+GRACE
+on
+ocean circulation estimates, J. Geophys. Res., 117, C04032,
+doi:10.1029/2011JC007623, 2012.
+Large, W. and Yeager, S.: Diurnal to decadal global forcing for
+ocean and sea-ice models: the data sets and ﬂux climatologies,
+Technical Report TN-460+STR, NCAR, 2004.
+Large, W., McWilliams, J., and Doney, S.: Oceanic vertical mixing:
+a review and a model with a nonlocal boundary layer parameter-
+ization, Rev. Geophys., 32, 363–403, 1994.
+Liang, X., Wunsch, C., Heimbach, P., and Forget, G.: Vertical re-
+distribution of oceanic heat content, J. Climate, 28, 3821–3833,
+doi:10.1175/JCLI-D-14-00550.1, 2015.
+Liu, C., Köhl, A., and Stammer, D.: Adjoint-based estimation of
+eddy-induced tracer mixing parameters in the global ocean, J.
+Phys. Oceanogr., 42, 1186–1206, 2012.
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3102
+G. Forget et al.: ECCO version 4
+Llovel, W., Willis, J., Landerer, F., and Fukumori, I.: Deep-ocean
+contribution to sea level and energy budget not detectable over
+the past decade, Nature Climate Change, 4, 1031–1035, 2014.
+Locarnini, R., Mishonov, A., Antonov, J., Boyer, T., Garcia, H., and
+Levitus, S.: World Ocean Atlas 2005 Volume 1: Temperature,
+NOAA Atlas NESDIS, S. Levitus, Ed. NOAA Atlas NESDIS 61,
+US Gov. Printing Ofﬁce, Wash., D.C., 182 pp., 2006.
+Losch, M., Menemenlis, D., Campin, J.-M., Heimbach, P., and
+Hill, C.: On the formulation of sea-ice models. Part 1: Effects of
+different solver implementations and parameterizations, Ocean
+Model., 33, 129–144, 2010.
+Losch, M., Strass, V., Cisewski, B., Klaas, C., and Bellerby, R. G.:
+Ocean state estimation from hydrography and velocity observa-
+tions during EIFEX with a regional biogeochemical ocean circu-
+lation model, J. Marine Syst., 129, 437–451, 2014.
+Lyman, J. and Johnson, G.: Estimating global ocean heat content
+changes in the upper 1800 m since 1950 and the inﬂuence of cli-
+matology choice, J. Climate, 27, 1945–1957, 2014.
+Marotzke, J., Giering, R., Zhang, K. Q., Stammer, D., Hill, C., and
+Lee, T.: Construction of the adjoint MIT ocean general circula-
+tion model and application to Atlantic heat transport sensitivity,
+J. Geophys. Res.-Oceans, 104, 29529–29547, 1999.
+Marshall, J., Adcroft, A., Hill, C., Perelman, L., and Heisey, C.:
+A ﬁnite-volume, incompressible Navier Stokes model for studies
+of the ocean on parallel computers, J. Geophys. Res., 102, 5753–
+5766, 1997.
+Marshall, J., Ferreira, D., Campin, J., and Enderton, D.: Mean cli-
+mate and variability of the atmosphere and ocean on an aqua-
+planet, J. Atmos. Sci., 64, 4270–4286, 2007a.
+Marshall, J., Ferreira, D., Campin, J.-M., and Enderton, D.: Mean
+climate and variability of the atmosphere and ocean on an aqua-
+planet, J. Atmos. Sci., 64, 4270–4286, 2007b.
+Marshall, J., Anderson, A., Dewar, W., Doney, S., Edson, J.,
+Ferrari, R., Forget, G., Fratantoni, D., Gregg, M., Joyce, T.,
+Kelly, K., Lozier, S., Lumpkin, R., Maze, G., Paster, J., Samel-
+son, R., Silverthorne, K., Skyllingstad, E., Straneo, F., Talley, L.,
+Thomas, L., Toole, J., and Weller, R.: Observing the cycle of con-
+vection and restratiﬁcation over the Gulf Stream and the subtrop-
+ical gyre of the North Atlantic Ocean: preliminary results from
+the CLIMODE ﬁeld campaign, B. Am. Meteorol. Soc., 90, 1337–
+1350, 2009.
+Marshall, J., Armour, K. C., Scott, J. R., Kostov, Y., Hausmann, U.,
+Ferreira, D., Shepherd, T. G., and Bitz, C. M.: The ocean’s role in
+polar climate change: asymmetric Arctic and Antarctic responses
+to greenhouse gas and ozone forcing, Philos. T. R. Soc. A, 372,
+20130040, doi:10.1098/rsta.2013.0040, 2014.
+Marzocchi, W. and Jordan, T. H.: Testing for ontological errors
+in probabilistic forecasting models of natural systems, P. Natl.
+Acad. Sci. USA, 111, 11973–11978, 2014.
+Maze, G., Forget, G., Buckley, M., Marshall, J., and Cerovecki, I.:
+Using transformation and formation maps to study the role of
+air–sea heat ﬂuxes in North Atlantic Eighteen Degree Water for-
+mation, J. Phys. Oceanogr., 39, 1818–1835, 2009.
+Mazloff, M. R., Heimbach, P., and Wunsch, C.: An eddy-permitting
+Southern Ocean state estimate, J. Phys. Oceanogr., 40, 880–899,
+2010.
+McCaffrey, K., Fox-Kemper, B., and Forget, G.: Estimates of
+ocean macro-turbulence: structure function and spectral slope
+from Argo proﬁling ﬂoats, J. Phys. Oceanogr., 45, 1773–1793,
+doi:10.1175/JPO-D-14-0023.1, 2015.
+Menemenlis, D., Hill, C., Adcroft, A., Campin, J., Cheng, B.,
+Ciotti, B., Fukumori, I., Koehl, A., Heimbach, P., Henze, C.,
+Lee, T., Stammer, D., Taft, J., and Zhang, J.: NASA supercom-
+puter improves prospects for ocean climate research, EOS T. Am.
+Geophys. Un., 86–96, doi:10.1029/2005EO090002, 2005.
+Mercier, H.: Determining the general circulation of the ocean:
+a nonlinear inverse problem, J. Geophys. Res.-Oceans, 91, 5103–
+5109, 1986.
+MITgcm Group: MITgcm Release 1 Manual, Technical re-
+port, available at: http://mitgcm.org/public/sealion/ (last access:
+29 April 2015), Massachusetts Institute of Technology, Cam-
+bridge, MA 02139, USA, 346 pp., 2002.
+Moore, A. M., Arango, H. G., Broquet, G., Powell, B. S., Weaver,
+A. T., and Zavala-Garay, J.: The Regional Ocean Modeling
+System (ROMS) 4-dimensional variational data assimilation
+systems: Part I – System overview and formulation, Prog.
+Oceanogr., 91, 34–49, doi:10.1016/j.pocean.2011.05.004, 2011.
+Munk, W. H.: Abyssal recipes, in: Deep Sea Research and
+Oceanographic, Vol. 13, Elsevier, 707–730, doi:10.1016/0011-
+7471(66)90602-4, 1966.
+Myers, G. J., Sandler, C., and Badgett, T.: The art of software test-
+ing, John Wiley & Sons, 2011.
+Nguyen, A., Menemenlis, D., and Kwok, R.: Improved model-
+ing of the Arctic halocline with a subgrid-scale brine rejec-
+tion parameterization, J. Geophys. Res.-Oceans, 114, C11014,
+doi:10.1029/2008JC005121, 2009.
+Olbers, D., Wenzel, M., and Willebrand, J.: The inference of North
+Atlantic circulation patterns from climatological hydrographic
+data, Rev. Geophys., 23, 313–356, 1985.
+Pavlis, N. K., Holmes, S. A., Kenyon, S. C., and Factor, J. K.: The
+development and evaluation of the Earth Gravitational Model
+2008 (EGM2008), J. Geophys. Res.-Sol. Ea., 117, B04406,
+doi:10.1029/2011JB008916, 2012.
+Piecuch, C., Ponte, R., Heimbach, H., and Forget, G.: Sensitivity of
+Ocean-Model Estimates of Contemporary Global and Regional
+Sea-Level Changes to Geothermal Heat Flow, Ocean Model., un-
+der review, 2015.
+Ponte, R. M.: Oceanic response to surface loading effects neglected
+in volume-conserving models, J. Phys. Oceanogr., 36, 426–434,
+doi:10.1175/JPO2843.1, 2006.
+Ponte, R. M., Wunsch, C., and Stammer, D.: Spatial mapping of
+time-variable errors in Jason-1 and TOPEX/Poseidon sea surface
+height measurements, J. Atmos. Ocean. Tech., 24, 1078–1085,
+2007.
+Prinn,
+R.
+G.,
+Heimbach,
+P.,
+Rigby,
+M.,
+Dutkiewicz,
+S.,
+Melillo, J. M., Reilly, J. M., Kicklighter, D. W., and Waugh, C.:
+A Strategy for a Global Observing System for Veriﬁcation of Na-
+tional Greenhouse Gas Emissions, Tech. rep., MIT Joint Program
+on the Science and Policy of Global Change, 2011.
+Purkey, S. G. and Johnson, G. C.: Warming of global abyssal and
+deep Southern Ocean waters between the 1990s and 2000s: con-
+tributions to global heat and sea level rise budgets∗, J. Climate,
+23, 6336–6351, 2010.
+Purser, R. and Ranˇci´c, M.: Smooth quasi-homogeneous gridding of
+the sphere, Q. J. Roy. Meteor. Soc., 124, 637–647, 1998.
+Quinn, K. J. and Ponte, R. M.: Estimating weights for the use of
+time-dependent gravity recovery and climate experiment data
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/
+
+G. Forget et al.: ECCO version 4
+3103
+in constraining ocean models, J. Geophys. Res., 113, C12013,
+doi:10.1029/2008JC004903, 2008.
+Quinn, K. J. and Ponte, R.: Uncertainty in ocean mass trends from
+GRACE, Geophys. J. Int., 181, 762–768, doi:10.1111/j.1365-
+246X.2010.04508.x, 2010.
+Ranˇci´c, M., Purser, R., and Mesinger, F.: A global shallow-water
+model using an expanded spherical cube: gnomonic versus con-
+formal coordinates, Q. J. Roy. Meteor. Soc., 122, 959–982, 1996.
+Redi, M. H.: Oceanic isopycnal mixing by coordinate rota-
+tion, J. Phys. Oceanogr., 12, 1154–1158, 1982.
+Reynolds, R. W., Rayner, N. A., Smith, T. M., Stokes, D. C., and
+Wang, W.: An improved in situ and satellite SST analysis for
+climate, J. Climate, 15, 1609–1625, 2002.
+Risien, C. and Chelton, D.: A global climatology of surface wind
+and wind stress ﬁelds from eight years of QuikSCAT scatterom-
+eter data, J. Phys. Oceanogr., 38, 2379–2413, 2008.
+Roquet, F., Charrassin, J.-B., Marchand, S., Boehme, L., Fedak, M.,
+Reverdin, G., and Guinet, C.: Delayed-mode calibration of hy-
+drographic data obtained from animal-borne satellite relay data
+loggers, J. Atmos. Ocean. Tech., 28, 787–801, 2011.
+Ryskin, G. and Leal, L.: Orthogonal mapping, J. Comput. Phys., 50,
+71–100, 1983.
+Scharroo, R., Lillibridge, J., Smith, W., and Schrama, E.: Cross-
+calibration and long-term monitoring of the microwave radiome-
+ters of ERS, TOPEX, GFO, Jason, and Envisat, Mar. Geod., 27,
+279–297, doi:10.1080/01490410490465265, 2004.
+Schott, F. and Zantopp, R.: On the effect of vertical mixing on the
+determination of absolute currents by the beta spiral method,
+Deep-Sea Res., 27, 173–180, 1980.
+Shchepetkin,
+A.
+F.
+and
+McWilliams,
+J.
+C.:
+The
+regional
+oceanic modeling system (ROMS): a split-explicit, free-surface
+topography-following-coordinate ocean model, Ocean Model., 9,
+347–404, 2005.
+Speer, K. and Forget, G.: Chapter 9 – Global distribution and forma-
+tion of mode waters, in: Ocean Circulation and Climate: a 21st
+Century Perspective, 211–226, doi:10.1016/B978-0-12-391851-
+2.00009-X, 2013.
+Stammer, D.: Adjusting internal model errors through ocean
+state
+estimation,
+J.
+Phys.
+Oceanogr.,
+35,
+1143–1153,
+doi:10.1175/JPO2733.1, 2005.
+Stammer, D., Wunsch, C., Giering, R., Eckert, C., Heimbach, P.,
+Marotzke, J., Adcroft, A., Hill, C., and Marshall, J.: The Global
+ocean circulation during 1992–1997, estimated from ocean ob-
+servations and a general circulation model, J. Geophys. Res.-
+Oceans, 107, 1.1–1.27, doi:10.1029/2001JC000888, 2002.
+Stammer, D., Ueyoshi, K., Köhl, A., Large, W., Josey, S., and Wun-
+sch, C.: Estimating air–sea ﬂuxes of heat, freshwater, and mo-
+mentum through global ocean data assimilation, J. Geophys. Res,
+109, 8691–8702, 2004.
+Steele, M., Morley, R., and Ermold, W.: PHC: a global ocean hy-
+drography with a high-quality Arctic Ocean, J. Climate, 14,
+2079–2087, 2001.
+Stommel, H.: The delicate interplay between wind-stress and buoy-
+ancy input in ocean circulation: the Goldsbrough variations∗,
+Tellus A, 36, 111–119, 1984.
+Sverdrup, H. U.: Wind-driven currents in a baroclinic ocean; with
+application to the equatorial currents of the eastern Paciﬁc, P.
+Natl. Acad. Sci. USA, 33, 318–326, 1947.
+Thacker, W. C. and Long, R. B.: Fitting dynamics to data, J. Geo-
+phys. Res.-Oceans, 93, 1227–1240, 1988.
+Toole, J., Krishﬁeld, R., Timmermans, M.-L., and Proshutinsky, A.:
+The ice-tethered proﬁler: Argo of the Arctic, Oceanography, 24,
+126–135, 2011.
+Trefethen, L.: SCPACK user’s guide, Tech. rep., Technical Report
+89-2, MIT Numerical Analysis Report, 1989.
+Tziperman, E. and Thacker, W. C.: An optimal-control/adjoint-
+equations approach to studying the oceanic general circulation,
+J. Phys. Oceanogr., 19, 1471–1485, 1989.
+Tziperman, E., Thacker, W. C., Long, R. B., and Hwang, S.-M.:
+Oceanic data analysis using a general circulation model. Part I:
+Simulations, J. Phys. Oceanogr., 22, 1434–1457, 1992a.
+Tziperman, E., Thacker, W. C., Long, R. B., Hwang, S.-M., and
+Rintoul, S. R.: Oceanic data analysis using a general circulation
+model. Part II: A North Atlantic model, J. Phys. Oceanogr., 22,
+1458–1485, 1992b.
+Utke, J., Naumann, U., Fagan, M., Tallent, N., Strout, M., Heim-
+bach, P., Hill, C., and Wunsch, C.: OpenAD/F: a modular open-
+source tool for automatic differentiation of Fortran codes, ACM
+T. Math. Software, 34, 18, doi:10.1145/1377596.1377598, 2008.
+Verdy, A., Mazloff, M. R., Cornuelle, B. D., and Kim, S. Y.: Wind-
+driven sea level variability on the California coast: an adjoint sen-
+sitivity analysis, J. Phys. Oceanogr., 44, 297–318, 2014.
+Weaver, A. and Courtier, P.: Correlation modelling on the sphere
+using a generalized diffusion equation, Q. J. Roy. Meteor. Soc.,
+127, 1815–1846, 2001.
+Wells, D.: Prime Numbers: the Most Mysterious Figures in Math,
+John Wiley & Sons, Hoboken, NJ, 2011.
+Wilkin, J. and Hedström, K.: User’s manual for an orthogonal
+curvilinear grid-generation package, Institute of Marine and
+Coastal Sciences, Rutgers University, available at: http://www.
+marine.rutgers.edu/po/tools/gridpak/grid_manual.ps.gz (last ac-
+cess: 29 April 2015), 1998.
+Wilson, C., Chipperﬁeld, M. P., Gloor, M., and Chevallier, F.: De-
+velopment of a variational ﬂux inversion system (INVICAT v1.0)
+using the TOMCAT chemical transport model, Geosci. Model
+Dev., 7, 2485–2500, doi:10.5194/gmd-7-2485-2014, 2014.
+Wunsch, C.: Determining the general circulation of the oceans:
+a preliminary discussion, Science, 196, 871–875, 1977.
+Wunsch, C.: Acoustic tomography and other answers, in: It’s the
+water that makes you drunk. A celebration in Geophysics and
+Oceanography – 1982. In honor of Walter Munk on his 65th
+birthday, Scripps Institution of Oceanography Reference Series
+84-5, Scripps Institution of Oceanography of California, San
+Diego, La Jolla, CA, 47–62, 1984.
+Wunsch, C.: Discrete Inverse and State Estimation Problems: with
+Geophysical Fluid Applications, Cambridge University Press,
+2006.
+Wunsch, C. and Heimbach, P.: Practical global oceanic state esti-
+mation, Physica D, 230, 197–208, 2007.
+Wunsch, C. and Heimbach, P.: The global zonally integrated ocean
+circulation, 1992–2006: seasonal and decadal variability, J. Phys.
+Oceanogr., 39, 351–368, doi:10.1175/2008JPO4012.1, 2009.
+Wunsch, C. and Heimbach, P.: Dynamically and kinematically con-
+sistent global ocean circulation and ice state estimates, in: Ocean
+Circulation and Climate: a 21st Century Perspective, 103, 553–
+579, doi:10.1016/B978-0-12-391851-2.00021-0, 2013a.
+www.geosci-model-dev.net/8/3071/2015/
+Geosci. Model Dev., 8, 3071–3104, 2015
+
+3104
+G. Forget et al.: ECCO version 4
+Wunsch, C. and Heimbach, P.: Two decades of the Atlantic merid-
+ional overturning circulation: anatomy, variations, extremes, pre-
+diction, and overcoming its limitations, J. Climate, 26, 7167–
+7186, 2013b.
+Wunsch, C. and Heimbach, P.: Bidecadal thermal changes in the
+Abyssal Ocean, J. Phys. Oceanogr., 44, 2013–2030, 2014.
+Wunsch, C. and Minster, J.-F.: Methods for box models and ocean
+circulation tracers: mathematical programing and nonlinear in-
+verse theory, J. Geophys. Res.-Oceans, 87, 5647–5662, 1982.
+Wunsch, C., Ponte, R., and Heimbach, P.: Decadal trends in sea
+level patterns: 1993–2004, J. Climate, 20, 5889–5911, 2007.
+Yu, L. and Weller, R. A.: Objectively analyzed air–sea heat ﬂuxes
+for the global ice-free oceans (1981–2005), B. Am. Meteorol.
+Soc., 88, 527–539, 2007.
+Zanna, L., Heimbach, P., Moore, A. M., and Tziperman, E.: Op-
+timal excitation of interannual Atlantic meridional overturning
+circulation variability, J. Climate, 24, 413–427, 2011.
+Geosci. Model Dev., 8, 3071–3104, 2015
+www.geosci-model-dev.net/8/3071/2015/

@@ -1,0 +1,874 @@
+Vol.:(0123456789)
+1 3
+International Journal of Computational Intelligence Systems           (2023) 16:54  
+https://doi.org/10.1007/s44196-023-00233-6
+RESEARCH ARTICLE
+Multiscale Feature Extraction and Fusion of Image and Text in VQA
+Siyu Lu1 · Yueming Ding1 · Mingzhe Liu2 · Zhengtong Yin3 · Lirong Yin4 · Wenfeng Zheng1 
+Received: 1 November 2022 / Accepted: 31 March 2023 
+© The Author(s) 2023
+Abstract
+The Visual Question Answering (VQA) system is the process of finding useful information from images related to the ques-
+tion to answer the question correctly. It can be widely used in the fields of visual assistance, automated security surveillance, 
+and intelligent interaction between robots and humans. However, the accuracy of VQA has not been ideal, and the main 
+difficulty in its research is that the image features cannot well represent the scene and object information, and the text infor-
+mation cannot be fully represented. This paper used multi-scale feature extraction and fusion methods in the image feature 
+characterization and text information representation sections of the VQA system, respectively to improve its accuracy. Firstly, 
+aiming at the image feature representation problem, multi-scale feature extraction and fusion method were adopted, and 
+the image features output of different network layers were extracted by a pre-trained deep neural network, and the optimal 
+scheme of feature fusion method was found through experiments. Secondly, for the representation of sentences, a multi-scale 
+feature method was introduced to characterize and fuse the word-level, phrase-level, and sentence-level features of sentences. 
+Finally, the VQA model was improved using the multi-scale feature extraction and fusion method. The results show that the 
+addition of multi-scale feature extraction and fusion improves the accuracy of the VQA model.
+Keywords  Multi-scale · Image features · Text information · Feature extraction and fusion · VQA
+1  Introduction
+VQA is a research task that links computer vision (CV) to 
+natural language processing (NLP). As a high-level com-
+plex task, VQA not only includes the task of identifying and 
+detecting the content of the picture, but also includes the 
+task of understanding the problem and the research of com-
+bining the question with the picture, and the task of using the 
+question and the picture content to reason about the answer. 
+Therefore, a complete VQA model mainly includes three 
+steps: single-mode feature extraction, image feature and text 
+information fusion, and answer reasoning [1–5]. Most of 
+the early work applied the model of image caption genera-
+tion [6–9] to the Visual Question Answering (VQA) task 
+[10–12] and realized the ability of VQA by combining the 
+modules of convolutional neural network and cyclic neural 
+network. At present, there are several mainstream meth-
+ods of VQA, such as the end-to-end neural network, the 
+multi-module neural network, and the neural network with 
+external database. The combination model is to decompose 
+VQA tasks into independent models to solve different types 
+of tasks, among which neural module networks (NMN) 
+[13] and dynamic memory networks (DMN) [14] are typi-
+cal representatives. Furthermore, scholars put forward the 
+introduction of an external knowledge base [8, 15], among 
+which the common external knowledge base includes the 
+DBpedia [16], the Freebase [17], the YAGO [18], and the 
+OpenIE [19].
+The core task of the VQA model is the extraction and 
+fusion of features [20, 21], which is also related to the accu-
+racy of the model [22]. Because the features extracted by the 
+deep neural network and then extracted by the shallow neu-
+ral network have different meanings, the multiscale feature 
+ *	 Mingzhe Liu 
+	
+liumz@cdut.edu.cn
+ *	 Wenfeng Zheng 
+	
+winfirms@uestc.edu.cn
+1	
+School of Automation, University of Electronic Science 
+and Technology of China, Chengdu 610054, China
+2	
+School of Data Science and Artificial Intelligence, Wenzhou 
+University of Technology, Wenzhou 325000, China
+3	
+College of Resource and Environment Engineering, Guizhou 
+University, Guiyang 550025, China
+4	
+Department of Geography and Anthropology, Louisiana 
+State University, Baton Rouge, LA 70803, USA
+
+	
+International Journal of Computational Intelligence Systems           (2023) 16:54 
+1 3
+   54  
+Page 2 of 11
+fusion method was applied to the extracted feature of the 
+image and the text in the VQA system, and the joint com-
+plementation of the two can make the feature expression 
+more perfect and more conducive to recognizing the object 
+in the image.
+1.1  Image Feature Extraction
+There are two typical methods used in the task of image 
+feature extraction. One of the typical deep learning methods 
+for image feature extraction is region selection, which was 
+proposed by Girshick [23] in the target detection task, and 
+then widely used in image target detection and segmentation 
+task. This method can get the object boundary and its key 
+characteristics well, but the problem is that it will ignore 
+some information, such as walls in the background, grass, 
+etc. The second method uses the classical neural network, 
+which has been pre-trained to extract features, such as the 
+VGG model and the ResNet model trained in big data such 
+as ImageNet. The advantage of this method is that it can 
+use the existing classical model, which has been pre-trained 
+by many data. On the other hand, the disadvantage of this 
+method is that it requires that the new task data needs to be 
+not much different from the data used in the pre-training. 
+Otherwise, it will not achieve the desired effect.
+The Convolutional neural network has made outstand-
+ing achievements in image classification [24, 25], but this 
+method still has significant limitations. The most typical is 
+that although the convolutional neural network is adaptive 
+to the object’s position change in the image, it is sensitive 
+to the size change of the object. Therefore, if the object's 
+size exceeds the convolutional kernel receptive field or the 
+object's size is too small, the network cannot correctly iden-
+tify the object from the image. Given this situation, scholars 
+have proposed many solutions, such as image pyramid [26] 
+or feature pyramid [6].
+(1)	 Image Pyramid
+The most intuitive method is to change the resolution of 
+the image. In the earliest method [26], some scholars pro-
+posed to zoom the original image to different sizes to get an 
+image pyramid structure, as shown in Fig. 1. After that, the 
+neural network used for classification is applied to images of 
+various sizes. To some extent, this method solves the prob-
+lem that the neural network is sensitive to the size of the 
+target, but the cost is vast. Moreover, it needs to consume 
+several times more storage space and computing resources 
+than the general network [27], so this method is less used.
+(2)	 Feature Pyramid
+In the later improved methods, some scholars focus on the 
+information representation of image features. The research 
+shows that the shallow image feature has a small receptive 
+field, high resolution, and rich location information, which 
+is beneficial for detecting small objects. While the high-
+level feature has a large receptive field and a low resolution, 
+strong semantic information representation complements 
+shallow network information. So scholars put forward the 
+SSD (single shot multi-box detector) [6] method (Fig. 2). In 
+this way, the shallow network can detect some objects that 
+the original deep network features cannot detect. However, 
+the effect is still limited because of the lack of semantic 
+information of the shallow network features.
+(3)	 Feature Pyramid Network
+In order to combine the high-resolution features of shal-
+low networks with the high-level semantic information of 
+high-level network features, the feature pyramid network 
+(FPN) method is proposed (Fig. 3). It extracts the features 
+from the deep-layer network and gets the same features as 
+the shallow layer features through the up-sampling. Then, 
+the fusion of the two features is used as the input of the 
+classification network and achieves good results in the clas-
+sification task.
+1.2  Text Information Extraction
+The text information in the VQA database is unstructured 
+information that is difficult for computers. To make the 
+computer be able to deal with the text information, it needs 
+to transformed. Word embedding was used to map text to 
+feature space. There are two models of word embedding: 
+skip-gram model and continuous word bag mode (CBOW) 
+Fig. 1   Pattern diagram of image 
+pyramid
+
+International Journal of Computational Intelligence Systems           (2023) 16:54 	
+1 3
+Page 3 of 11 
+   54 
+[28]. In the skip-gram model, the model trains the neural 
+network to derive the probability distribution of the context 
+vector of the input word based on the given input word and 
+the pre-sized window. CBOW, on the other hand, is given 
+context and trained on input words, and the context under 
+the window size given by the input predicts the probability 
+distribution of words.
+For the feature extraction of the question sentence, 
+because the convolution neural network cannot process the 
+sequence information well, the cyclic convolution neural 
+network is used to get the sentence feature after iterating the 
+word feature in the sentence. However, gradients in cyclic 
+convolutional networks disappear as iterations increase. 
+The long short-term memory (LSTM) network and the Gate 
+Recurrent Unit (GRU) network [29] are proposed for this 
+issue. LSTM uses gate control to control the time length of 
+the self-accumulating information cycle. The sigmoid acti-
+vation function limits the value to a limited range, which 
+keeps the memory of the past gradient within a particular 
+time and guarantees that the gradient will not explode due to 
+accumulation. On the other hand, GRU simplifies the thresh-
+old and only uses the update gate and reset gate to achieve a 
+similar effect with LSTM.
+The realization of multiscale text feature extraction is 
+based on the processing of language feature sequences. After 
+embedding words into natural language, the obtained word 
+vectors are the features at the word scale. To get the feature 
+in phrase scale, a one-dimensional convolution neural net-
+work proposed by Lu [30] is used to extract the feature of 
+word vector space. Some scholars [31] propose using convo-
+lution kernels of three different scale windows to convolute 
+with word vectors, respectively to get text features of differ-
+ent scales, cascade the output under all windows, and use 
+the maximum pooling processing to get the “phrase” feature.
+1.3  Multiscale Feature Fusion
+In the VQA task, the typical multimodal features are image 
+features and text features [32–34]. The fusion of image 
+features and text features in the VQA system plays a vital 
+role in model performance [35]. The selection of methods 
+directly affects the results. In the early stage of the VQA 
+model, the joint representation method is used to process 
+multimodal features. Researchers map image features into 
+text feature space, add features, measure similarity or join 
+features in-depth at the element level [36, 37]. The fusion 
+of semantic and image features adopts the direct connec-
+tion method, which has an unclear termination position. 
+Malinowski [10] proposed a recursive neural network imple-
+mentation using long-term and short-term memory cells. 
+The research of fine-grained classification tasks inspires the 
+application of collaborative representation in multimodal 
+Fig. 2   Pattern diagram of fea-
+ture pyramid
+Fig. 3   Pattern diagram of fea-
+ture pyramid network
+
+	
+International Journal of Computational Intelligence Systems           (2023) 16:54 
+1 3
+   54  
+Page 4 of 11
+feature fusion. Lin first proposed the bilinear network [38], 
+mainly used for fine-grained image classification tasks, such 
+as distinguishing bird species and aircraft species and other 
+extremely subtle images.
+Because the feature dimension of the bilinear model is 
+too high and there are many parameters, many scholars have 
+proposed to compress and reduce the dimension of the fused 
+feature. Gao [11] proposed compressing the bilinear pooling 
+network, which reduced the feature dimension to a certain 
+extent. Fukui [39] introduced a bilinear pooling network into 
+a VQA task (MCB). In the VQA task, two independent con-
+volutional neural networks of the original bilinear network 
+are replaced by a convolutional neural network to extract 
+image features and a cyclic neural network to extract text 
+features. Both image and text features are mapped to the 
+same feature space, and the subsequent feature fusion is still 
+the same as Gao’s processing. Although the method of MCB 
+can compress the vector to a lower dimension, in order to 
+ensure the classification result, the output feature is still a 
+feature in a higher dimension space. Next, Yu [40] put for-
+ward the multi-modular factorized bilinear pooling (MFB) 
+structure based on the MLB pooling method to reduce the 
+dimension. The author mainly decomposes the feature map-
+ping matrix into two low-rank matrices, making the feature 
+mapping complete under relatively low features. Kim [41] 
+introduced Hadamard product and matrix decomposition to 
+compress the features. Ben [42] introduced Tucker decom-
+position of a tensor into a bilinear pooling network, further 
+compressed data. Bilinear pooling text keyword features 
+extracted by cyclic convolution neural network and feature 
+output of convolution neural network and used text features 
+and visual features to predict attention weighting in feature 
+space.
+This paper introduces the multiscale feature technology 
+into the VQA system, and the improved image multiscale 
+feature extraction method is introduced. Firstly, the develop-
+ment and research significance of multiscale feature fusion 
+technology were introduced. After that, this paper introduces 
+the multiscale image feature extraction method and the text 
+multiscale feature extraction method. Finally, the experi-
+ments on the improved image multiscale feature method and 
+the introduced text multiscale feature method are carried out 
+and analyze its influence and role in the VQA task.
+The main contributions and innovations are: apply multi-
+scale feature fusion method to feature extraction of image 
+and text in visual question answering system, and improve 
+the multi-scale image feature representation method of 
+image. Because the features extracted by the deep network 
+and the shallow network in the neural network have different 
+meanings, the combination of the two can make the feature 
+expression more perfect and more conducive to the recog-
+nition of objects in the image. This paper introduces the 
+multi-scale feature extraction based on the depth residual 
+network. Due to the existence of multimodal feature fusion 
+based on bilinear network in the VQA model, the param-
+eters of neural network are complex and huge. In this paper, 
+the image multi-scale feature technology is improved, and 
+the feature expression is simplified on the basis of ensuring 
+performance improvement.
+2  Materials and Methods
+2.1  Materials
+2.1.1  Dataset
+VQA dataset is one of the earliest and most widely used 
+data sets. It contains VQA data set composed of real natu-
+ral scene photos and VQA abstract data set composed of 
+cartoon pictures. VQA data contains 123287 photos as the 
+training set and 81,434 photos as the test set. The source of 
+the photos is the coco data set provided by Microsoft for the 
+image classification competition. The data of questions and 
+answers are put forward and answered manually. The forms 
+of questions include yes or no questions, multiple choices 
+questions, and open answer questions. VQA consists of 
+614163 Q & A pairs. The provider gives a detailed analysis 
+of the characteristics of the dataset. This paper mainly ana-
+lyzes the open problems.
+2.1.2  Experimental Environment
+The hardware environment is as follows: processor, CPU 
+Intel i7-4790; graphics card, NVIDIA GTX 1070; memory, 
+16G. The Software environment is as follows: general com-
+puting architecture, CUDA 9.0; GPU acceleration library, 
+CUDNN 7.0; deep learning framework, python.
+2.2  Method
+2.2.1  Multiscale Image Feature Extraction and Fusion
+In our experiment, the pre-trained residual network is used 
+for image feature extraction. Since the visual question 
+and answer database adopted in this paper is based on the 
+COCO image data set, the pre-trained Resnet-152 model 
+in the standard model library can be used as the image fea-
+ture extraction network. Thus, this paper extracted the final 
+output of conv3, conv4, conv5 residual modules. Regarding 
+the fusion of multiscale features, we used the method of the 
+FPN model to fuse the combination of features of different 
+layers in a top-down way.
+
+International Journal of Computational Intelligence Systems           (2023) 16:54 	
+1 3
+Page 5 of 11 
+   54 
+1.	 Image Feature Extraction Network
+Image feature extraction adopts the feature extraction 
+method based on deep learning. First, this paper removes 
+the fully connected layer, which is highly related to the 
+classification task. Then, the output of the final convolu-
+tion layer is adopted as the image feature. Finally, the 152-
+layer residual network, pre-trained in ImageNet, is adopted 
+for the image feature extraction model.
+2.	 Feature Extraction Network Fine-Tuning
+After considering the difference in training data distribu-
+tion from the original model, the network is fine-tuned. He 
+Keming [43] studied the parameter initialization method of 
+ImageNet pre-training. The research shows that the advan-
+tage of this method is that it can improve the convergence 
+speed but is not sensitive enough to local targets. Unlike 
+ImageNet, which was originally only used for classifica-
+tion tasks, the COCO data set contains more multi-objects 
+data and more abundant local targets. Therefore, this paper 
+fine-tuned the network on the COCO data set.
+3.	 Multiscale Feature Extraction and Fusion
+The bilinear feature fusion networks generate a large number 
+of parameters with high dimensions. Therefore, considering 
+the computational cost, instead of generating answers to all 
+scale features, the experiment explores the best fusion mode 
+among the features of different scales and finally obtained a 
+single fusion feature, as shown in Fig. 4.
+First, we unify the size of the images in the COCO data 
+set to 448 × 448 as the model input. The output feature size 
+of conv3 is 28 × 28, and the channel dimension is 512. The 
+output feature size of conv4 is 14 × 14, and the channel 
+dimension is 1024. The output feature size of conv5 is 7 × 7, 
+and the channel dimension is 2048, shown in Fig. 5.
+We refer to the FPN fusion method and fuse different 
+scale features in top-down order for feature fusion. For 
+example, for the merge of conv5 with conv4, we first deal 
+with features extracted by conv5. Then, this paper adopts 
+Fig. 4   Multi-scale feature 
+fusion in visual question 
+answering system
+Fig. 5   Multi-scale feature extraction model for images in VQA system
+
+	
+International Journal of Computational Intelligence Systems           (2023) 16:54 
+1 3
+   54  
+Page 6 of 11
+the 1024 times deconvolution, in which step length is 2 and 
+dimension is 2048, expand the feature to the same feature 
+size and channel number as conv4. Then we add the features 
+by elements, and the new features are stored as conv4 & 5. 
+The conv5 and conv3 fusion are similar approaches.
+Then, for the integration of three layers of features, we 
+further deconvolution conv4&5. With 512 deconvolution 
+and step of 2, the size of features is expanded to 28 × 28, and 
+the number of channels is reduced to 512, which is the same 
+as the feature size and channel number of conv3. After the 
+expansion, conv4&5 and conv3 are also processed by adding 
+elements to get the high-resolution features of conv3&4&5. 
+As the experimental control, we retain the direct output of 
+conv5 as the final feature directly outputted by the model.
+4.	 Feature Fusion Networks Applied to Different Mul-
+timodal
+The proposed multiscale feature extraction and fusion 
+method are applied to different multi-mode feature fusion 
+networks. The experiment adopts the MLB [2] network and 
+the MUTAN [44] network and compares the results after 
+experiments.
+5.	 Generate the Answer
+A multilayer perceptron is employed to classify the fusion 
+features, and the probability distribution of the final answer 
+is obtained. Finally, the features are decoded into natural 
+language by the circular convolutional neural network.
+2.2.2  Multiscale Text Feature Extraction
+In the VQA model, we first embed words into the text and 
+mapped it to the continuous numerical feature space to get 
+the continuous word vector. Then the phrase features are 
+obtained by one-dimensional convolution with three differ-
+ent scales. Moreover, the skip-thought model is adopted for 
+feature extraction of sentences. Combined with the expres-
+sion of GRU, the word embedding feature of a single step 
+went through convolution in the unit of window scale and 
+then output as word feature. Sentences with the length of 
+N are filled to the set input length and output as sentence 
+features by skip-thought. For phrase features, maximum 
+pooling output after features is convoluted with a different 
+scale one-dimensional convolution network. The output is 
+phrase features. The overall text feature extraction is shown 
+in Fig. 6.
+As the skip-thought loop network is an encoder, we need 
+to set the length of the hidden layer first and set the target 
+cycle times as length N. Sentences with insufficient length 
+are filled with 0. The word features and phrase features are 
+obtained after embedding with the one-dimensional convo-
+lution of different scales. For phrase feature extraction, the 
+experiment adopts a convolution kernel of various sizes and 
+a maximum pooling layer to extract the feature of word vec-
+tor as phrase feature.
+2.2.3  Overall Model
+The model is divided into two parts, as shown in Fig. 7. 
+Firstly, the image multiscale feature extraction and text 
+multiscale feature extraction modules described extract the 
+Fig. 6   Multiscale text feature 
+extraction
+
+International Journal of Computational Intelligence Systems           (2023) 16:54 	
+1 3
+Page 7 of 11 
+   54 
+features of VQA data. Then, the extracted features are con-
+verted into binary data and stored on the hard disk. This 
+section sets up the VQA system model, the ResNet152 
+network, which has been pre-trained in the ImageNet data 
+set, is employed to feature image extraction. The feature 
+extraction model of the problem employs skip—thought 
+cyclic convolution neural network based on the structure 
+of the GRU helped threshold. The later part is to com-
+plete feature fusion, interaction, and the formation of the 
+answer.
+The fusion method needs to be combined with the ten-
+sor compression method mentioned above. This paper uses 
+the bilinear network to realize the fusion of the final output 
+of multiscale text and image features. After feature fusion, 
+we use MLB and tucker decomposition to compress the 
+feature. The compressed features are input into the answer 
+to generate multiple classifiers, and the probability distri-
+bution of each answer is obtained. Finally, the final answer 
+is obtained by fusing and normalizing it with the softmax 
+layer.
+After the model features are extracted, we store the fea-
+tures as binaries for subsequent question-and-answer sys-
+tem training. In the question-answering system, the fused 
+multiscale image features and text features are used as the 
+input of the question-answering system, and the value of 
+state distribution is firstly used for parameter initialization. 
+After a few times of training, the parameters and results of 
+each training are stored. After each training, the parameters 
+with the best results were selected for initialization. In this 
+paper, the Adam optimization algorithm was used for the 
+training optimizer. The Alpha value was set to 0.01, the first-
+order moment was estimated to be 0.9, and the second-order 
+moment was estimated to be 0.99.
+3  Results
+Firstly, the comparison of several different fusion modes is 
+given. Then, the fusion mode with better performance is 
+selected as the basis of the subsequent work to be applied 
+in the model. Next, multiscale feature fusion is applied to 
+the model, and the method is analyzed after the experiment.
+3.1  Comparison of Fusion Methods
+The experiment tests several visual question-and-answer 
+models at the current forefront, among which Baseline is 
+the original image feature and text feature cascade model, 
+as shown in Table 1. 
+In this experiment, MLB fusion and the MUTAN fusion 
+are used as the control group to compare the prediction 
+results of MLB fusion and the MUTAN fusion on the open 
+problem data set in the VQA data set. The loss function and 
+the accuracy under top1 and top5 indexes are analyzed and 
+compared, as shown in Table 2. Top1 refers to the model 
+as successful learning only when the answer with the high-
+est score is correct in the probability distribution obtained 
+Fig. 7   Overall model
+
+	
+International Journal of Computational Intelligence Systems           (2023) 16:54 
+1 3
+   54  
+Page 8 of 11
+through training. Top5 refers to the obtained probability dis-
+tribution. Therefore, the model learning is considered suc-
+cessful when the highest five results contain correct answers. 
+According to the convergence rate of the model’s loss 
+function in Fig. 8, the model's loss function based on MLB 
+fusion converges significantly faster in the training pro-
+cess. The model's loss function based on the MUTANMLB 
+tensor dimension-reducing model converges to 1.98, and 
+the final loss function of the MUTAN method converges 
+to 2.27.
+As shown in Fig. 9, under the evaluation of top1 accuracy, 
+the highest accuracy of the MLB model on the training set 
+was nearly 60%, which was higher than the 54% accuracy 
+of the MUTAN method. The test results of the two were 
+very similar under the analysis of the generalization effect 
+of the test set.
+As shown in Fig. 10, under the top5 evaluation method, 
+the training set results still showed that the accuracy of the 
+MLB model is higher than that of the MUTAN model, with 
+a difference of nearly 4%. On the test set, the result of the 
+MLB model is 0.4% higher than that of the MUTAN model, 
+but the MLB model converges in the 10th epoch, while the 
+MUTAN model converges in the 60th epoch.
+3.2  Comparison of Multiscale Feature Fusion 
+Methods
+We selected MLB and MUTAN models as the multimodal 
+feature fusion method of the VQA model by comparing and 
+testing various models before, and firstly added text multi-
+scale features to conduct the experiment.
+As shown in Table 3, the accuracy of the MLB model and 
+MUTAN model was improved to some extent after adding 
+multiscale text features, among which MLB improved by 
+0.43 percentage points.
+Based on multiscale text feature extraction, we experi-
+ment with the multiscale image feature method. Multi-
+scale feature extraction is based on the image FPN network 
+Table 2   Comparison of MLB model and MUTAN model
+MLB_train (%)
+MLB_test (%)
+MUTAN_
+train (%)
+MUTAN_test 
+(%)
+Top1
+59.28
+47.28
+54.47
+47.67
+Top5
+82.97
+74.29
+79.20
+73.89
+Fig. 8   Loss function
+Fig. 9   Accuracy of Top1 in test set and training set
+Fig. 10   Top 5 accuracy of MLB and MUTAN in test set and training 
+set
+Table 3   Multi-scale text feature experiment
+Method
+MLB (%)
+MUTAN (%)
+Multi-scale text feature
+74.82
+74.05
+Original model
+74.39
+73.89
+Table 1   Experimental results of various VQA models
+Model
+Accuracy (%)
+Validation set
+Test set
+Baseline
+67.92
+70.73
+MCB
+70.74
+73.18
+MLB
+71.53
+74.29
+MUTAN
+71.72
+73.89
+
+International Journal of Computational Intelligence Systems           (2023) 16:54 	
+1 3
+Page 9 of 11 
+   54 
+method. In the calculation, the FPN network synthesis con-
+sumes more computation resources and time. In our experi-
+ment, each characteristics layer is in different combinations, 
+and we analyzed the result of the combination to get a better 
+solution.
+Firstly, based on the above experiment, the directly 
+extracted feature layer includes conv3, conv4, and conv5. 
+The obtained accuracy when the input is the feature of conv5 
+is taken as the benchmark. Combined conv3 and conv5, 
+conv4 and conv5 are taken as the input, respectively to cal-
+culate the accuracy, and then the combined three features are 
+taken for the experiment. It can be seen from Table 4 that 
+when using three layers of features with different scales at 
+the same time, the results decreased. After combining conv4 
+and conv5 features, the experimental results did not signifi-
+cantly improve. After combining conv3 and conv5 features, 
+the experimental results improved significantly, and MLB 
+and MUTAN both increased by about two percent under the 
+condition of top5 evaluation on the test set.
+4  Discussion
+Table 1 show that using dual linear network test results of 
+multiple modal characteristics of fusion is superior to the 
+traditional method (Baseline) test results. Furthermore, the 
+MLB model and MUTAN model are better than the original 
+bilinear model of MCB. Although these two models are pro-
+cessed reduction of dimensionality, the parameter number is 
+less than MCB mode.
+Table 2 (Comparison of MLB model and MUTAN model) 
+shows the maximum accuracy of training 100 epochs. The 
+average results under the training set show that the training 
+accuracy of the MLB fusion in the training data set is signifi-
+cantly higher than that of the MUTAN model Tucker decom-
+position method. However, there is little difference between 
+the two in the test set. There is only a 0.39% difference in 
+the top1 accuracy rate in the test set and only a 0.4% differ-
+ence in the top5 accuracy rate. The difference under top1 
+evaluation in training test is nearly 5%, and the difference 
+under top5 evaluation is 3.77%. Thus, the MUTAN tensor 
+compression model has a relatively similar effect compared 
+with the MLB model. However, the MUTAN model reduces 
+more parameters and feature dimensions and is better than 
+the MLB model in memory consumption.
+From Fig. 10 (Top5 accuracy), it can be seen from the 
+analysis that the MLB model converged faster, and the effect 
+was slightly better than the MUTAN model. However, the 
+overfitting of the MLB model is more severe than that of the 
+MUTAN model. The reason may be that the MLB model is 
+more complex and has more parameters. Therefore, MUTAN 
+is better at solving the overfitting problem than the MLB 
+model, but the training effect of the model is not improved. 
+Therefore, considering that there is little difference between 
+the two methods in the performance of final results, we can 
+adopt the two methods in the follow-up research and further 
+compare them in the follow-up work.
+From experimental results analysis, we find that when 
+the feature fusion of the three layers of different scales 
+is used simultaneously, the results did not improve but 
+declined. After combining the feature of conv4 and conv5, 
+the improvement is not obvious. However, after combin-
+ing the feature of conv3 and conv5, experimental results 
+show evident improvement. On the test set based on the top5 
+evaluation, the improvement under the MLB and MUTAN 
+model are both about two percent.
+From the extracted features, we can see that the image 
+features under different scales have obvious differences, rep-
+resenting different aspects of the image information. There-
+fore, this information can be combined with the problem 
+features under different scales in future work.
+5  Conclusions
+This paper improves the image feature extraction method 
+in the VQA model. The concept and method of multiscale 
+features are proposed in the research of feature engineering. 
+The application of multiscale features in image classifica-
+tion tasks has achieved good results. Refer to the semantic 
+research of different scale features in feature engineering 
+and the semantic information of different languages repre-
+sented by different scale features of image features. This 
+paper applies multiscale feature extraction and fusion in 
+the VQA system. It also adopts a simplified multiscale fea-
+ture method to integrate information of different scales and 
+reduce the parameter number. The 152-layer ResNet network 
+pre-trained on the ImageNet dataset is used for image feature 
+extraction. The final output of the different residual convo-
+lution modules of the network is used as image features of 
+different scales. In this paper, the characteristics of different 
+scales are combined through experiments, and the best com-
+bination method is applied to the VQA system.
+Although the work of this paper has made improvements 
+to the VQA model in terms of visual feature extraction and 
+text information extraction, the results still have not achieved 
+Table 4   Image feature combination experiment
+Combination
+MLB (%)
+MUTAN (%)
+Conv5
+74.82
+74.05
+Conv5 + conv4 + conv3
+73.34
+72.03
+Conv5 + conv4
+74.50
+74.93
+Conv5 + conv3
+75.97
+75.88
+
+	
+International Journal of Computational Intelligence Systems           (2023) 16:54 
+1 3
+   54  
+Page 10 of 11
+the ideal effect, and there is room for improvement and 
+optimization.
+First of all, when the model recognizes objects in the 
+problem, it cannot accurately recognize and give answers 
+in the image. Many scholars have discussed the causes and 
+solutions to this problem. The underlying cause may be that 
+there are many types of objects in the image. For example, 
+objects occlude each other or objects are too small. At pre-
+sent, the possible solutions can refer to the fine-grained clas-
+sification problem to perform separate target detection and 
+classification of image features. However, the existing prob-
+lem is the same as the dilemma faced by the fine-grained 
+classification problem. Moreover, it will take up a lot of 
+computing resources and storage space. Therefore, the solu-
+tion to this problem requires further research on optimizing 
+feature compression and dimensionality reduction.
+Acknowledgements  A thanks to all the authors for their great contribu-
+tions to this paper.
+Author Contributions  Conceptualization, WZ and ML; methodology, 
+ZY; software, YD and SL; formal analysis, LY and ML; data curation, 
+YD; writing—original draft preparation, SL and LY; writing review 
+and editing, WZ, LY and SL; visualization, YD; supervision, ZY and 
+ML; funding acquisition, WZ. All authors have read and agreed to the 
+published version of the manuscript.
+Funding  This work was jointly supported by the Sichuan Science and 
+Technology Program (2021YFQ0003).
+Data Availability  Not applicable.
+Declarations 
+Conflict of Interest  The authors have no competing interests to declare 
+that are relevant to the content of this article.
+Open Access  This article is licensed under a Creative Commons Attri-
+bution 4.0 International License, which permits use, sharing, adapta-
+tion, distribution and reproduction in any medium or format, as long 
+as you give appropriate credit to the original author(s) and the source, 
+provide a link to the Creative Commons licence, and indicate if changes 
+were made. The images or other third party material in this article are 
+included in the article's Creative Commons licence, unless indicated 
+otherwise in a credit line to the material. If material is not included in 
+the article's Creative Commons licence and your intended use is not 
+permitted by statutory regulation or exceeds the permitted use, you will 
+need to obtain permission directly from the copyright holder. To view a 
+copy of this licence, visit http://​creat​iveco​mmons.​org/​licen​ses/​by/4.​0/.
+References
+	 1.	 Zhang, D., Cao, R., Wu, S.: Information fusion in visual question 
+answering: a survey. Inform. Fusion 52, 268–280 (2019). https://​
+doi.​org/​10.​1016/j.​inffus.​2019.​03.​005
+	 2.	 Kim, J.H., et al., Hadamard Product for Low-rank Bilinear Pool-
+ing. (2016)
+	 3.	 Chen, C., Han, D., Chang, C.C.: CAAN: context-aware attention 
+network for visual question answering. Pattern Recogn. (2022). 
+https://​doi.​org/​10.​1016/j.​patcog.​2022.​108980
+	 4.	 Chen, Y.-S, Jiang, I.H.-R.: Many-layer hotspot detection by layer-
+attentioned visual question answering. In 25th design, automation 
+and test in europe conference and exhibition (DATE). Electr Net-
+work. (2022)
+	 5.	 Guo, Z., Han, D.: Multi-modal co-attention relation networks for 
+visual question answering. Visual Computer (2022). https://​doi.​
+org/​10.​1007/​s00371-​022-​02695-9
+	 6.	 Wu, Q., et al. What value do explicit high level concepts have in 
+vision to language problems? in Proceedings of the IEEE confer-
+ence on computer vision and pattern recognition. (2016)
+	 7.	 Yao, T., et al. Boosting image captioning with attributes. In Pro-
+ceedings of the IEEE international conference on computer vision. 
+(2017)
+	 8.	 Donahue, J., et al., Long-term recurrent convolutional networks 
+for visual recognition and description. in Proceedings of the IEEE 
+conference on computer vision and pattern recognition. (2015)
+	 9.	 Vinyals, O., et al. Show and tell: A neural image caption generator. 
+in Proceedings of the IEEE conference on computer vision and 
+pattern recognition. (2015)
+	10.	 Malinowski, M., M. Rohrbach, M. Fritz.: Ask your neurons: A 
+neural-based approach to answering questions about images. In 
+Proceedings of the IEEE international conference on computer 
+vision. (2015)
+	11.	 Gao, H., et al.: Are you talking to a machine? Dataset and methods 
+for multilingual image question. Adv. Neural. Inf. Process. Syst. 
+28, 2296–2304 (2015)
+	12.	 Ren, M., Kiros, R., Zemel, R.: Exploring models and data for 
+image question answering. Adv. Neural. Inf. Process. Syst. 28, 
+2953–2961 (2015)
+	13.	 Andreas, J., et al. Neural module networks. in Proceedings of 
+the IEEE conference on computer vision and pattern recognition. 
+(2016)
+	14.	 Kumar, A., et al., Ask me anything: Dynamic memory networks 
+for natural language processing. In International conference on 
+machine learning. PMLR. (2016)
+	15.	 Xiao, F.Y., Pedrycz, W.: Negation of the quantum mass function 
+for multisource quantum information fusion with its application 
+to pattern classification. IEEE Trans. Pattern Anal. Mach. Intell. 
+45(2), 2054–2070 (2023). https://​doi.​org/​10.​1109/​tpami.​2022.​
+31670​45
+	16.	 Auer, S., et al. DBpedia: A nucleus for a web of open data. in 
+6th International Semantic Web Conference/2nd Asian Semantic 
+Web Conference (ISWC 2007/ASWC 2007). Busan, South Korea: 
+Springer-Verlag Berlin. (2007)
+	17.	 Bollacker, K., et al. Freebase: a collaboratively created graph data-
+base for structuring human knowledge. In Proceedings of the 2008 
+ACM SIGMOD international conference on Management of data. 
+(2008)
+	18.	 Hoffart, J., et al.: YAGO2: a spatially and temporally enhanced 
+knowledge base from Wikipedia. Artif. Intell. 194, 28–61 (2013)
+	19.	 Etzioni, O., et al. Open information extraction: The second genera-
+tion. In Twenty-Second International Joint Conference on Artifi-
+cial Intelligence. (2011)
+	20.	 Zhang, M., et al.: Multimodal feature fusion and exploitation with 
+dual learning and reinforcement learning for recipe generation. 
+Appl. Soft Comput. (2022). https://​doi.​org/​10.​1016/j.​asoc.​2022.​
+109281
+	21.	 Huang, W.-C., et al.: Attentive gated graph sequence neural net-
+work-based time-series information fusion for financial trading. 
+Inform Fusion 91, 261–276 (2023). https://​doi.​org/​10.​1016/j.​inf-
+fus.​2022.​10.​006
+
+International Journal of Computational Intelligence Systems           (2023) 16:54 	
+1 3
+Page 11 of 11 
+   54 
+	22.	 Xiao, F.: GEJS: a generalized evidential divergence measure for 
+multisource information fusion. IEEE Trans. Syst. Man Cybern: 
+Syst. (2022). https://​doi.​org/​10.​1109/​TSMC.​2022.​32114​98
+	23.	 Girshick, R., et al., Rich feature hierarchies for accurate object 
+detection and semantic segmentation. In Proceedings of the IEEE 
+conference on computer vision and pattern recognition. (2014)
+	24.	 Xiao, F., Wen, J., Pedrycz, W.: Generalized divergence-based 
+decision making method with an application to pattern classifica-
+tion. IEEE Trans Knowl Data Eng (2022). https://​doi.​org/​10.​1109/​
+TKDE.​2022.​31778​96
+	25.	 Xiao, F., Cao, Z., Lin, C.T.: A complex weighted discounting 
+multisource information fusion with its application in pattern clas-
+sification. IEEE Trans Knowl Data Eng (2022). https://​doi.​org/​10.​
+1109/​TKDE.​2022.​32068​71
+	26.	 Adelson, E.H., et al.: Pyramid methods in image processing. RCA 
+Eng 29(6), 33–41 (1984)
+	27.	 Ni, X., et al.: Semantic representation for visual reasoning. 
+MATEC Web Conf. 277, 02006 (2019)
+	28.	 Carrasco, R.S.M., Sicilia, M.-A.: Sicilia, and security unsuper-
+vised intrusion detection through skip-gram models of network 
+behavior. Comput. Secur. 78, 187–197 (2018)
+	29.	 Chung, J., et al. Gated feedback recurrent neural networks. In 
+international conference on machine learning. PMLR. (2015)
+	30.	 Lu, J., et al.: Hierarchical question-image co-attention for visual 
+question answering. Adv. Neural. Inf. Process. Syst. 29, 289–297 
+(2016)
+	31.	 Nie, X., et al.: Deep multiscale fusion hashing for cross-modal 
+retrieval. 31(1), 401–410 (2020)
+	32.	 Miao, Y., et al.: Research on visual question answering based on 
+GAT relational reasoning. Neural Process. Lett. 54(2), 1435–1448 
+(2022). https://​doi.​org/​10.​1007/​s11063-​021-​10689-2
+	33.	 Peng, L., et al.: Answer again: improving VQA with cascaded-
+answering model. IEEE Trans. Knowl. Data Eng. 34(4), 1644–
+1655 (2022). https://​doi.​org/​10.​1109/​tkde.​2020.​29988​05
+	34.	 Xia, Q., et al.: Multi-modal alignment of visual question answer-
+ing based on multi-hop attention mechanism. Electronics (2022). 
+https://​doi.​org/​10.​3390/​elect​ronic​s1111​1778
+	35.	 Wu, Q., et al.: Visual question answering: a survey of methods 
+and datasets. Comput. Vis. Image Underst. 163, 21–40 (2017)
+	36.	 Miao, Y., et  al.: Research on visual question answering 
+based on dynamic memory network model of multiple atten-
+tion mechanisms. Sci Rep (2022). https://​doi.​org/​10.​1038/​
+s41598-​022-​21149-9
+	37.	 Yan, F., et al.: SPCA-Net: a based on spatial position relation-
+ship co-attention network for visual question answering. Vis 
+Comput 38(9–10), 3097–3108 (2022). https://​doi.​org/​10.​1007/​
+s00371-​022-​02524-z
+	38.	 Lin, T-Y., RoyChowdhury A., Maji S.: Bilinear cnn models for 
+fine-grained visual recognition. In Proceedings of the IEEE inter-
+national conference on computer vision. (2015)
+	39.	 Fukui, A., et al. Multimodal compact bilinear pooling for visual 
+question answering and visual grounding. In conference on empir-
+ical methods in natural language processing. ACL. (2016)
+	40.	 Yu, Z., et al. Multi-modal factorized bilinear pooling with co-
+attention learning for visual question answering. In Proceedings 
+of the IEEE international conference on computer vision. (2017)
+	41.	 Kim, J.-H., et al. Multimodal residual learning for visual qa. In 
+Advances in neural information processing systems. (2016)
+	42.	 Ben-Younes, H., et al. Mutan: Multimodal tucker fusion for visual 
+question answering. In Proceedings of the IEEE international con-
+ference on computer vision. (2017)
+	43.	 He, K., R. Girshick, P. Dollár. Rethinking imagenet pre-training. 
+in Proceedings of the IEEE/CVF International Conference on 
+Computer Vision. (2019)
+	44.	 Ben-younes, H., et al. MUTAN: Multimodal Tucker Fusion for 
+Visual Question Answering. In 16th IEEE International Confer-
+ence on Computer Vision (ICCV). Venice, ITALY: Ieee. (2017)
+Publisher's Note  Springer Nature remains neutral with regard to 
+jurisdictional claims in published maps and institutional affiliations.

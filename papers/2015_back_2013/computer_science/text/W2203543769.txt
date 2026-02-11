@@ -1,0 +1,1181 @@
+Large-Scale Supervised Multimodal Hashing
+with Semantic Correlation Maximization
+Dongqing Zhang† and Wu-Jun Li‡ ∗
+† Shanghai Key Laboratory of Scalable Computing and Systems
+Department of Computer Science and Engineering, Shanghai Jiao Tong University, China
+‡ National Key Laboratory for Novel Software Technology
+Department of Computer Science and Technology, Nanjing University, China
+zdq@sjtu.edu.cn, liwujun@nju.edu.cn
+Abstract
+Due to its low storage cost and fast query speed, hashing
+has been widely adopted for similarity search in mul-
+timedia data. In particular, more and more attentions
+have been payed to multimodal hashing for search in
+multimedia data with multiple modalities, such as im-
+ages with tags. Typically, supervised information of se-
+mantic labels is also available for the data points in
+many real applications. Hence, many supervised mul-
+timodal hashing (SMH) methods have been proposed
+to utilize such semantic labels to further improve the
+search accuracy. However, the training time complex-
+ity of most existing SMH methods is too high, which
+makes them unscalable to large-scale datasets. In this
+paper, a novel SMH method, called semantic correlation
+maximization (SCM), is proposed to seamlessly inte-
+grate semantic labels into the hashing learning proce-
+dure for large-scale data modeling. Experimental results
+on two real-world datasets show that SCM can signiﬁ-
+cantly outperform the state-of-the-art SMH methods, in
+terms of both accuracy and scalability.
+Introduction
+Recent years have witnessed the great success of hashing
+techniques for scalable similarity search in many real ap-
+plications (Torralba, Fergus, and Weiss 2008; Salakhutdi-
+nov and Hinton 2009; Kong and Li 2012a; He et al. 2012;
+Tseng et al. 2012; Dean et al. 2013; Wang et al. 2013;
+Xu et al. 2013; Zhang et al. 2014). The basic idea of hash-
+ing is to transform the data points from the original feature
+space into a Hamming space with binary hash codes, where
+the storage cost can be substantially reduced and the query
+speed can be dramatically improved. Although a lot of hash-
+ing methods have been proposed, most of them focus on
+data in a single-view space. That is to say, most existing
+hashing methods are unimodal (Weiss, Torralba, and Fer-
+gus 2008; Andoni and Indyk 2008; Kulis and Darrell 2009;
+Lin, Ross, and Yagnik 2010; Wang, Kumar, and Chang
+2010; Norouzi and Fleet 2011; Kong, Li, and Guo 2012;
+Heo et al. 2012; Liu et al. 2012a; Kong and Li 2012b;
+Norouzi, Fleet, and Salakhutdinov 2012; Strecha et al. 2012;
+Ge et al. 2013; Neyshabur et al. 2013).
+∗Wu-Jun Li is the corresponding author.
+Copyright c⃝2014, Association for the Advancement of Artiﬁcial
+Intelligence (www.aaai.org). All rights reserved.
+As the development of information technology, more and
+more multimodal data have been available in many ap-
+plications, especially in multimedia domains (Barnard and
+Forsyth 2001; Chua et al. 2009; Song et al. 2011; Chen et al.
+2012; Wu et al. 2014). For example, a Flickr image may have
+tags associated with it, and a web image can have surround-
+ing texts relevant to it. How to leverage such multimodal
+data to conduct cross-view similarity search (Rasiwasia et
+al. 2010; Hwang and Grauman 2012; Sharma et al. 2012;
+Gong et al. 2014) has become a challenging but interest-
+ing research problem. Hence, there also exist several mul-
+timodal hashing methods for fast similarity search in multi-
+modal data (Bronstein et al. 2010; Kumar and Udupa 2011;
+Song et al. 2011; Gong and Lazebnik 2011; Zhang, Wang,
+and Si 2011; Liu et al. 2012b; Zhen and Yeung 2012a;
+2012b; Song et al. 2013; Zhai et al. 2013; Ou et al. 2013;
+Rastegari et al. 2013).
+Existing multimodal hashing methods can be divided
+into two main categories: multi-source hashing (MSH) and
+cross-modal hashing (CMH). MSH is also called multiple
+feature hashing (Song et al. 2011) or composite hashing
+(Zhang, Wang, and Si 2011), which aims at learning bet-
+ter codes by leveraging auxiliary views than unimodal hash-
+ing. MSH assumes that all the views should be provided for
+a query point when performing search, which are typically
+not feasible for many multimedia applications.
+The CMH methods are much more popular because only
+one view is needed for a query point in CMH. For example,
+all the tasks of image-to-image, text-to-image, and image-to-
+text retrieval can be performed with CMH in the Flickr im-
+age datasets. According to whether supervised information
+is used or not, CMH methods can be further divided into two
+subcategories: unsupervised CMH and supervised CMH.
+Unsupervised CMH methods, such as the method in (Gong
+and Lazebnik 2011), mostly rely on canonical correlation
+analysis (CCA) (Hotelling 1936), which maps two views,
+such as visual and textual views, into a common latent space
+where the correlation between the two views is maximized.
+This space is cross-modal, which means that entities in ei-
+ther visual or textual view can be transformed into this space,
+and thus image-to-image, text-to-image, and image-to-text
+retrieval tasks can all be handled in the same manner.
+In many real applications, besides the multimodal (multi-
+view) feature information, supervised information like se-
+Proceedings of the Twenty-Eighth AAAI Conference on Artificial Intelligence
+2177
+
+mantic labels is also available for the data points. Such su-
+pervised information, typically provided by people, is very
+discriminative for hashing function learning. Hence, super-
+vised CMH methods, which can utilize supervised infor-
+mation for hashing, have attracted more and more attention
+from researchers. Representative supervised CMH methods
+include CMSSH (Bronstein et al. 2010), cross view hash-
+ing (CVH) (Kumar and Udupa 2011), multimodal latent
+binary embedding (MLBE) (Zhen and Yeung 2012b), and
+co-regularized hashing (CRH) (Zhen and Yeung 2012a).
+CMSSH (Bronstein et al. 2010) aims at learning two hash
+functions for two modalities using eigen-decomposition and
+boosting. CVH (Kumar and Udupa 2011) extends spectral
+hashing (Weiss, Torralba, and Fergus 2008) to the mul-
+timodal setting. MLBE (Zhen and Yeung 2012b) directly
+learns the binary hash codes with latent variable models.
+CRH (Zhen and Yeung 2012a) is learned by solving the dif-
+ference of convex function programs, while the learning for
+multiple bits is performed by a boosting procedure.
+Although supervised multimodal hashing (SMH) meth-
+ods, mainly including the supervised CMH methods men-
+tioned above, have achieved promising results in many real
+applications, the training time complexity of most exist-
+ing SMH methods is too high. More speciﬁcally, the train-
+ing time complexity of these methods is at least O(NSxy),
+where NSxy is the number of observed similar or dissimilar
+pairs between the two views x and y. Assuming that there
+are n data points with semantic labels in the training set,
+NSxy can be as large as n2. Hence, existing SMH methods
+cannot be scalable to large-scale datasets. To handle large-
+scale datasets, most of them have to sample only a small
+subset of the whole training set or sample only a subset of
+the similar or dissimilar pairs from the training set. Both of
+these two sampling strategies will deteriorate the accuracy
+because the supervised information cannot be fully utilized.
+In this paper, a novel SMH method, called semantic
+correlation maximization (SCM), is proposed to seamlessly
+integrate semantic labels into the hashing learning procedure
+for large-scale data modeling. The main contributions of our
+SCM hashing method are summarized as follows:
+• By avoiding explicitly computing the pairwise similarity
+matrix, our SCM method can utilize all the supervised in-
+formation for training with linear-time complexity, which
+is much more scalable than existing SMH methods.
+• A sequential learning method is proposed to learn the hash
+functions bit by bit. The solution of the hash function
+for each bit has a closed-form solution. Hence, no hyper-
+parameters and stopping conditions are needed for tuning
+in SCM.
+• Experimental results on two real-world datasets show
+that SCM can signiﬁcantly outperform the state-of-the-art
+SMH methods, in terms of both accuracy and scalability.
+Please note that we only focus on the cross-modal hash-
+ing in this paper because cross-modal hashing is much
+more popular than multi-source hashing in real applications.
+Moreover, it is easy to adapt the proposed method for multi-
+source hashing problems.
+Notation and Problem Deﬁnition
+For ease of presentation, here we describe the SMH problem
+with only two modalities, which can be easily extended to
+the cases with more than two modalities.
+Let n denote the number of training entities (data points),
+x and y denote the two modalities (views) for each entity. We
+use {x1, x2, ..., xn|xi ∈Rdx} and {y1, y2, ..., yn|yi ∈Rdy}
+to denote the feature vectors of the two modalities in the
+original space, where dx and dy are the dimensions of fea-
+ture space in each modality. These feature vectors form the
+rows of the data matrix X ∈Rn×dx and Y ∈Rn×dy, re-
+spectively. For example, in the Flickr image search appli-
+cation, xi is the image content information of the entity i,
+and yi is the tag information of the entity i. Without loss of
+generality, we assume that the data points are zero-centered,
+i.e., Pn
+i=1 xi = 0 and Pn
+i=1 yi = 0. Furthermore, we as-
+sume that both modalities are observed (available) for all the
+data points in the training set. But our model can be easily
+extended to the cases with missing modality for some train-
+ing points. Note that for a query point, only one modality is
+needed for search. That is to say, given a query entity q, we
+can perform search when either xq or yq is available. This is
+the key difference between the cross-modal hashing in this
+paper and the multi-source hashing in (Song et al. 2011) and
+(Zhang, Wang, and Si 2011).
+Besides the feature vectors of the two modalities x and
+y, we also have semantic labels for each training entity
+in SMH. These labels are denoted by the label vectors
+{l1, l2, ..., ln|li ∈{0, 1}m}, where m is the total number
+of categories. Here, we assume that each entity belongs to
+at least one of the m categories. li,k = 1 denotes that the
+ith entity belongs to the kth semantic category. Otherwise,
+li,k = 0.
+The goal of SMH is to learn two hashing functions
+for the two modalities: f(x) : Rdx
+→{−1, 1}c and
+g(y) : Rdy →{−1, 1}c, where c is the length of the binary
+hash code. These two hashing functions map the feature vec-
+tors in the corresponding modality into a common hamming
+space which should preserve the semantic similarity of the
+labels. Although many different kinds of functions can be
+used to deﬁne f(x) and g(y), we adopt the commonly used
+hashing function form, which is deﬁned as follows:
+f(x) = sgn(W T
+x x),
+g(y) = sgn(W T
+y y),
+where
+sgn(·)
+denotes
+the
+element-wise
+sign
+func-
+tion,
+Wx
+=
+[w(1)
+x , w(2)
+x , ..., w(c)
+x ]
+∈
+Rdx×c
+and
+Wy = [w(1)
+y , w(2)
+y , ..., w(c)
+y ] ∈Rdy×c
+are
+the
+projection
+matrices.
+Hence, the problem of our SMH is to learn the two
+projection matrices Wx and Wy from the label vectors
+{l1, l2, ..., ln} and the feature matrices X and Y .
+Our Methodology
+In this section, we describe the details of the model and the
+learning algorithm of our SCM hashing method.
+2178
+
+Model Formulation
+To leverage semantic labels for SMH, we construct the pair-
+wise semantic similarity by the cosine similarity between the
+semantic label vectors. More speciﬁcally, the similarity be-
+tween the ith entity and the jth entity is deﬁned as follows:
+˜Sij =
+li · lj
+∥li∥2 ∥lj∥2
+,
+(1)
+where li · lj denotes the inner product between the two label
+vectors li and lj, and ∥li∥2 denotes the two-norm (length) of
+the label vector li.
+We use a n × m matrix ˜L to store the label information,
+with ˜Lik =
+li,k
+∥li∥2 . Here, ˜Lik denotes the element at the ith
+row and the kth column in the matrix ˜L. Then, we can write
+the similarity matrix as ˜S = ˜L˜LT , where the element at the
+ith row and the jth column in ˜S is ˜Sij. We perform element-
+wise linear transformation on ˜S to get our ﬁnal semantic
+similarity matrix S ∈[−1, 1]n×n:
+S = 2 ˜S −E = 2˜L˜LT −1n1T
+n,
+(2)
+where 1n is an all-one column vector with length n, and E
+is an all-one matrix. Note that we use the semantic similarity
+matrix S of size n × n here just for ease of understanding.
+In the following learning algorithm, this matrix will not be
+explicitly computed. This is one of the key contributions of
+our method to avoid the high time complexity.
+Because our focus is on cross-modal similarity search, the
+two hashing functions should preserve the semantic similar-
+ity cross modalities. More speciﬁcally, we try to reconstruct
+the semantic similarity matrix by the learned hash codes.
+Hence, the objective function of our model is to minimize
+the following squared error:
+min
+f,g
+X
+i,j
+1
+c f(xi)T g(yj) −Sij
+2
+.
+(3)
+In matrix form, we can rewrite the problem in (3) as fol-
+lows:
+min
+Wx,Wy
+sgn(XWx)sgn(Y Wy)T −cS
+2
+F
+(4)
+This objective function is simpler than existing methods
+and offers a clearer connection between the learned hash
+codes and the semantic similarity. However, it is NP hard
+to directly compute the best binary functions of the problem
+in (4). In the next subsections, we’ll discuss our algorithms
+which can efﬁciently learn the binary functions.
+Learning for Orthogonal Projection
+One common way to approximately solve the NP hard prob-
+lem in (4) is to apply spectral relaxation (Weiss, Torralba,
+and Fergus 2008) and impose orthogonality constraints in
+order to make the bits between different hashing functions
+balanced and uncorrelated, which can be formulated as fol-
+lows:
+max
+Wx,Wy
+(XWx)(Y Wy)T −cS
+2
+F
+(5)
+s.t. W T
+x XT XWx = nIc
+W T
+y Y T Y Wy = nIc,
+where Ic denotes an identity matrix of size c × c.
+With simple algebra, we can transform the objective func-
+tion in (5) into the following form:
+(XWx)(Y Wy)T −cS
+2
+F
+=tr[((XWx)(Y Wy)T −cS)((XWx)(Y Wy)T −cS)T ]
+=tr[(XWx)(Y Wy)T (Y Wy)(XWx)T ]
+−2c · tr[(XWx)T S(Y Wy)] + tr(c2ST S)
+= −2c · tr(W T
+x XT SY Wy) + cn2 + tr(c2ST S)
+= −2c · tr(W T
+x XT SY Wy) + const,
+where tr() denotes the trace of a matrix, and const is a con-
+stant independent of the variables Wx and Wy.
+Then, we can reformulate the problem in (5) as the follow-
+ing equivalent quadratically constrained quadratic program:
+max
+Wx,Wytr(W T
+x XT SY Wy)
+(6)
+s.t. W T
+x XT XWx = nIc
+W T
+y Y T Y Wy = nIc.
+In (6), the term XT SY actually measures the correlation
+between the two modalities with respect to the semantic la-
+bels. This correlation is called semantic correlation in this
+paper because the semantic labels are seamlessly integrated
+into the correlation computation. From (6), we can ﬁnd that
+the goal of our method is to maximize the semantic corre-
+lation. Hence, we name our method as semantic correlation
+maximization (SCM).
+It is very interesting to ﬁnd that our SCM method will
+degenerate to the CCA formulation when S = In.
+We can prove that the problem in (6) is equivalent to a
+generalized eigenvalue problem. Let Cxy = XT SY , Cxx =
+XT X, and Cyy = Y T Y . Then the optimal solution of Wx is
+the eigenvectors corresponding to the c largest eigenvalues
+of CxyC−1
+yy CT
+xyWx = Λ2CxxWx, and the optimal solution
+of Wy can be obtained by Wy = C−1
+yy CT
+xyWxΛ−1.
+Sequential Learning for Non-Orthogonal
+Projection
+The above solution obtained by direct eigen-decomposition
+leads to a practical problem. In real world datasets, most of
+the variance is contained in a few top projections. The or-
+thogonality constraints force the solution to pick directions
+with low variance progressively. Since the variances of dif-
+ferent projected dimensions are different and larger-variance
+projected dimensions carry more information, using each
+eigenvector to generate one bit in hash code is not reason-
+able (Kong and Li 2012b). To tackle this issue, (Gong and
+Lazebnik 2011) and (Kong and Li 2012b) proposed orthog-
+onal rotation learning methods to reduce the quantization er-
+ror while preserving the orthogonality constraints. But those
+methods focus on unsupervised unimodal learning which
+doesn’t ﬁt for our settings. It has been veriﬁed that the pro-
+jection vectors that are not necessarily orthogonal to each
+other might achieve better performance than orthogonal pro-
+jection vectors in practice (Wang, Kumar, and Chang 2012).
+2179
+
+Motivated by this, we propose a sequential strategy to learn
+the hashing function bit by bit without imposing the orthog-
+onality constraints.
+Note that we aim to reconstruct the similarity matrix by
+the learned hash codes. Assuming that the projection vectors
+w(1)
+x , ..., w(t−1)
+x
+and w(1)
+y , ..., w(t−1)
+y
+have been learned, we
+then need to learn the next projection vectors w(t)
+x
+and w(t)
+y .
+Let us deﬁne a residue matrix Rt as follows:
+Rt = cS −
+t−1
+X
+k=1
+sgn(Xw(k)
+x )sgn(Y w(k)
+y )T .
+(7)
+Based on our original objective function in (4), to learn
+the best projection vectors w(t)
+x
+and w(t)
+y
+after the previous
+projection vectors w(1)
+x , ..., w(t−1)
+x
+and w(1)
+y , ..., w(t−1)
+y
+have
+been learned, our objective function can be written as fol-
+lows:
+min
+w(t)
+x ,w(t)
+y
+sgn(Xw(t)
+x )sgn(Y w(t)
+y )T −Rt
+
+2
+F .
+(8)
+Similar to the problem in (6), we can apply the spectral re-
+laxation trick to the objective function in (8) and obtain the
+one bit projection vectors by solving a generalized eigen-
+value problem which can be got by substituting w(t)
+x , w(t)
+y ,
+and Rt for Wx, Wy, and S in (6). Here, the semantic corre-
+lation is deﬁned as follows:
+C(t)
+xy = XT RtY
+= cXT SY −
+t−1
+X
+k=1
+XT sgn(Xw(k)
+x )sgn(Y w(k)
+y )T Y
+= C(t−1)
+xy
+−XT sgn(Xw(t−1)
+x
+)sgn(Y w(t−1)
+y
+)T Y,
+which can also be efﬁciently calculated in an incremental
+mode with time complexity linear to n.
+The overall sequential learning algorithm of our SCM
+hashing method is brieﬂy summarized in Algorithm 1, where
+C(0)
+xy = XT SY = 2(XT ˜L)(Y T ˜L)T −(XT 1n)(Y T 1n)T ,
+and γ is a very small positive number 10−6 to overcome nu-
+merical problems.
+Please note that although all the supervised information
+in the n × n matrices {Rt|t = 0, . . . , c} can be fully used in
+our algorithm, we elegantly avoid explicitly computing the
+pairwise similarity matrices. This has dramatically reduced
+the training time complexity from O(n2) to O(n). Further-
+more, it is easy to ﬁnd the nice property of SCM that the
+solution of the hash function for each bit has a closed-form
+solution and no hyper-parameters or stopping conditions are
+needed for tuning during learning.
+Complexity Analysis
+During the training procedure for sequential learning, the
+computational cost for initializing the Cxy, Cxx and Cyy is
+O(dxmn + dymn + dxdym + dx
+2n + dy
+2n) in total. To
+learn each bit, solving the generalized eigenvalue problem
+takes O(dx
+3 + dy
+3 + dxdy
+2 + dx
+2dy) time, which is inde-
+pendent of the size of training set n. The time for updating
+Algorithm 1 Sequential Learning Algorithm for SCM.
+Input:
+X, Y - feature vectors of the multimodal data
+˜L - normalized semantic lables
+c - code length
+Output:
+Wx = [w(1)
+x , w(2)
+x , ..., w(c)
+x ]
+Wy = [w(1)
+y , w(2)
+y , ..., w(c)
+y ]
+Procedure:
+C(0)
+xy ←2(XT ˜L)(Y T ˜L)T −(XT 1n)(Y T 1n)T ;
+C(1)
+xy ←c × C(0)
+xy ;
+Cxx ←XT X + γIdx;
+Cyy ←Y T Y + γIdy;
+for t = 1 →c do
+Solving the following generalized eigenvalue problem
+C(t)
+xy C−1
+yy [C(t)
+xy ]T wx = λ2Cxxwx,
+we can obtain the optimal solution w(t)
+x
+corresponding
+to the largest eigenvalue λmax;
+w(t)
+y
+←
+C−1
+yy CT
+xyw(t)
+x
+λmax
+;
+h(t)
+x
+←sgn(Xw(t)
+x );
+h(t)
+y
+←sgn(Y w(t)
+y );
+U = (XT sgn(Xw(t)
+x ))(Y T sgn(Y w(t)
+y ))T ;
+C(t+1)
+xy
+←C(t)
+xy −U;
+end for
+Cxy is O(dxn + dyn + dxdy). Hence, the total time com-
+plexity for sequential learning is O(dxdym+c(dx
+3 +dy
+3 +
+dxdy
+2 +dx
+2dy)+(dxm+dym+dx
+2 +dy
+2 +cdx +cdy)n).
+For orthogonal projection learning, the computation is
+simpler. All c projections can be learned in one pass by solv-
+ing only one generalized eigenvalue problem. Then the time
+complexity is O(dxdym + dx
+3 + dy
+3 + dxdy
+2 + dx
+2dy +
+(dxm + dym + dx
+2 + dy
+2)n). Typically, dx, dy and m will
+be much less than n.
+Hence, the training time complexity of both the orthog-
+onal projection and the sequential (non-orthogonal projec-
+tion) learning methods is linear to the size of the training set.
+Moreover, the computational bottleneck in our algorithm is
+from matrix multiplication, which can be easily parallelized.
+During the query procedure, the computational cost of en-
+coding a query point with our learned hashing function is
+O(cdx) or O(cdy). Hence, the query time complexity of our
+SCM method is also very low.
+The training time complexity of other existing methods,
+such as CVH (Kumar and Udupa 2011), CRH (Zhen and
+Yeung 2012a) and MLBE (Zhen and Yeung 2012b), is at
+least O(n2) because they have to compute all the elements in
+the n × n similarity matrix if all the supervised information
+need to be used. Hence, our SCM is much more scalable
+than existing SMH methods, which will be veriﬁed by the
+following experimental results.
+2180
+
+Experiment
+In this section, experimental results on two real-world mul-
+timodal multimedia datasets are used to verify the effec-
+tiveness of our SCM hashing method. All our experiments
+are conducted on a workstation with Intel(R) Xeon(R) CPU
+X7560@2.27GHz and 64 GB RAM.
+Datasets
+Two widely used datasets are adopted for evaluation. One is
+the NUS-WIDE dataset (Chua et al. 2009), and the other is
+the Wiki dataset (Rasiwasia et al. 2010).
+NUS-WIDE (Chua et al. 2009) is a public image dataset
+containing 269,648 images crawled from Flickr, together
+with the associated raw tags of these images. Furthermore,
+the semantic labels of 91 concepts (categories) for these im-
+ages are also available in the dataset. We select 186,577
+image-tag pairs that belong to the 10 largest concepts. The
+images are represented by 500-dimensional bag-of-visual
+words (BOVW) and the tags are represented by 1000-
+dimensional tag occurrence feature vectors.
+The Wiki dataset (Rasiwasia et al. 2010) is crawled from
+the Wikipedia’s featured articles. It consists of 2,866 doc-
+uments which are image-text pairs and annotated with se-
+mantic labels of 10 categories. Each image is represented
+by a 128-dimensional bag-of-visual SIFT feature vector and
+each text is represented by a 10-dimensional feature vector
+generated by latent Dirichlet allocation (Blei, Ng, and Jor-
+dan 2001).
+Baselines and Evaluation Scheme
+The most typical task for SMH is cross-modal retrieval. In
+our experiment, we evaluate our method on two cross-modal
+retrieval tasks: querying image database by text keywords,
+and querying text database by image examples. We com-
+pare our SCM method with several state-of-the-art multi-
+modal hashing methods, including CCA (Gong and Lazeb-
+nik 2011), CVH (Kumar and Udupa 2011), CRH (Zhen
+and Yeung 2012a), and MLBE (Zhen and Yeung 2012b).
+1 Among them, CCA is an unsupervised method and all
+the other methods are supervised. To integrate the seman-
+tic labels into CCA, we also evaluate a 3-view CCA method
+which regards label vectors as the third modality. We denote
+this method as CCA-3V. The orthogonal projection learning
+method and the sequential learning method of SCM are ab-
+breviated as SCM-Orth and SCM-Seq, respectively.
+As in most existing SMH methods, the accuracy is eval-
+uated by Mean Average Precision (MAP) (Zhen and Yeung
+2012a). For a query q, the average precision (AP) is deﬁned
+as AP(q) =
+1
+Lq
+Pn
+r=1 Pq(r)δq(r), where Lq is the num-
+ber of ground-truth neighbors of query q in database (train-
+ing set), n is the number of entities in the database, Pq(r)
+denotes the precision of the top r retrieved entities, and
+δq(r) = 1 if the rth retrieved entity is a ground-truth
+neighbor and δq(r) = 0 otherwise. Ground-truth neigh-
+bors are deﬁned as those pairs of entities (image or text)
+1Since the original implementation of CVH is not publicly
+available, we implement it by ourselves. The source codes of all
+the other methods are kindly provided by the authors.
+which share at least one semantic label. Given a query set
+of size Q, the MAP is deﬁned as the mean of the aver-
+age precision scores for all the queries in the query set:
+MAP = 1
+Q
+PQ
+i=1 AP(qi).
+In some settings of the following experiments, a random
+set of entities should be sampled from the whole database
+as training set. In such cases, ﬁve rounds of experiments are
+performed and the average MAP score is reported.
+Scalability
+To investigate the scalability of different methods, we evalu-
+ate the training time of different methods on NUS-WIDE
+dataset by varying the size of training set from 500 to
+20,000. The code length is ﬁxed to 16 in this experiment.
+The training time is reported in Table 1, where ‘-’ denotes
+an untested value which is obvious to be relatively large and
+unnecessary to be tested. From Table 1, it is easy to ﬁnd
+that the training time complexity of CVH, CRH and MLBE
+is much higher than that of our SCM-Seq and SCM-Orth
+methods when the size of the training set is relatively large,
+e.g., larger than 10,000. Because the motivation of hash-
+ing is to solve large-scale similarity search problems, the
+size of training set in most real hashing applications will
+be larger than tens of thousand. Hence, it is obvious that
+CVH, CRH and MLBE are not scalable, but both our SCM-
+Seq and SCM-Orth can be easily scaled up to large-scale
+applications. Note that CCA is an unsupervised method, and
+CCA-3V is a naive supervised method which cannot effec-
+tively utilize the supervised information. We list the results
+of CCA and CCA-3V in the table just for reference.
+Figure 1 reports the MAP results on NUS-WIDE dataset
+by varying the size of training set. We can ﬁnd that in most
+cases, our SCM-Seq method achieves the best accuracy. The
+SCM-Orth method doesn’t achieve desirable result due to
+the quantization loss. In some cases, some traditional super-
+vised methods, such as MLBE, can achieve promising re-
+sults (refer to Figure 1(b)) when the available training set is
+small. However, as the available training set increases, most
+traditional supervised methods cannot fully utilize the avail-
+able information for training due to high time complexity.
+On the contrary, our SCM can fully utilize the available in-
+formation to further improve the accuracy as more and more
+training points are available.
+0
+0.5
+1
+1.5
+2
+x 10
+4
+0.35
+0.4
+0.45
+0.5
+0.55
+Size of Training Set
+MAP
+Image Query vs. Text Database
+ 
+ 
+SCM−Seq
+SCM−Orth
+CCA
+CCA−3V
+CVH
+CRH
+MLBE
+(a)
+0
+0.5
+1
+1.5
+2
+x 10
+4
+0.36
+0.38
+0.4
+0.42
+0.44
+0.46
+0.48
+0.5
+Size of Training Set
+MAP
+Text Query vs. Image Database
+ 
+ 
+SCM−Seq
+SCM−Orth
+CCA
+CCA−3V
+CVH
+CRH
+MLBE
+(b)
+Figure 1: MAP on NUS-WIDE dataset by varying the size
+of training set.
+2181
+
+Table 1: Training time (in seconds) on NUS-WIDE dataset by varying the size of training set.
+Method\Size of Training Set
+500
+1000
+1500
+2000
+2500
+3000
+5000
+10000
+20000
+SCM-Seq
+276
+249
+303
+222
+236
+260
+248
+228
+230
+SCM-Orth
+36
+80
+85
+77
+83
+76
+110
+87
+102
+CCA
+25
+20
+23
+22
+25
+22
+28
+38
+44
+CCA-3V
+69
+57
+68
+69
+62
+55
+67
+70
+86
+CVH
+62
+116
+123
+149
+155
+170
+237
+774
+1630
+CRH
+68
+253
+312
+515
+760
+1076
+-
+-
+-
+MLBE
+67071
+126431
+-
+-
+-
+-
+-
+-
+-
+Accuracy
+Accuracy
+on
+NUS-WIDE
+Dataset
+The
+whole
+NUS-WIDE dataset contains 186,577 points. We use
+99% of the data as the training set (database) and the re-
+maining 1% to form the query set. Since the whole training
+set is too large, some baseline methods cannot be trained
+using the whole database. We conduct two experiments
+for evaluation: one is with a small-scale training set of
+2,000 entities sampled from the database, and the other is
+with large-scale training set containing the whole database.
+Table 2 and Table 3 report the MAP results of these two
+experiments, respectively. We can ﬁnd that our SCM-Seq
+method can outperform other baselines in all the cases.
+Table 2: MAP results on small-scale training set of
+NUS-WIDE. The best performance is shown in boldface.
+Task
+Method
+Code Length
+c = 16
+c = 24
+c = 32
+SCM-Seq
+0.4385
+0.4397
+0.4390
+SCM-Orth
+0.3804
+0.3746
+0.3662
+Image Query
+CCA
+0.3625
+0.3586
+0.3565
+v.s.
+CCA-3V
+0.3826
+0.3741
+0.3692
+Text Database
+CVH
+0.3608
+0.3575
+0.3562
+CRH
+0.3957
+0.3965
+0.3970
+MLBE
+0.3697
+0.3620
+0.3540
+SCM-Seq
+0.4273
+0.4265
+0.4259
+SCM-Orth
+0.3757
+0.3625
+0.3581
+Text Query
+CCA
+0.3619
+0.3580
+0.3560
+v.s.
+CCA-3V
+0.3801
+0.3721
+0.3676
+Image Database
+CVH
+0.3640
+0.3596
+0.3581
+CRH
+0.3926
+0.3910
+0.3904
+MLBE
+0.3877
+0.3636
+0.3551
+Table 3: MAP results on large-scale training set of
+NUS-WIDE. The best performance is shown in boldface.
+Task
+Method
+Code Length
+c = 16
+c = 24
+c = 32
+Image Query
+SCM-Seq
+0.5451
+0.5501
+0.5412
+v.s.
+SCM-Orth
+0.4146
+0.3886
+0.3890
+Text Database
+CCA
+0.4078
+0.3964
+0.3886
+CCA-3V
+0.4132
+0.3980
+0.3895
+Text Query
+SCM-Seq
+0.5147
+0.5153
+0.5105
+v.s.
+SCM-Orth
+0.4043
+0.3788
+0.3676
+Image Database
+CCA
+0.4038
+0.3934
+0.3861
+CCA-3V
+0.4088
+0.3954
+0.3877
+Accuracy on Wiki Dataset
+For the Wiki dataset, we use
+80% of the data as the training set and the remaining 20% to
+form the query set.
+The MAP results are reported in Table 4 with various code
+lengths. Once again, the experimental results show that our
+SCM-Seq method can achieve much better accuracy than
+baseline methods.
+Table 4: MAP results on Wiki dataset. The best performance
+is shown in boldface.
+Task
+Method
+Code Length
+c = 16
+c = 24
+c = 32
+SCM-Seq
+0.2393
+0.2379
+0.2419
+SCM-Orth
+0.1549
+0.1545
+0.1550
+Image Query
+CCA
+0.1805
+0.1656
+0.1618
+v.s.
+CCA-3V
+0.1713
+0.1651
+0.1653
+Text Database
+CVH
+0.1499
+0.1408
+0.1372
+CRH
+0.1586
+0.1618
+0.1578
+MLBE
+0.2015
+0.2238
+0.2342
+SCM-Seq
+0.2325
+0.2454
+0.2452
+SCM-Orth
+0.1470
+0.1370
+0.1284
+Text Query
+CCA
+0.1566
+0.1398
+0.1317
+v.s.
+CCA-3V
+0.1544
+0.1426
+0.1397
+Image Database
+CVH
+0.1315
+0.1171
+0.1080
+CRH
+0.1293
+0.1276
+0.1225
+MLBE
+0.2000
+0.2384
+0.2186
+Conclusion
+Most existing supervised multimodal hashing methods are
+not scalable. In this paper, by avoiding explicitly computing
+the semantic similarity matrix, we have proposed a very ef-
+fective supervised multimodal hashing method, called SCM,
+with high scalability. Furthermore, our SCM method has a
+nice property that no hyper-parameters or stopping condi-
+tions are needed for tuning during learning. Experiments on
+real datasets have demonstrated that our method with se-
+quential learning can signiﬁcantly outperform the state-of-
+the-art methods in terms of both accuracy and scalability.
+Acknowledgements
+This work is supported by the NSFC (No. 61100125),
+the 863 Program of China (No. 2012AA011003), and the
+Program for Changjiang Scholars and Innovative Research
+Team in University of China (IRT1158, PCSIRT).
+2182
+
+References
+Andoni, A., and Indyk, P. 2008. Near-optimal hashing algorithms
+for approximate nearest neighbor in high dimensions. Commun.
+ACM 51(1):117–122.
+Barnard, K., and Forsyth, D. A. 2001. Learning the semantics of
+words and pictures. In ICCV, 408–415.
+Blei, D. M.; Ng, A. Y.; and Jordan, M. I. 2001. Latent dirichlet
+allocation. In NIPS, 601–608.
+Bronstein, M. M.; Bronstein, A. M.; Michel, F.; and Paragios, N.
+2010. Data fusion through cross-modality metric learning using
+similarity-sensitive hashing. In CVPR, 3594–3601.
+Chen, N.; Zhu, J.; Sun, F.; and Xing, E. P. 2012. Large-margin pre-
+dictive latent subspace learning for multiview data analysis. IEEE
+Trans. Pattern Anal. Mach. Intell. 34(12):2365–2378.
+Chua, T.-S.; Tang, J.; Hong, R.; Li, H.; Luo, Z.; and Zheng, Y.
+2009. Nus-wide: a real-world web image database from national
+university of singapore. In CIVR.
+Dean, T. L.; Ruzon, M. A.; Segal, M.; Shlens, J.; Vijaya-
+narasimhan, S.; and Yagnik, J. 2013. Fast, accurate detection of
+100, 000 object classes on a single machine. In CVPR, 1814–1821.
+Ge, T.; He, K.; Ke, Q.; and Sun, J. 2013. Optimized product quan-
+tization for approximate nearest neighbor search. In CVPR, 2946–
+2953.
+Gong, Y., and Lazebnik, S. 2011. Iterative quantization: A pro-
+crustean approach to learning binary codes. In CVPR, 817–824.
+Gong, Y.; Ke, Q.; Isard, M.; and Lazebnik, S. 2014. A multi-
+view embedding space for modeling internet images, tags, and their
+semantics. International Journal of Computer Vision 106(2):210–
+233.
+He, J.; Feng, J.; Liu, X.; Cheng, T.; Lin, T.-H.; Chung, H.; and
+Chang, S.-F. 2012. Mobile product search with bag of hash bits
+and boundary reranking. In CVPR, 3005–3012.
+Heo, J.-P.; Lee, Y.; He, J.; Chang, S.-F.; and Yoon, S.-E. 2012.
+Spherical hashing. In CVPR, 2957–2964.
+Hotelling, H.
+1936.
+Relations between two sets of variates.
+Biometrika 28(3/4):321–377.
+Hwang, S. J., and Grauman, K. 2012. Learning the relative impor-
+tance of objects from tagged images for retrieval and cross-modal
+search. International Journal of Computer Vision 100(2):134–153.
+Kong, W., and Li, W.-J. 2012a. Double-bit quantization for hash-
+ing. In AAAI.
+Kong, W., and Li, W.-J. 2012b. Isotropic hashing. In NIPS, 1655–
+1663.
+Kong, W.; Li, W.-J.; and Guo, M. 2012. Manhattan hashing for
+large-scale image retrieval. In SIGIR, 45–54.
+Kulis, B., and Darrell, T. 2009. Learning to hash with binary re-
+constructive embeddings. In NIPS, 1042–1050.
+Kumar, S., and Udupa, R. 2011. Learning hash functions for cross-
+view similarity search. In IJCAI, 1360–1365.
+Lin, R.-S.; Ross, D. A.; and Yagnik, J. 2010. Spec hashing: Sim-
+ilarity preserving algorithm for entropy-based coding. In CVPR,
+848–854.
+Liu, W.; Wang, J.; Ji, R.; Jiang, Y.-G.; and Chang, S.-F. 2012a.
+Supervised hashing with kernels. In CVPR, 2074–2081.
+Liu, X.; He, J.; Liu, D.; and Lang, B. 2012b. Compact kernel
+hashing with multiple features. In ACM Multimedia, 881–884.
+Neyshabur, B.; Srebro, N.; Salakhutdinov, R.; Makarychev, Y.; and
+Yadollahpour, P. 2013. The power of asymmetry in binary hashing.
+In NIPS, 2823–2831.
+Norouzi, M., and Fleet, D. J.
+2011.
+Minimal loss hashing for
+compact binary codes. In ICML, 353–360.
+Norouzi, M.; Fleet, D. J.; and Salakhutdinov, R. 2012. Hamming
+distance metric learning. In NIPS, 1070–1078.
+Ou, M.; Cui, P.; Wang, F.; Wang, J.; Zhu, W.; and Yang, S. 2013.
+Comparing apples to oranges: a scalable solution with heteroge-
+neous hashing. In KDD, 230–238.
+Rasiwasia, N.; Pereira, J. C.; Coviello, E.; Doyle, G.; Lanckriet, G.
+R. G.; Levy, R.; and Vasconcelos, N. 2010. A new approach to
+cross-modal multimedia retrieval. In ACM Multimedia, 251–260.
+Rastegari, M.; Choi, J.; Fakhraei, S.; III, H. D.; and Davis, L. S.
+2013. Predictable dual-view hashing. In ICML, 1328–1336.
+Salakhutdinov, R., and Hinton, G. E. 2009. Semantic hashing. Int.
+J. Approx. Reasoning 50(7):969–978.
+Sharma, A.; Kumar, A.; III, H. D.; and Jacobs, D. W. 2012. Gener-
+alized multiview analysis: A discriminative latent space. In CVPR,
+2160–2167.
+Song, J.; Yang, Y.; Huang, Z.; Shen, H. T.; and Hong, R. 2011.
+Multiple feature hashing for real-time large scale near-duplicate
+video retrieval. In ACM Multimedia, 423–432.
+Song, J.; Yang, Y.; Yang, Y.; Huang, Z.; and Shen, H. T. 2013.
+Inter-media hashing for large-scale retrieval from heterogeneous
+data sources. In SIGMOD Conference, 785–796.
+Strecha, C.; Bronstein, A. A.; Bronstein, M. M.; and Fua, P. 2012.
+LDAHash: Improved matching with smaller descriptors.
+IEEE
+Trans. Pattern Anal. Mach. Intell. 34(1):66–78.
+Torralba, A.; Fergus, R.; and Weiss, Y. 2008. Small codes and large
+image databases for recognition. In CVPR.
+Tseng, K.-Y.; Lin, Y.-L.; Chen, Y.-H.; and Hsu, W. H.
+2012.
+Sketch-based image retrieval on mobile devices using compact
+hash bits. In ACM Multimedia, 913–916.
+Wang, J.; Wang, J.; Yu, N.; and Li, S. 2013. Order preserving hash-
+ing for approximate nearest neighbor search. In ACM Multimedia,
+133–142.
+Wang, J.; Kumar, S.; and Chang, S.-F. 2010. Sequential projection
+learning for hashing with compact codes. In ICML, 1127–1134.
+Wang, J.; Kumar, S.; and Chang, S.-F.
+2012.
+Semi-supervised
+hashing for large-scale search. IEEE Trans. Pattern Anal. Mach.
+Intell. 34(12):2393–2406.
+Weiss, Y.; Torralba, A.; and Fergus, R. 2008. Spectral hashing. In
+NIPS, 1753–1760.
+Wu, F.; Yu, Z.; Yang, Y.; Tang, S.; Zhang, Y.; and Zhuang, Y. 2014.
+Sparse multi-modal hashing. IEEE Transactions on Multimedia
+16(2):427–439.
+Xu, B.; Bu, J.; Lin, Y.; Chen, C.; He, X.; and Cai, D. 2013. Har-
+monious hashing. In IJCAI.
+Zhai, D.; Chang, H.; Zhen, Y.; Liu, X.; Chen, X.; and Gao, W.
+2013. Parametric local multimodal hashing for cross-view similar-
+ity search. In IJCAI.
+Zhang, P.; Zhang, W.; Li, W.-J.; and Guo, M. 2014. Supervised
+hashing with latent factor models. In SIGIR.
+Zhang, D.; Wang, F.; and Si, L. 2011. Composite hashing with
+multiple information sources. In SIGIR, 225–234.
+Zhen, Y., and Yeung, D.-Y. 2012a. Co-regularized hashing for
+multimodal data. In NIPS, 1385–1393.
+Zhen, Y., and Yeung, D.-Y. 2012b. A probabilistic model for mul-
+timodal hash function learning. In KDD, 940–948.
+2183

@@ -1,0 +1,2420 @@
+FedALA: Adaptive Local Aggregation for Personalized Federated Learning
+Jianqing Zhang1, Yang Hua2, Hao Wang3, Tao Song1, Zhengui Xue1, Ruhui Ma1*, Haibing Guan1
+1Shanghai Jiao Tong University
+2Queen’s University Belfast
+3Louisiana State University
+{tsingz, songt333, zhenguixue, ruhuima, hbguan}@sjtu.edu.cn, Y.Hua@qub.ac.uk, haowang@lsu.edu
+Abstract
+A key challenge in federated learning (FL) is the statis-
+tical heterogeneity that impairs the generalization of the
+global model on each client. To address this, we propose a
+method Federated learning with Adaptive Local Aggregation
+(FedALA) by capturing the desired information in the global
+model for client models in personalized FL. The key compo-
+nent of FedALA is an Adaptive Local Aggregation (ALA)
+module, which can adaptively aggregate the downloaded
+global model and local model towards the local objective on
+each client to initialize the local model before training in each
+iteration. To evaluate the effectiveness of FedALA, we con-
+duct extensive experiments with five benchmark datasets in
+computer vision and natural language processing domains.
+FedALA outperforms eleven state-of-the-art baselines by up
+to 3.27% in test accuracy. Furthermore, we also apply ALA
+module to other federated learning methods and achieve up
+to 24.19% improvement in test accuracy. Code is available at
+https://github.com/TsingZ0/FedALA.
+Introduction
+Federated learning (FL) can leverage distributed user data
+while preserving privacy by iteratively downloading mod-
+els, training models locally on the clients, uploading models,
+and aggregating models on the server. A key challenge in
+FL is statistical heterogeneity, e.g., the not independent and
+identically distributed (Non-IID) and unbalanced data across
+clients. This kind of data makes it hard to obtain a global
+model that generalizes to each client (McMahan et al. 2017;
+Reisizadeh et al. 2020; T Dinh, Tran, and Nguyen 2020).
+Personalized FL (pFL) methods have been proposed to
+tackle statistical heterogeneity in FL. Unlike traditional FL
+that seeks a high-quality global model via distributed train-
+ing across clients, e.g., FedAvg (McMahan et al. 2017), pFL
+methods are proposed to prioritize the training of a local
+model for each client. Recent pFL studies on model aggrega-
+tion on the server can be classified into three categories: (1)
+methods that learn a single global model and fine-tune it, in-
+cluding Per-FedAvg (Fallah, Mokhtari, and Ozdaglar 2020)
+and FedRep (Collins et al. 2021), (2) methods that learn ad-
+ditional personalized models, including pFedMe (T Dinh,
+*Corresponding author.
+Copyright © 2023, Association for the Advancement of Artificial
+Intelligence (www.aaai.org). All rights reserved.
+Tran, and Nguyen 2020) and Ditto (Li et al. 2021a), and (3)
+methods that learn local models with personalized (local)
+aggregation, including FedAMP (Huang et al. 2021), Fed-
+PHP (Li et al. 2021b), FedFomo (Zhang et al. 2020), AP-
+PLE (Luo and Wu 2021) and PartialFed (Sun et al. 2021).
+pFL methods in Category (1) and (2) take all the infor-
+mation in the global model for local initialization, i.e., ini-
+tializing the local model before local training in each iter-
+ation. However, only the desired information that improves
+the quality of the local model is beneficial for the client. The
+global model has poor generalization ability since it has de-
+sired and undesired information for an individual client si-
+multaneously. Thus, pFL methods in Category (3) intend to
+capture the desired information in the global model through
+personalized aggregation.
+However, pFL methods in Category (3) still have short-
+comings. FedAMP/FedPHP performs personalized aggre-
+gation on the server/clients without considering the local
+objective. FedFomo/APPLE downloads other client models
+and locally aggregates them with the approximated/learned
+aggregating weights on each client. All the parameters in one
+client model are assigned with the same weight, i.e., model-
+level weight. Besides, downloading client models among
+clients causes high communication overhead in each iter-
+ation and also has privacy concerns since the data from
+other clients can be recovered through these client mod-
+els (Zhu, Liu, and Han 2019). In addition, FedFomo/AP-
+PLE also requires feeding data forward in the downloaded
+client models to obtain the aggregating weights, which intro-
+duces additional computation overhead. PartialFed locally
+learns aggregation strategies to select the parameters in the
+global model or the local model. Still, the layer-level and
+binary selection cannot precisely capture the desired infor-
+mation in the global model. Furthermore, PartialFed uses
+non-overlapping samples to learn the local model and the
+strategy, so it can hardly learn a strategy that fully satisfies
+the local objective. Due to the significant modification of
+the learning process in FedAvg, the personalized aggrega-
+tion process in these methods cannot be directly applied to
+most existing FL methods.
+To precisely capture the desired information in the down-
+loaded global model for each client without additional
+communication overhead in each iteration, we propose a
+novel pFL method Federated learning with Adaptive Local
+The Thirty-Seventh AAAI Conference on Artificial Intelligence (AAAI-23)
+11237
+
+Local model
+⇥t−1
+Global model
+⇥t−1
+i
+ALA
+ˆ⇥t
+i
+Initialized local model
+Local model
+Train
+Download
+Upload
+⇥t
+i
+Client 
+Figure 1: Local learning process on client i in the t-th itera-
+tion. Specifically, client i downloads the global model from
+the server, locally aggregates it with the old local model by
+ALA module for local initialization, trains the local model,
+and finally uploads the trained local model to the server.
+Aggregation (FedALA) to adaptively aggregates the down-
+loaded global model and local model towards the local ob-
+jective for local initialization. FedALA only downloads one
+global model and uploads one local model on each client
+with the same communication overhead as in FedAvg, which
+also has fewer privacy concerns and is more communication-
+efficient than FedFomo and APPLE. By adaptively learning
+real-value and element-wise aggregation weights towards
+the local objective on the full local dataset, FedALA can
+capture the desired information in the global model at the
+element level, which is more precise than the binary and
+layer-wise weight learning in PartialFed. Since the lower
+layers in a deep neural network (DNN) learn more generic
+information than the higher layers (Yosinski et al. 2014;
+LeCun, Bengio, and Hinton 2015), we can further reduce
+the computation overhead by only applying Adaptive Local
+Aggregation (ALA) module on the higher layers. The whole
+local learning process is shown in Figure 1.
+To evaluate the effectiveness of FedALA, we conduct
+extensive experiments on five benchmark datasets. Re-
+sults show that FedALA outperforms eleven state-of-the-art
+(SOTA) methods. Besides, we apply the ALA module to the
+traditional FL methods and pFL methods to improve their
+performance. To sum up, our contributions are as follows.
+• We propose a novel pFL method FedALA that adaptively
+aggregates the global model and local model towards the
+local objective to capture the desired information from
+the global model in an element-wise manner.
+• We empirically show the effectiveness of FedALA,
+which outperforms eleven SOTA methods by up to
+3.27% in test accuracy without additional communica-
+tion overhead in each iteration.
+• Attributed to the minor modification of FL process, the
+ALA module in FedALA can be directly applied to ex-
+isting FL methods to enhance their performance by up to
+24.19% in test accuracy on Cifar100.
+Related Work
+Traditional Federated Learning
+The widely known traditional FL method FedAvg (McMa-
+han et al. 2017) learns a single global model for all clients
+by aggregating their local models. However, it often suffers
+in statistically heterogeneous settings, e.g., FL with Non-
+IID and unbalanced data (Kairouz et al. 2019; Zhao et al.
+2018). To address this issue, FedProx (Li et al. 2020) im-
+proves the stability of the FL process through a proximal
+term. To counteract the bias introduced by the Non-IID data,
+FAVOR (Wang et al. 2020a) selects a subset of clients based
+on deep Q-learning (Van Hasselt, Guez, and Silver 2016)
+at each iteration. By generating the global model layer-
+wise, FedMA (Wang et al. 2020b) can adapt to statistical
+heterogeneity with the matched averaging approach. How-
+ever, with statistical heterogeneity in FL, it is hard to ob-
+tain a single global model which generalizes well to each
+client (Kairouz et al. 2019; Huang et al. 2021; T Dinh, Tran,
+and Nguyen 2020).
+Personalized Federated Learning
+Recently, personalization has attracted much attention for
+tackling statistical heterogeneity in FL (Kairouz et al. 2019).
+We consider the following three categories of pFL methods
+that focus on aggregating models on the server:
+(1) Methods that learn a single global model and fine-
+tune it. Per-FedAvg (Fallah, Mokhtari, and Ozdaglar 2020)
+considers the global model as an initial shared model based
+on MAML (Finn, Abbeel, and Levine 2017). By perform-
+ing a few additional training steps locally, all the clients
+can easily fine-tune the reasonable initial shared model. Fe-
+dRep (Collins et al. 2021) splits the backbone into a global
+model (representation) and a client-specific head and fine-
+tunes the head locally to achieve personalization.
+(2) Methods that learn additional personalized models.
+pFedMe(T Dinh, Tran, and Nguyen 2020) learns an addi-
+tional personalized model for each client with Moreau en-
+velopes. In Ditto (Li et al. 2021a), each client learns its ad-
+ditional personalized model with a proximal term to fetch
+information from the downloaded global model.
+(3) Methods that learn local models with personal-
+ized (local) aggregation. To further capture the person-
+alization, recent methods try to generate client-specific
+models through personalized aggregation. For example,
+FedAMP (Huang et al. 2021) generates an aggregated model
+for an individual client by the attention-inducing function
+and personalized aggregation. To utilize the historical lo-
+cal model, FedPHP (Li et al. 2021b) locally aggregates the
+global model and local model with the rule-based moving
+average and a pre-defined weight (hyperparameter). Fed-
+Fomo (Zhang et al. 2020) focuses on aggregating other client
+models locally for local initialization in each iteration and
+approximates the client-specific weights for aggregation us-
+ing the local models from other clients. Similar to FedFomo,
+APPLE (Luo and Wu 2021) also aggregates client models
+locally but learns the weights instead of approximation and
+performs the local aggregation in each training batch rather
+than just local initialization. FedAMP and APPLE are pro-
+posed for the cross-silo FL setting, which require all clients
+to join each iteration. By learning the binary and layer-level
+aggregation strategy for each client, PartialFed (Sun et al.
+2021) selects the parameters in the global model or the local
+model to construct the new local model in each batch.
+11238
+
+Our FedALA belongs to Category (3) but is more pre-
+cise and requires less communication cost than FedFomo
+and APPLE. The fine-grained ALA in FedALA can element-
+wisely aggregate the global model and local model to adapt
+to the local objective on each client for local initialization.
+As FedALA only modifies the local initialization in FL, it
+can be applied to existing FL methods to improve their per-
+formance without modifying other learning processes.
+Method
+Problem Statement
+Suppose we have N clients with their private training data
+D1, . . . , DN, respectively. These datasets are heterogeneous
+(Non-IID and unbalanced). Specifically, D1, . . . , DN are
+sampled from N distinct distributions and have different
+sizes. With the help of a central server, our goal is to col-
+laboratively learn individual local models ˆΘ1, . . . , ˆΘN using
+D1, . . . , DN for each client, without exchanging the private
+data. The objective is to minimize the global objective and
+obtain the reasonable local models
+{ˆΘ1, . . . , ˆΘN} = arg min G(L1, . . . , LN),
+(1)
+where Li = L(ˆΘi, Di; Θ), ∀i ∈[N] and L(·) is the loss
+function. Θ is the global model, which brings external infor-
+mation to client i. Typically, G(·) is set to PN
+i=1 kiLi, where
+ki = |Di|/ PN
+j=1 |Dj| and |Di| is the amount of local data
+samples on client i.
+Adaptive Local Aggregation (ALA)
+The server generates a global model by aggregating trained
+client models in heterogeneous settings, but this global
+model generalizes poorly on each client. To address this
+problem, we propose a pFL method FedALA with a fine-
+grained ALA module that element-wisely aggregates the
+global model and local model to adapt to the local objective.
+We show the learning process in ALA in Figure 2.
++
+⊙
+Local model
+⇥t−1
+i
+Update
+<
+l
+a
+t
+e
+x
+i
+t
+ 
+s
+h
+a
+1
+_
+b
+a
+s
+e
+6
+4
+=
+"
+C
+L
+/
+G
+A
+k
+h
+Y
+l
+F
+D
+K
+s
+y
+W
+C
+P
+l
+G
+z
+R
+Y
+f
+V
+a
+m
+s
+=
+"
+>
+A
+A
+A
+C
+C
+H
+i
+c
+b
+V
+C
+7
+S
+g
+N
+B
+F
+J
+2
+N
+r
+x
+h
+f
+q
+5
+Y
+W
+D
+g
+Y
+h
+F
+g
+m
+7
+E
+t
+Q
+y
+Y
+G
+M
+Z
+I
+S
+9
+I
+1
+m
+V
+2
+M
+p
+s
+M
+m
+X
+0
+w
+c
+1
+c
+I
+S
+0
+o
+b
+f
+8
+X
+G
+Q
+h
+F
+b
+P
+8
+H
+O
+v
+3
+G
+S
+b
+B
+E
+T
+D
+1
+w
+4
+c
+8
+6
+9
+z
+L
+3
+H
+i
+w
+V
+X
+Y
+F
+k
+/
+R
+m
+5
+t
+f
+W
+N
+z
+K
+7
+9
+d
+2
+N
+n
+d
+2
+z
+8
+w
+D
+4
+9
+a
+K
+k
+o
+k
+Z
+U
+0
+a
+i
+U
+h
+2
+P
+K
+K
+Y
+4
+C
+F
+r
+A
+g
+f
+B
+O
+r
+F
+k
+J
+P
+A
+E
+a
+3
+u
+j
+2
+6
+n
+f
+f
+m
+R
+S
+8
+S
+h
+s
+w
+D
+h
+m
+T
+k
+A
+G
+I
+f
+c
+5
+J
+a
+A
+l
+1
+z
+w
+t
+9
+R
+p
+D
+B
+u
+Q
+h
+h
+b
+I
+9
+w
+W
+W
+8
++
+H
+T
+5
+h
+W
+s
+W
+r
+Y
+o
+1
+A
+1
+4
+l
+d
+k
+a
+K
+K
+E
+P
+d
+N
+b
+9
+7
+/
+Y
+g
+m
+A
+Q
+u
+B
+C
+q
+J
+U
+1
+7
+Z
+i
+c
+F
+I
+i
+g
+V
+P
+B
+J
+o
+V
+e
+o
+l
+h
+M
+6
+I
+g
+M
+W
+F
+f
+T
+k
+A
+R
+M
+O
+e
+n
+s
+k
+A
+k
++
+1
+0
+o
+f
++
+5
+H
+U
+F
+Q
+K
+e
+q
+Y
+s
+T
+K
+Q
+m
+U
+G
+g
+e
+e
+7
+g
+w
+I
+D
+N
+W
+y
+N
+x
+X
+/
+8
+7
+o
+J
++
+D
+d
+O
+y
+s
+M
+4
+A
+R
+b
+S
++
+U
+d
++
+I
+j
+B
+E
+e
+J
+o
+K
+7
+n
+P
+J
+K
+I
+i
+x
+J
+o
+R
+K
+r
+n
+f
+F
+d
+E
+g
+k
+o
+a
+C
+z
+K
++
+g
+Q
+7
+O
+W
+T
+V
+0
+n
+r
+s
+m
+J
+f
+V
+a
+r
+3
+1
+W
+K
+t
+l
+s
+W
+R
+R
+y
+f
+o
+D
+J
+W
+Q
+j
+a
+5
+R
+D
+d
+2
+h
+O
+m
+o
+i
+i
+p
+7
+Q
+C
+3
+p
+D
+7
+8
+a
+z
+8
+W
+p
+8
+G
+J
+/
+z
+1
+p
+y
+R
+z
+R
+y
+j
+P
+z
+C
++
+f
+g
+G
+B
+i
+p
+h
+i
+<
+/
+l
+a
+t
+e
+x
+i
+t
+>
+(⇥t−1 −⇥t−1
+i
+)
+Train
+Adaptive weights
+1|⇥i|−p
+Old weights
+1|⇥i|−p
+<
+l
+a
+t
+e
+x
+i
+t
+ 
+s
+h
+a
+1
+_
+b
+a
+s
+e
+6
+4
+=
+"
+V
+N
+/
+9
+I
+k
+A
+J
+E
+0
+x
+x
+8
+v
+P
+j
+T
+g
+n
+I
+y
+A
+S
+E
+J
+f
+c
+=
+"
+>
+A
+A
+A
+B
+8
+H
+i
+c
+b
+V
+A
+9
+S
+w
+N
+B
+E
+J
+2
+L
+X
+z
+E
+a
+j
+V
+r
+a
+L
+A
+l
+C
+q
+n
+A
+n
+o
+p
+Y
+B
+G
+8
+s
+I
++
+Z
+I
+k
+h
+r
+3
+N
+X
+r
+J
+k
+d
++
+/
+Y
+3
+R
+P
+C
+c
+b
+/
+C
+x
+k
+I
+R
+W
+/
++
+E
+n
+a
+1
+g
+5
+7
+9
+x
+8
+1
+F
+o
+4
+o
+O
+B
+x
+3
+s
+z
+z
+M
+z
+z
+I
+8
+6
+0
+c
+d
+1
+v
+J
+7
+O
+2
+v
+r
+G
+5
+l
+d
+3
+O
+7
+e
+z
+m
+9
+/
+Y
+L
+B
+4
+d
+N
+H
+c
+a
+K
+0
+A
+Y
+J
+e
+a
+j
+a
+P
+t
+a
+U
+M
+0
+k
+b
+h
+h
+l
+O
+2
+5
+G
+i
+W
+P
+i
+c
+t
+v
+z
+x
+1
+d
+R
+v
+3
+V
+O
+l
+W
+S
+j
+r
+Z
+h
+L
+R
+n
+s
+B
+D
+y
+Q
+J
+G
+s
+L
+H
+S
+b
+d
+J
+K
+7
+5
+I
+o
+7
+b
+N
++
+o
+e
+R
+W
+3
+B
+n
+Q
+K
+v
+E
+W
+p
+F
+Q
+t
+l
+j
+/
+f
+P
++
+r
+5
+W
+r
+/
+w
+1
+R
+2
+E
+J
+B
+Z
+U
+G
+s
+K
+x
+1
+h
+3
+P
+j
+U
+w
+v
+w
+c
+o
+w
+w
+m
+m
+a
+6
+8
+a
+a
+R
+p
+i
+M
+8
+Z
+B
+2
+L
+J
+V
+Y
+U
+N
+1
+L
+Z
+g
+e
+n
+6
+M
+Q
+q
+A
+x
+S
+E
+y
+p
+Y
+0
+a
+K
+b
++
+n
+k
+i
+w
+0
+H
+o
+i
+f
+N
+s
+p
+s
+B
+n
+p
+Z
+W
+8
+q
+/
+u
+d
+1
+Y
+h
+N
+c
+9
+h
+I
+m
+o
+9
+h
+Q
+S
+e
+a
+L
+g
+p
+g
+j
+E
+6
+L
+p
+9
+2
+j
+A
+F
+C
+W
+G
+T
+y
+z
+B
+R
+D
+F
+7
+K
+y
+I
+j
+r
+D
+A
+x
+N
+q
+O
+c
+D
+c
+F
+b
+f
+n
+m
+V
+N
+E
+8
+r
+3
+n
+n
+l
+7
+M
+a
+m
+U
+Y
+U
+5
+s
+n
+A
+M
+R
+S
+i
+D
+B
+x
+d
+Q
+h
+W
+u
+o
+Q
+Q
+M
+I
+C
+H
+i
+A
+J
+3
+h
+2
+l
+P
+P
+o
+v
+D
+i
+v
+8
+9
+a
+M
+s
+5
+g
+5
+g
+j
+9
+w
+3
+n
+4
+A
+o
+Y
+i
+T
+8
+w
+=
+=
+<
+/
+l
+a
+t
+e
+x
+i
+t
+>
+W p
+i
+W p
+i
+Local 
+data
+Clip
+LA 
+ALA 
+Figure 2: The learning process in ALA. LA denotes “local
+aggregation”. Here, we consider a five-layer model and set
+p = 3. The lighter the color, the larger the value.
+In traditional FL (e.g., FedAvg), after the server sends the
+old global model Θt−1 to client i in iteration t, Θt−1 over-
+writes the old local model Θt−1
+i
+to obtain the initialized lo-
+cal model ˆΘt
+i for local model training, i.e., ˆΘt
+i := Θt−1.
+In FedALA, we element-wisely aggregate the global model
+and local model instead of overwriting. Formally,
+ˆΘt
+i := Θt−1
+i
+⊙Wi,1 + Θt−1 ⊙Wi,2,
+s.t.
+wq
+1 + wq
+2 = 1, ∀valid q
+(2)
+where ⊙is a Hadamard product and wq
+1 and wq
+2 are the q-th
+parameters in the aggregating weights Wi,1 and Wi,2, re-
+spectively. For overwriting, ∀valid q, wq
+1 ≡0 and wq
+2 ≡1.
+However, it is hard to learn Wi,1 and Wi,2 with the con-
+straint through the gradient-based learning method. Thus,
+we combine Wi,1 and Wi,2 by viewing Equation (2) as:
+ˆΘt
+i := Θt−1
+i
++ (Θt−1 −Θt−1
+i
+) ⊙Wi,
+(3)
+where we call the term (Θt−1 −Θt−1
+i
+) as the “update”. In-
+spired by the previous methods (Courbariaux et al. 2016;
+Luo et al. 2018), we utilize element-wise weight clipping
+σ(w) = max(0, min(1, w)) for regularization (Arjovsky,
+Chintala, and Bottou 2017) and let w ∈[0, 1], ∀w ∈Wi.
+Since the lower layers in the DNN learn more general in-
+formation than the higher layers (Yosinski et al. 2014; Zhu,
+Hong, and Zhou 2021), the client desires most of the infor-
+mation in the lower layers of the global model. To reduce
+computation overhead, we introduce a hyperparameter p to
+control the range of ALA by applying it on p higher lay-
+ers and overwriting the parameters in the lower layers like
+FedAvg for local initialization:
+ˆΘt
+i := Θt−1
+i
++ (Θt−1 −Θt−1
+i
+) ⊙[1|Θi|−p; W p
+i ],
+(4)
+where |Θi| is the number of layers (or blocks) in Θt−1
+i
+and
+1|Θi|−p has the same shape of the lower layers in Θt−1
+i
+. The
+elements in 1|Θi|−p are ones (constants). The weight W p
+i has
+the same shape as the remaining p higher layers.
+We initialize the value of each element in W p
+i to one in
+the beginning and learn W p
+i based on old W p
+i in each itera-
+tion. To further reduce computation overhead, we randomly
+sample s% of Di in iteration t and denote it as Ds,t
+i . Client i
+trains W p
+i through the gradient-based learning method:
+W p
+i ←W p
+i −η∇W p
+i L(ˆΘt
+i, Ds,t
+i ; Θt−1),
+(5)
+where η is the learning rate for weight learning. We freeze
+other trainable parameters in ALA, including the entire
+global model and entire local model. After local initializa-
+tion, client i performs local model training as in FedAvg.
+We can significantly reduce the number of the trainable
+parameters in ALA by choosing a small p with negligible
+performance decline. We show the details in Section . Be-
+sides, we observe that once we train W p
+i to converge in the
+second iteration (initial stage), it hardly changes in the sub-
+sequent iterations, as shown in Figure 3. In other words, W p
+i
+can be reused. Similar to APPLE and PartialFed, we train
+only one epoch for W p
+i when t > 2 to adapt to the chang-
+ing model parameters. Note that ALA is meaningless and
+deactivated in the first iteration since Θ0 = Θ0
+i , ∀i ∈[N].
+Algorithm 1 presents the overall FL process in FedALA.
+Analysis of ALA
+We omit σ(·) and set p = |Θi| here for simplicity without
+affecting the analysis. According to Equation (4) and Equa-
+tion (5), we have ∇WiLt
+i = η(Θt−1 −Θt−1
+i
+) ⊙∇ˆΘiLt
+i,
+11239
+
+Algorithm 1: FedALA
+Input: N clients, ρ: client joining ratio, L: loss function,
+Θ0: initial global model, α: local learning rate, η: the
+learning rate in ALA, s%: the percent of local data in
+ALA, p: the range of ALA, and σ(·): clip function.
+Output: Reasonable local models ˆΘ1, . . . , ˆΘN
+1: Server sends Θ0 to all clients to initialize local models.
+2: Clients initialize W p
+i , ∀i ∈[N] to ones.
+3: for iteration t = 1, . . . , T do
+4:
+Server samples a subset It of clients according to ρ.
+5:
+Server sends Θt−1 to |It| clients.
+6:
+for Client i ∈It in parallel do
+7:
+Client i samples s% of local data.
+▷ALA
+8:
+if t = 2 then
+▷Initial stage
+9:
+while W p
+i does not converge do
+10:
+Client i trains W p
+i by Equation (5).
+11:
+Client i clips W p
+i using σ(·).
+12:
+else if t > 2 then
+13:
+Client i trains W p
+i by Equation (5).
+14:
+Client i clips W p
+i using σ(·).
+15:
+Client i obtains ˆΘt
+i by Equation (4).
+16:
+Client i obtains Θt
+i by ▷Local model training
+Θt
+i ←ˆΘt
+i −α∇ˆΘiL(ˆΘt
+i, Di; Θt−1).
+17:
+Client i sends Θt
+i to the server.
+▷Uploading
+18:
+Server obtains Θt by Θt ←P
+i∈It
+ki
+P
+j∈It kj Θt
+i.
+19: return ˆΘ1, . . . , ˆΘN
+where Lt
+i represents L(ˆΘt
+i, Ds,t
+i ; Θt−1). Based on Equa-
+tion (4), we can view updating Wi as updating ˆΘt
+i in ALA:
+ˆΘt
+i ←ˆΘt
+i−η(Θt−1−Θt−1
+i
+)⊙(Θt−1−Θt−1
+i
+)⊙∇ˆΘiLt
+i. (6)
+The gradient ∇ˆΘiLt
+i is element-wisely scaled in iteration t.
+In contrast to local model training (or fine-tuning) that only
+focuses on the local data, the whole process of updating in
+Equation (6) can be aware of the generic information in the
+global model. Across iterations, the dynamic term (Θt−1 −
+Θt−1
+i
+) brings dynamic information for ALA to adapt to the
+complex scenarios, although it is a constant in iteration t.
+Experiments
+Experimental Setup
+In this section, we firstly compare FedALA with eleven
+SOTA FL baselines including FedAvg (McMahan et al.
+2017), FedProx (Li et al. 2020), Per-FedAvg (Fallah,
+Mokhtari, and Ozdaglar 2020), FedRep (Collins et al. 2021),
+pFedMe (T Dinh, Tran, and Nguyen 2020), Ditto (Li et al.
+2021a), FedAMP (Huang et al. 2021), FedPHP (Li et al.
+2021b), FedFomo (Zhang et al. 2020), APPLE (Luo and Wu
+2021), and PartialFed (Sun et al. 2021). To show the supe-
+riority of weight learning in FedALA over additional local
+training steps, we also compare FedALA with FedAvg-C
+and FedProx-C, which locally fine-tune the global model for
+local initialization at each iteration. Then we apply ALA to
+SOTA FL methods and show that ALA can improve them.
+0
+5
+10
+15
+20
+25
+30
+Weight learning epochs
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Local loss
+Weight learning
+Local model training & server aggregation
+MNIST pathological setting
+Cifar10 default practical setting
+Figure 3: The local loss on client #8 regarding weight learn-
+ing epochs in ALA on MNIST and Cifar10. Here, we train
+the weights for at least six epochs in each iteration. The de-
+tails of the settings are described in Section .
+We conduct extensive experiments in computer vision (CV)
+and natural language processing (NLP) domains.
+For the CV domain, we study the image classification
+tasks with four widely used datasets including MNIST (Le-
+Cun et al. 1998), Cifar10/100 (Krizhevsky and Geoffrey
+2009) and Tiny-ImageNet (Chrabaszcz, Loshchilov, and
+Hutter 2017) (100K images with 200 classes) using the 4-
+layer CNN (McMahan et al. 2017). For the NLP domain,
+we study the text classification tasks with AG News (Zhang,
+Zhao, and LeCun 2015) and fastText (Joulin et al. 2017). To
+evaluate the effectiveness of FedALA on a larger model, we
+also use ResNet-18 (He et al. 2016) on Tiny-ImageNet. We
+set the local learning rate to 0.005 for the 4-layer CNN (0.1
+on MNIST following FedAvg) and 0.1 for both fastText and
+ResNet-18. We set the batch size to 10 and the number of
+local model training epochs to 1, following FedAvg. We run
+all the tasks for 2000 iterations to make all the methods con-
+verge empirically. Following pFedMe, we have 20 clients
+and set ρ = 1 by default.
+We simulate the heterogeneous settings with two widely
+used scenarios. The first one is the pathological hetero-
+geneous setting (McMahan et al. 2017; Shamsian et al.
+2021), where we sample 2/2/10 classes for MNIST/Ci-
+far10/Cifar100 from a total of 10/10/100 classes for each
+client, with disjoint data samples. The second scenario is the
+practical heterogeneous setting (Lin et al. 2020; Li, He, and
+Song 2021), which is controlled by the Dirichlet distribu-
+tion, denoted as Dir(β). The smaller the β is, the more het-
+erogeneous the setting is. We set β = 0.1 for the default
+heterogeneous setting (Lin et al. 2020; Wang et al. 2020c).
+We use the same evaluation metrics as pFedMe, which
+reports the test accuracy of the best single global model for
+the traditional FL and the average test accuracy of the best
+local models for pFL. To simulate the practical pFL setting,
+we evaluate the learned model on the client side. 25% of the
+local data forms the test dataset, and the remaining 75% data
+is used for training. We run all the tasks five times and report
+the mean and standard deviation.
+We implement FedALA using PyTorch-1.8 and run all
+experiments on a server with two Intel Xeon Gold 6140
+CPUs (36 cores), 128G memory, and eight NVIDIA 2080
+Ti GPUs, running CentOS 7.8.
+11240
+
+Items
+p = 1
+s = 80
+s = 5
+s = 10
+s = 20
+s = 40
+s = 60
+s = 80
+s = 100
+p = 6
+p = 5
+p = 4
+p = 3
+p = 2
+p = 1
+Acc.
+39.53
+40.62
+40.02
+40.23
+41.11
+41.94
+42.11
+41.71
+41.54
+41.62
+41.86
+42.47
+41.94
+Param.
+0.005
+11.182
+11.172
+11.024
+10.499
+8.399
+0.005
+Table 1: The test accuracy (%) and the number of trainable parameters (in millions) for ALA on TINY*.
+Settings
+Pathological heterogeneous setting
+Practical heterogeneous setting
+Methods
+MNIST
+Cifar10
+Cifar100
+Cifar10
+Cifar100
+TINY
+TINY*
+AG News
+FedAvg
+97.93±0.05
+55.09±0.83
+25.98±0.13
+59.16±0.47
+31.89±0.47
+19.46±0.20
+19.45±0.13
+79.57±0.17
+FedProx
+98.01±0.09
+55.06±0.75
+25.94±0.16
+59.21±0.40
+31.99±0.41
+19.37±0.22
+19.27±0.23
+79.35±0.23
+FedAvg-C
+99.79±0.00
+92.13±0.03
+66.17±0.03
+90.34±0.01
+51.80±0.02
+30.67±0.08
+36.94±0.10
+95.89±0.25
+FedProx-C
+99.80±0.04
+92.12±0.03
+66.07±0.08
+90.33±0.01
+51.84±0.07
+30.77±0.13
+38.78±0.52
+96.10±0.22
+Per-FedAvg
+99.63±0.02
+89.63±0.23
+56.80±0.26
+87.74±0.19
+44.28±0.33
+25.07±0.07
+21.81±0.54
+93.27±0.25
+FedRep
+99.77±0.03
+91.93±0.14
+67.56±0.31
+90.40±0.24
+52.39±0.35
+37.27±0.20
+39.95±0.61
+96.28±0.14
+pFedMe
+99.75±0.02
+90.11±0.10
+58.20±0.14
+88.09±0.32
+47.34±0.46
+26.93±0.19
+33.44±0.33
+91.41±0.22
+Ditto
+99.81±0.00
+92.39±0.06
+67.23±0.07
+90.59±0.01
+52.87±0.64
+32.15±0.04
+35.92±0.43
+95.45±0.17
+FedAMP
+99.76±0.02
+90.79±0.16
+64.34±0.37
+88.70±0.18
+47.69±0.49
+27.99±0.11
+29.11±0.15
+94.18±0.09
+FedPHP
+99.73±0.00
+90.01±0.00
+63.09±0.04
+88.92±0.02
+50.52±0.16
+35.69±3.26
+29.90±0.51
+94.38±0.12
+FedFomo
+99.83±0.00
+91.85±0.02
+62.49±0.22
+88.06±0.02
+45.39±0.45
+26.33±0.22
+26.84±0.11
+95.84±0.15
+APPLE
+99.75±0.01
+90.97±0.05
+65.80±0.08
+89.37±0.11
+53.22±0.20
+35.04±0.47
+39.93±0.52
+95.63±0.21
+PartialFed
+99.86±0.01
+89.60±0.13
+61.39±0.12
+87.38±0.08
+48.81±0.20
+35.26±0.18
+37.50±0.16
+85.20±0.16
+FedALA
+99.88±0.01
+92.44±0.02
+67.83±0.06
+90.67±0.03
+55.92±0.03
+40.54±0.02
+41.94±0.05
+96.52±0.08
+Table 2: The test accuracy (%) in the pathological heterogeneous setting and practical heterogeneous setting.
+Effect of Hyperparameters
+Effect of s.
+From Table 1, high accuracy corresponds to
+large s, where “TINY*” represents using ResNet-18 on
+Tiny-ImageNet in the default heterogeneous setting. We
+can balance the performance and the computational cost by
+choosing a reasonable value for s. FedALA can also achieve
+excellent performance with only 5% local data for ALA.
+Since the improvement from s = 80 to s = 100 is negli-
+gible, we set s = 80 for FedALA.
+Effect of p.
+By decreasing the hyperparameter p, we can
+shrink the range of ALA with negligible accuracy decrease,
+as shown in Table 1. When p decreases from 6 to 1, the
+number of trainable parameters in ALA also decreases, es-
+pecially from p = 2 to p = 1, as the last block in ResNet-18
+contains most of the parameters (He et al. 2016). Although
+FedALA performs the best when p = 2 here, we set p = 1
+for ResNet-18 to reduce computation overhead. Similarly,
+we also set p = 1 for the 4-layer CNN and fastText. This
+also shows that the lower layers of the global model mostly
+contain generic information which is desired by the client.
+Performance Comparison and Analysis
+Pathological heterogeneous setting.
+Clients are sepa-
+rated into groups, which benefits the methods that measure
+the similarity among clients, such as FedAMP. Even so, Ta-
+ble 2 shows that FedALA outperforms all the baselines. Due
+to the poor generalization ability of the global model, Fe-
+dAvg and FedProx perform poorly in this setting.
+pFL methods in Category (1). Compared to the traditional
+FL methods, the personalized methods perform better. The
+accuracy for Per-FedAvg is the lowest among these meth-
+ods since it only finds an initial shared model corresponding
+to the learning trends of all the clients, which may not cap-
+ture the needs of an individual client. Fine-tuning the global
+model in FedAvg-C/FedProx-C generates client-specific lo-
+cal models, which improves the accuracy for FedAvg/Fed-
+Prox. However, fine-tuning only focuses on the local data
+and cannot be aware of the generic information during local
+training like FedALA. Although FedRep also fine-tunes the
+head at each iteration, it freezes the downloaded representa-
+tion part when fine-tuning and keeps most of the generic in-
+formation in the global model, thus performing excellently.
+However, the generic information of the head part is lost
+without sharing the head among clients.
+pFL methods in Category (2). Although both pFedMe and
+Ditto use the proximal term to learn their additional person-
+alized models, pFedMe learns the desired information from
+the local model while Ditto learns it from the global model.
+Thus, Ditto learns more generic information locally, and it
+performs better. However, learning the personalized model
+with the proximal term is an implicit way to extract the de-
+sired information.
+pFL methods in Category (3). Aggregating the models us-
+ing the rule-based method is aimless in capturing the desired
+information in the global model, so FedPHP performs worse
+than FedRep and Ditto. The model-level personalized aggre-
+gation in FedAMP, FedFomo, and APPLE, as well as the
+11241
+
+Computation
+Communication
+Total time
+Time/iter.
+Param./iter.
+FedAvg
+365 min
+1.59 min
+2 ∗Σ
+FedProx
+325 min
+1.99 min
+2 ∗Σ
+FedAvg-C
+607 min
+24.28 min
+2 ∗Σ
+FedProx-C
+711 min
+28.44 min
+2 ∗Σ
+Per-FedAvg
+121 min
+3.56 min
+2 ∗Σ
+FedRep
+471 min
+4.09 min
+2 ∗αf ∗Σ
+pFedMe
+1157 min
+10.24 min
+2 ∗Σ
+Ditto
+318 min
+11.78 min
+2 ∗Σ
+FedAMP
+92 min
+1.53 min
+2 ∗Σ
+FedPHP
+264 min
+4.06 min
+2 ∗Σ
+FedFomo
+193 min
+2.72 min
+(1 + M) ∗Σ
+APPLE
+132 min
+2.93 min
+(1 + M) ∗Σ
+PartialFed
+693 min
+2.13 min
+2 ∗Σ
+FedALA
+7+116 min
+1.93 min
+2 ∗Σ
+Table 3: The computation overhead on TINY* and the com-
+munication overhead (transmitted parameters per iteration).
+Σ is the parameter amount in the backbone. αf (αf < 1)
+is the ratio of the parameters of the feature extractor in the
+backbone. M (M ≥1) is the number of the received client
+models on each client in FedFomo and APPLE.
+layer-level and binary selection in PartialFed, are imprecise,
+which may introduce undesired information in the global
+model to the local model. Furthermore, downloading mul-
+tiple models on each client in each iteration has additional
+communication costs for FedFomo and APPLE.
+By adaptively learning the aggregating weights, FedALA
+can explicitly capture the desired information precisely in
+the global model to facilitate the local model training.
+Practical heterogeneous setting.
+We add two additional
+tasks using Tiny-ImageNet and one text classification task
+on AG News in the default practical heterogeneous set-
+ting. The results in the default heterogeneous setting with
+Dir(0.1) are shown in Table 2, where “TINY” represents
+using the 4-layer CNN on Tiny-ImageNet. FedALA is still
+superior to other baselines, which achieves an accuracy of
+3.27% higher than FedRep on TINY.
+In the practical heterogeneous setting, due to the com-
+plex data distribution of each client, it is hard to mea-
+sure the similarity among clients. Thus, FedAMP can not
+precisely assign importance to the local models through
+the attention-inducing function to generate aggregated mod-
+els with personalized aggregation. After downloading the
+global model/representation, Ditto and FedRep can capture
+the generic information from it instead of measuring the sim-
+ilarity among local models. In this way, they achieve excel-
+lent performance in most of the tasks. The trainable weights
+are more informative than the approximated one, so APPLE
+performs better than FedFomo. Although FedPHP performs
+well on TINY, the standard deviation is relatively high. Since
+FedALA can adapt to the changing circumstances through
+ALA, it still outperforms all the baselines in the practical set-
+ting. If we reuse the aggregated weights learned in the initial
+stage without adaptation, the accuracy drops to 33.81% on
+TINY. Due to the fine-grained feature of ALA, it still outper-
+forms Per-FedAvg, pFedMe, Ditto, FedAMP, and FedFomo.
+Compared to the 4-layer CNN, ResNet-18 is a larger
+backbone. With ResNet-18, most methods achieve a higher
+accuracy, including FedALA. However, it is harder for
+FedAMP to measure the model similarity, and the heuris-
+tic local aggregation in FedPHP performs worse when using
+ResNet-18. As we set p = 1, the number of trainable pa-
+rameters in ALA is much less than that of ResNet-18, but
+FedALA can still achieve superior performance.
+Computation Overhead.
+We record the total time cost for
+each method until convergence, as shown in Table 3. Ex-
+cept for the 7 min cost in the initial stage, FedALA costs
+1.93 min (similar to FedAvg) in each iteration. In other
+words, ALA only costs additional 0.34 min for the great ac-
+curacy improvement. However, FedAvg-C, FedProx-C, and
+FedRep cost relatively more time than most of the methods
+because of the fine-tuning for the entire local model (or only
+the head). Due to the additional training steps for the per-
+sonalized model, Ditto and pFedMe have the top computa-
+tion overhead per iteration among SOTA methods. FedFomo
+and APPLE feed data forward in the downloaded client-side
+model to approximate aggregate weights and update directed
+relation (DR) vectors, respectively, taking additional time.
+Communication Overhead.
+We show the communica-
+tion overhead for one client in one iteration in Table 3. The
+communication overhead for most of the methods is the
+same as FedAvg, which uploads and downloads only one
+model. Since FedRep only transmits the representation and
+keeps the head locally, it has less communication overhead.
+FedFomo and APPLE require the highest communication
+overhead, as they download M client models in each iter-
+ation (Zhang et al. 2020; Luo and Wu 2021). To achieve the
+results in Table 2, we set M = 20 for them.
+Heterogeneity.
+To study the effectiveness of FedALA in
+the settings with different degrees of heterogeneity, we vary
+the β in Dir(β) on Tiny-ImageNet and AG News. The
+smaller the β is, the more heterogeneous the setting is.
+In Table 4, most of the pFL methods have better perfor-
+mance in the more heterogeneous settings. However, except
+for FedPHP, APPLE, PartialFed, and FedALA, these meth-
+ods excessively focus on personalization but underestimate
+the significance of the generic information. When the data
+heterogeneity becomes moderate with Dir(0.5) for Tiny-
+ImageNet, they perform worse than FedAvg.
+Scalability.
+To show the scalability of FedALA, we con-
+duct two experiments with 50 and 100 clients in the default
+heterogeneous setting. In Table 4, most of the pFL meth-
+ods degenerate greatly as the client amount increases to 100,
+while FedALA drops less than 1% in accuracy. Since the
+data amount on Cifar100 is constant, the data amount on the
+client decreases with more clients. This aggravates the lack
+of local data, so precisely capturing the desired information
+in the global model becomes more critical.
+11242
+
+Heterogeneity
+Scalability
+Applicability of ALA
+Datasets
+Tiny-ImageNet
+AG News
+Cifar100
+Tiny-ImageNet
+Cifar100
+Methods
+Dir(0.01)
+Dir(0.5)
+Dir(1)
+50 clients
+100 clients
+Acc.
+Imps.
+Acc.
+Imps.
+FedAvg
+15.70±0.46
+21.14±0.47
+87.12±0.19
+31.90±0.27
+31.95±0.37
+40.54±0.17
+21.08
+55.92±0.15
+24.03
+FedProx
+15.66±0.36
+21.22±0.47
+87.21±0.13
+31.94±0.30
+31.97±0.24
+40.53±0.26
+21.16
+56.18±0.65
+24.19
+FedAvg-C
+49.88±0.11
+16.21±0.05
+91.38±0.21
+49.82±0.11
+47.90±0.12
+—
+—
+—
+—
+FedProx-C
+49.84±0.02
+16.36±0.19
+92.03±0.19
+49.79±0.14
+48.02±0.02
+—
+—
+—
+—
+Per-FedAvg
+39.39±0.30
+16.36±0.13
+87.08±0.26
+44.31±0.20
+36.07±0.24
+30.90±0.28
+5.83
+48.68±0.36
+4.40
+FedRep
+55.43±0.15
+16.74±0.09
+92.25±0.20
+47.41±0.18
+44.61±0.20
+37.89±0.31
+0.62
+53.02±0.11
+0.63
+pFedMe
+41.45±0.14
+17.48±0.61
+87.08±0.18
+48.36±0.64
+46.45±0.18
+27.30±0.24
+0.37
+47.91±0.21
+0.57
+Ditto
+50.62±0.02
+18.98±0.05
+91.89±0.17
+54.22±0.04
+52.89±0.22
+40.75±0.06
+8.60
+56.33±0.07
+3.46
+FedAMP
+48.42±0.06
+12.48±0.21
+83.35±0.05
+44.39±0.35
+40.43±0.17
+28.18±0.20
+0.19
+48.03±0.23
+0.34
+FedPHP
+48.63±0.02
+21.09±0.07
+90.52±0.19
+52.44±0.16
+49.70±0.31
+40.16±0.24
+4.47
+54.28±0.21
+3.76
+FedFomo
+46.36±0.54
+11.59±0.11
+91.20±0.18
+42.56±0.33
+38.91±0.08
+—
+—
+—
+—
+APPLE
+48.04±0.10
+24.28±0.21
+84.10±0.18
+55.06±0.20
+52.81±0.29
+—
+—
+—
+—
+PartialFed
+49.38±0.02
+24.20±0.10
+91.01±0.28
+48.95±0.07
+39.31±0.01
+35.40±0.02
+0.14
+48.99±0.05
+0.18
+FedALA
+55.75±0.02
+27.85±0.06
+92.45±0.10
+55.61±0.02
+54.68±0.57
+—
+—
+—
+—
+Table 4: The test accuracy (%) (and improvement (%)) on Tiny-ImageNet, AG News, and Cifar100.
+Applicability of ALA
+As the ALA module only modifies the local initialization in
+FL, it can be applied to most existing FL methods. We ap-
+ply ALA to the SOTA FL methods except for FedFomo and
+APPLE (as they download multiple client models) without
+modifying other learning processes to evaluate the effective-
+ness of ALA. We report the accuracy and improvements on
+Tiny-ImageNet and Cifar100 using the 4-layer CNN in de-
+fault heterogeneous setting with s = 80 and p = 1.
+In Table 4, the accuracy improvement for FedAvg and
+FedProx is apparent, and the improvement for Per-FedAvg,
+Ditto, and FedPHP is also remarkable. This indicates the ap-
+plicability of ALA to the traditional FL and pFL methods.
+However, the improvement to other pFL methods is rel-
+atively small. In FedAMP, only the information in the im-
+portant local models is emphasized through the attention-
+inducing function with the generic information in unimpor-
+tant models ignored, so ALA can hardly find the ignored in-
+formation back without modifying other learning processes.
+According to Table 1, the representation part mostly con-
+tains generic information, which is desired by the client. It
+leaves little room for ALA to take effect, but ALA still im-
+proves FedRep by more than 0.60% in accuracy. pFedMe
+learns a personalized model to approximate the local model
+at each local training batch, so it benefits little (0.57% on Ci-
+far100) from ALA. In PartialFed, the local aggregation hap-
+pens in each training batch, so the initialized local model
+generated by ALA is later re-aggregated by its strategy, thus
+eliminating the effect of ALA.
+Update Direction Correction
+Compared to overwriting the local model with the down-
+loaded global model, ALA can correct the update direc-
+tion for the local model with the desired information in the
+global model. We visualize the learning trajectory of the lo-
+cal model on client #4 using the visualization method (Li
+0.002
+0.003
+0.004
+0.005
+0.006
+0.007
+0.008
+0.009
+0.010
+0.011
+0.012
+0.013
+0.014
+0.015
+0.016
+0.017
+0.018
+0.019
+0.020
+0.021
+0.022
+0.023
+0.024
+0.025
+0.026
+0.027
+0.028
+0.029
+0.030
+0.031
+0.032
+0.033
+0.034
+0.035
+0.036
+0.037
+0.038
+0.039
+0.040
+0.041
+0.042
+0.043
+0.044
+0.045
+0.046
+0.047
+0.048
+0.049
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0.0
+0.1
+0.2
+C1: 68.83 %
+0.2
+0.1
+0.0
+0.1
+0.2
+0.3
+C2: 23.80 %
+Figure 4: 2D visualization of local learning trajectory (from
+iteration 140 to 200) and the local loss surface on MNIST in
+the pathological heterogeneous setting. The red circles and
+green cubes represent the local model at the beginning and
+end of each iteration, respectively. The black and blue tra-
+jectories with the arrows represent FedAvg and FedALA,
+respectively. The local models are projected to the 2D plane
+using PCA. C1 and C2 are the two principal components
+generated by the PCA.
+et al. 2018). We deactivate the ALA for FedALA in the first
+155 iterations and activate it in the subsequent iterations.
+Without capturing the desired information in the global
+model, the update direction of local model is misled by the
+global model in FedAvg, as shown by the black trajectory in
+Figure 4. Once the ALA is activated, the update direction of
+local model is corrected to the local loss reducing direction,
+as shown by the blue trajectory in Figure 4.
+Conclusion
+In this paper, we propose an adaptive and fine-grained
+method FedALA in pFL to facilitate the local model training
+with the received global model. The extensive experiments
+demonstrate the effectiveness of FedALA. Our method out-
+performs eleven SOTA methods. Also, the ALA module in
+FedALA can improve other FL methods in accuracy.
+11243
+
+Acknowledgements
+This work was supported in part by National NSF of China
+(NO. 61872234, 61732010), Shanghai Key Laboratory of
+Scalable Computing and Systems, Innovative Research
+Foundation of Ship General Performance (NO.25622114),
+the Key Laboratory of PK System Technologies Research
+of Hainan, Intel Corporation (UFunding 12679), and the
+Louisiana BoR LAMDA.
+References
+Arjovsky, M.; Chintala, S.; and Bottou, L. 2017. Wasserstein
+generative adversarial networks. In ICML.
+Chrabaszcz, P.; Loshchilov, I.; and Hutter, F. 2017. A Down-
+sampled Variant of Imagenet as an Alternative to the Cifar
+Datasets. arXiv preprint arXiv:1707.08819.
+Collins, L.; Hassani, H.; Mokhtari, A.; and Shakkottai, S.
+2021. Exploiting Shared Representations for Personalized
+Federated Learning. In ICML.
+Courbariaux, M.; Hubara, I.; Soudry, D.; El-Yaniv, R.; and
+Bengio, Y. 2016. Binarized Neural Networks: Training Deep
+Neural Networks with Weights and Activations Constrained
+to +1 or -1. arXiv preprint arXiv:1602.02830.
+Fallah, A.; Mokhtari, A.; and Ozdaglar, A. 2020. Person-
+alized Federated Learning with Theoretical Guarantees: A
+Model-Agnostic Meta-Learning Approach. In NeurIPS.
+Finn, C.; Abbeel, P.; and Levine, S. 2017. Model-Agnostic
+Meta-Learning for Fast Adaptation of Deep Networks. In
+ICML.
+He, K.; Zhang, X.; Ren, S.; and Sun, J. 2016. Deep Residual
+Learning for Image Recognition. In CVPR.
+Huang, Y.; Chu, L.; Zhou, Z.; Wang, L.; Liu, J.; Pei, J.; and
+Zhang, Y. 2021. Personalized Cross-Silo Federated Learn-
+ing on Non-IID Data. In AAAI.
+Joulin, A.; Grave, E.; Bojanowski, P.; and Mikolov, T. 2017.
+Bag of Tricks for Efficient Text Classification”. In EACL.
+Kairouz, P.; McMahan, H. B.; Avent, B.; Bellet, A.; Bennis,
+M.; Bhagoji, A. N.; Bonawitz, K.; Charles, Z.; Cormode, G.;
+Cummings, R.; et al. 2019. Advances and Open Problems in
+Federated Learning. arXiv preprint arXiv:1912.04977.
+Krizhevsky, A.; and Geoffrey, H. 2009. Learning Multiple
+Layers of Features From Tiny Images. Citeseer.
+LeCun, Y.; Bengio, Y.; and Hinton, G. 2015. Deep learning.
+nature, 521(7553): 436–444.
+LeCun, Y.; Bottou, L.; Bengio, Y.; and Haffner, P. 1998.
+Gradient-based Learning Applied to Document Recogni-
+tion. Proceedings of the IEEE, 86(11): 2278–2324.
+Li, H.; Xu, Z.; Taylor, G.; Studer, C.; and Goldstein, T. 2018.
+Visualizing the Loss Landscape of Neural Nets. In NeurIPS.
+Li, Q.; He, B.; and Song, D. 2021. Model-Contrastive Fed-
+erated Learning. In CVPR.
+Li, T.; Hu, S.; Beirami, A.; and Smith, V. 2021a. Ditto: Fair
+and Robust Federated Learning Through Personalization. In
+ICML.
+Li, T.; Sahu, A. K.; Zaheer, M.; Sanjabi, M.; Talwalkar, A.;
+and Smith, V. 2020. Federated Optimization in Heteroge-
+neous Networks. In MLSys.
+Li, X.-C.; Zhan, D.-C.; Shao, Y.; Li, B.; and Song, S. 2021b.
+FedPHP: Federated Personalization with Inherited Private
+Models. In ECML PKDD.
+Lin, T.; Kong, L.; Stich, S. U.; and Jaggi, M. 2020. Ensemble
+Distillation for Robust Model Fusion in Federated Learning.
+In NeurIPS.
+Luo, J.; and Wu, S. 2021. Adapt to Adaptation: Learning
+Personalization for Cross-Silo Federated Learning.
+arXiv
+preprint arXiv:2110.08394.
+Luo, L.; Xiong, Y.; Liu, Y.; and Sun, X. 2018. Adaptive
+Gradient Methods with Dynamic Bound of Learning Rate.
+In ICLR.
+McMahan, B.; Moore, E.; Ramage, D.; Hampson, S.; and
+y Arcas, B. A. 2017. Communication-Efficient Learning of
+Deep Networks from Decentralized Data. In AISTATS.
+Reisizadeh, A.; Mokhtari, A.; Hassani, H.; Jadbabaie, A.;
+and Pedarsani, R. 2020.
+Fedpaq: A Communication-
+Efficient Federated Learning Method with Periodic Averag-
+ing and Quantization. In AISTATS.
+Shamsian, A.; Navon, A.; Fetaya, E.; and Chechik, G. 2021.
+Personalized Federated Learning using Hypernetworks. In
+ICML.
+Sun, B.; Huo, H.; Yang, Y.; and Bai, B. 2021. PartialFed:
+Cross-Domain Personalized Federated Learning via Partial
+Initialization. In NeurIPS.
+T Dinh, C.; Tran, N.; and Nguyen, T. D. 2020. Personalized
+Federated Learning with Moreau Envelopes. In NeurIPS.
+Van Hasselt, H.; Guez, A.; and Silver, D. 2016. Deep rein-
+forcement learning with double q-learning. In AAAI.
+Wang, H.; Kaplan, Z.; Niu, D.; and Li, B. 2020a. Optimizing
+Federated Learning on Non-IID Data with Reinforcement
+Learning. In InfoComm.
+Wang, H.; Yurochkin, M.; Sun, Y.; Papailiopoulos, D.; and
+Khazaeni, Y. 2020b. Federated learning with matched aver-
+aging. arXiv preprint arXiv:2002.06440.
+Wang, J.; Liu, Q.; Liang, H.; Joshi, G.; and Poor, H. V.
+2020c.
+Tackling the Objective Inconsistency Problem in
+Heterogeneous Federated Optimization. In NeurIPS.
+Yosinski, J.; Clune, J.; Bengio, Y.; and Lipson, H. 2014.
+How Transferable Are Features in Deep Neural Networks?
+In NeurIPS.
+Zhang, M.; Sapra, K.; Fidler, S.; Yeung, S.; and Alvarez,
+J. M. 2020. Personalized Federated Learning with First Or-
+der Model Optimization. In ICLR.
+Zhang, X.; Zhao, J.; and LeCun, Y. 2015. Character-level
+Convolutional Networks for Text Classification. In NeurIPS.
+Zhao, Y.; Li, M.; Lai, L.; Suda, N.; Civin, D.; and Chan-
+dra, V. 2018. Federated learning with non-iid data. arXiv
+preprint arXiv:1806.00582.
+Zhu, L.; Liu, Z.; and Han, S. 2019. Deep leakage from gra-
+dients. In NeurIPS.
+Zhu, Z.; Hong, J.; and Zhou, J. 2021. Data-Free Knowl-
+edge Distillation for Heterogeneous Federated Learning. In
+ICML.
+11244

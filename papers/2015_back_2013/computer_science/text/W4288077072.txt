@@ -1,0 +1,427 @@
+Data Validation
+Mark P.J. van der Loo∗and Edwin de Jonge
+Statistics Netherlands
+This is the submitted version of the following book chapter: “Van der
+Loo, M.P.J. and De Jonge, E. (2020) Data Validation. In Wiley
+StatsRef: Statistics Reference Online” which has been published in
+ﬁnal form in
+https://onlinelibrary.wiley.com/doi/10.1002/9781118445112.stat08255.
+Abstract
+Data validation is the activity where one decides whether or not a
+particular data set is ﬁt for a given purpose. Formalizing the require-
+ments that drive this decision process allows for unambiguous commu-
+nication of the requirements, automation of the decision process, and
+opens up ways to maintain and investigate the decision process itself.
+The purpose of this article is to formalize the deﬁnition of data vali-
+dation and to demonstrate some of the properties that can be derived
+from this deﬁnition. In particular, it is shown how a formal view of the
+concept permits a classiﬁcation of data quality requirements, allowing
+them to be ordered in increasing levels of complexity. Some subtleties
+arising from combining possibly many such requirements are pointed
+out as well.
+Informally, data validation is the activity where one decides whether or
+not a particular data set is ﬁt for a given purpose. The decision is based
+on testing observed data against prior expectations that a plausible dataset
+is assumed to satisfy. Examples of prior expectations range widely. They
+include natural limits on variables (weight cannot be negative), restrictions
+on combinations of multiple variables (a man cannot be pregnant), combi-
+nations of multiple entities (a mother cannot be younger than her child) and
+combinations of multiple data sources (import value of country A from coun-
+try B must equal the export value of country B to country A). Besides the
+strict logical constraints mentioned in the examples, there are often ‘softer’
+∗Corresponding author: mplo@cbs.nl
+1
+arXiv:2012.12028v1  [cs.DB]  21 Dec 2020
+
+constraints based on human experience. For example, one may not expect
+a certain economic sector to grow more than 5% in a quarter. Here, the
+5% limit does not represent a physical impossibility but rather a limit based
+on past experience. Since one must decide in the end whether a data set is
+usable for its intended purpose, we treat such assessments on equal footing.
+The purpose of this paper is to formalize the deﬁnition of data validation
+and to demonstrate some of the properties that can be derived from this
+deﬁnition.
+In particular, it is shown how a formal view of the concept
+permits a classiﬁcation of data validation rules (assertions), allowing them
+to be ordered in increasing levels of ‘complexity’. Here, the term ‘complexity’
+refers to the amount of diﬀerent types of information necessary to evaluate
+a validation rule. A formal deﬁnition also permits development of tools for
+automated validation and automated reasoning about data validation (Zio
+et al., 2015; Van der Loo and De Jonge, 2018, 2019). Finally, some subtleties
+arising from combining validation rules are pointed out.
+1
+Formal deﬁnition of data validation
+Intuitively, a validation activity classiﬁes a dataset as acceptable or not
+acceptable. A straightforward formalization is to deﬁne it as a function from
+the collection of data sets that could have been observed, to {True, False}.
+One only needs to be careful in deﬁning the ‘collection of data sets’, to avoid
+a ‘set of all sets’ which recursively holds itself. To avoid such paradoxes, a
+data set is deﬁned as a set of key-value pairs, where the keys come from a
+ﬁnite set, and the values from some domain.
+Deﬁnition 1. A data point is a pair (k, x) ∈K × D, where k is a key,
+selected from a ﬁnite set K and x is a value from a domain D.
+In applications the identiﬁer k makes the value interpretable as the prop-
+erty of a real-world entity or event. The domain D is the set of all possible
+values that x can take, and it therefore depends on the circumstances in
+which the data is obtained.
+As an example, consider an administrative system holding age and job
+status of persons. It is assumed that ‘job’ takes values in {"employed", "unemployed"}
+and that ‘age’ is an integer. However, if the data entry system performs no
+validation on entered data, numbers may end up in the job ﬁeld, and job val-
+ues may end up in the age ﬁeld. In an example where the database contains
+2
+
+data on two persons identiﬁed as 1 and 2, this gives
+K = {1, 2} × {"age", "job"}
+D = N ∪{"employed", "unemployed"}.
+(1)
+This deﬁnition allows for the occurrence of missing values by deﬁning a
+special value for them, say ‘NA’ (not available) and adding it to the domain.
+Once K and D are ﬁxed it is possible to deﬁne the set of all observable
+datasets.
+Deﬁnition 2. A dataset is a subset of K × D where every key in K occurs
+exactly once.
+Another way to interpret this is to say that a data set is a total function
+K →D. The set of all observable data sets is denoted DK. In the example,
+one possible dataset is
+{((1, "age"), 25), ((1, "job"), "unemployed"),
+((2, "age"), "employed"), ((2, "job"), 42)}
+Observe that the key consists of a person identiﬁer and a variable identiﬁer.
+Since type checking is a common part of data validation these deﬁnitions
+deliberately leave open the possibility that variables assume a value of the
+wrong type.
+Data validation can now be formally deﬁned as follows.
+Deﬁnition 3. A data validation function is a surjective function
+v : DK ↠{False, True}.
+A data set d ∈DK for which v(d) = True is said to satisfy v. A data set
+for which v(d) = False is said to fail v.
+Recall that surjective means that there is at least one d ∈DK for which
+v(d) = False and at least one d ∈DK for which v(d) = True. A validation
+function has to be surjective to have any meaning as a data validation ac-
+tivity. Suppose v′ : DK →{False, True} non-surjective function. If there is
+no data set d for which v′(d) = False, then v′ is always true and it does not
+validate anything. If, on the other hand, there is no d for which v′(d) = True
+then no data set can satisfy v′. In short, a function that is not surjective on
+{False, True} does not separate valid from invalid data.
+A data validation function is reminiscent of a predicate as deﬁned in ﬁrst-
+order logic. Informally, a predicate is a statement about variables that can
+3
+
+be True or False. The variables can take values in a predeﬁned set (referred
+to as the domain of the predicate). Since validation functions map elements
+of DK to {False, True}, it is tempting to equate a validation function as a
+predicate over DK. However, the elements of DK are instances of possible
+data sets, and validation is based on statements involving variables of a single
+observed data set. It is therefore more convenient to adopt the following
+deﬁnition.
+Deﬁnition 4. A validation rule is a predicate over an instance d ∈DK that
+is neither a tautology nor a contradiction.
+The elements of DK are suﬃciently similar so that any validation rule
+over a particular data set d ∈DK is also a validation rule over another data
+set in d′ ∈DK, where the truth value of a validation rule depends on the
+chosen data set. This also allows us to interpret a tautology as a predicate
+that is True for every element of DK and a contradiction as a predicate that
+is False for every element of DK.
+The equivalence between an assertion about a data set and a function
+classifying possible data sets as valid or invalid instances is a rather obvious
+conclusion. The actual value of the above exercise is the strict deﬁnition of
+a data point as a key-value pair. As will be shown below, inclusion of the
+key permits a useful classiﬁcation of data validation rules.
+To demonstrate that many types of validation rules can be expressed in
+this framework a few examples based on the example of Equation (1) will
+be considered. The following rule states that all ages must be integer.
+∀((u, "age"), x) ∈d : x ∈N.
+Here, ((u, "age"), x) runs over the person-value pairs where the value is
+supposed to represent an age. Similarly, it is possible express a nonnegativity
+check on the age variable.
+∀((u, "age"), x) ∈d : x ≥0.
+In these examples a data set fails a validation rule when not all elements
+satisfy a predicate. Such rules are not very informative when it comes to
+pinpointing what elements of the data set cause the violation. It is cus-
+tomary to perform data validation on a ﬁner level, for example by checking
+nonnegativity element by element. Based on the deﬁnitions introduced here
+this is done by ﬁxing the key completely.
+∀((1, "age"), x) ∈d : x ≥0
+∀((2, "age"), x) ∈d : x ≥0.
+4
+
+Now consider the cross-variable check that states that employed persons
+must be 15 or older.
+∀((u, "age"), x), (u, "job"), y) ∈d : y = "employed" ⇒x ≥15,
+where ⇒denotes logical implication (if y = "employed" then x ≥15). Fi-
+nally, consider the cross-person check that states that we expect the average
+age in the data set to be larger then or equal to 5.
+P
+(u,"age",x)∈d x
+P
+(u,X,x)∈d δ(X, "age") ≥5,
+where δ(X, Y ) = 1 when X = Y and otherwise 0.
+In practical applications validation rules are often expressed more di-
+rectly in terms of variable names, such as age ≥0. Such expressions are
+specializations where one silently assumes extra properties such as that the
+rule will be evaluated for the entry for age in every record.
+Remark 1.
+In Deﬁnition 3, (and also 4) a validation function is deﬁned as
+a surjection DK ↠{False, True}. In practical applications it is often useful
+to also allow the value NA (not available) for cases where one or more of
+the data points necessary for evaluating the validation rule are missing. In
+that case the domain D in the Equation (1) must be extended to D ∪{NA}.
+See Van der Loo and De Jonge (2019) for an implementation.
+Remark 2.
+The current formalization of data validation excludes checking
+for completeness of the key set: it is assumed by deﬁnition that each data
+set in DK is a complete set of key-value pairs where the keys cover all of
+K. The above deﬁnitions therefore create a clean distinction between what
+is metadata (the keys and their interpretation) and data (key-value pairs).
+It is possible to check for uniqueness of variables.
+Remark 3.
+The formal deﬁnition of data validation rules also allows a
+formalization of data validation software tools or domain speciﬁc languages,
+such as in Van der Loo and De Jonge (2019).
+Remark 4.
+In oﬃcial (government) statistics, validation rules are referred
+to as edit rules rather than data validation rules. See De Waal et al. (2011)
+and references therein.
+5
+
+2
+Classiﬁcation of validation rules
+Validation rules deﬁned by domain experts may be easy for humans to in-
+terpret, but can be complex to implement. Take as an example the assertion
+‘the average price of a certain type of goods this year, should not diﬀer more
+then ten percent from last year’s average’. To evaluate this assertion one
+needs to combine prices of multiple goods collected over two time periods.
+A practical question is therefore if the ‘complexity of evaluation’, in terms
+of the amount of information necessary, can somehow be measured. In this
+section a classiﬁcation of data validation rules is derived that naturally leads
+to an ordering of validation rules in terms of the variety of information that
+is necessary for their evaluation.
+One way to measure the amount of information is to look at the pred-
+icate deﬁning a data validation rule and to determine how many diﬀerent
+(k, x) pairs are needed to evaluate it. This is not very useful for comparing
+complexity across diﬀerent data sets that are not from the same DK since
+the numbers will depend on the size of the key set K. One measure that
+does generalize to diﬀerent DK is the measure ‘does a rule need one, or
+several (k, x) to be evaluated?’.
+This measure is not very precise, but it can be reﬁned when a key consists
+of multiple meaningful parts such as in the running example where the key
+consists of the id of a person and the name of a variable. One can then
+classify a rule according to two questions: ‘are multiple person id’s necessary
+for evaluation?’, and: ‘are multiple variables necessary for evaluation?’. This
+gives a four-way classiﬁcation: one where both questions are answered with
+‘no’, two where one of the questions is answered with ‘yes’ and one where
+both questions are answered with ‘yes’. Although this reﬁnement improves
+the accuracy of the classiﬁcation, it only allows for comparing validation
+rules over data sets with the exact same key structure. It would therefore be
+useful to have a generic key structure that can be reused in many situations.
+One such structure can be found by considering in great generality how a
+data point is obtained in practice.
+A data point usually represents the value of an attribute of an object or
+event in the real world: a person, a web site, an e-mail, a radio broadcast, a
+country, a sensor, a company, or anything else that has observable attributes.
+In what follows, an object or event is referred to as a ‘unit’ for brevity. A
+data point is created by observing an attribute X from a unit u of a certain
+type U at time τ, as in Figure 1. Using the same reasoning as above, this
+yields a 24 = 16-way classiﬁcation of validation rules: for each element U, τ,
+u, X a validation rule requires a single or multiple instances to be evaluated.
+6
+
+t
+x
+tu
+t′
+u
+τ
+Figure 1:
+A unit u of type U exists from tu to t′
+u. From tu onward it has
+an attribute X with its value x possibly changing over time. At some time
+τ this value is observed. The observed value is thus fully characterized by
+the quartet (U, τ,u, X).
+However, there are some restrictions. Any unit u can only be of one type.
+So evaluating a validation rule will never require multiple types and a single
+unit. Second, the type of a unit ﬁxes its properties. So a validation rule
+will never need a single variable for multiple types. With these restrictions
+considered, the number of possible classes of validation rules reduces from
+sixteen to ten.
+To distinguish the classes the following notation is introduced. For each
+element U, τ, u, X assign an s when a validation rule pertains to a single
+value of that element and assign an m when a validation rule pertains to
+multiple values of that element.
+For example, a validation rule of class
+sssm needs a single type, a single measurement, a single object and multiple
+variables to be evaluated.
+The ten possible classes can themselves be grouped into validation levels,
+according to whether a class is labeled with no, one, two, three, or four m’s.
+A higher validation level indicates that we need a larger variety of informa-
+tion in order to evaluate the rule. The classiﬁcation, and their grouping into
+validation levels is summarized in Table 1.
+Going from level 0 to 4 corresponds to a workﬂow that is common in
+practice. One starts with simple tests such as range checks. These are of
+level zero since a range check can be performed on a single data point. That
+is, one only needs a value that corresponds to a single type, measurement,
+unit, and variable. Next, more involved checks are performed, for instance,
+involving multiple variables (sssm, e.g. the ratio between two properties
+of the same unit must be in a given range), multiple units (ssms, e.g. the
+mean of a variable over multiple units must be within a speciﬁed range),
+or multiple measurements (smss, e.g. the current value of the property of
+7
+
+Table 1: The ten possible classes of validation rules, grouped into ‘valida-
+tion levels’. A higher level indicates that a wider variety of information is
+necessary to evaluate a validation rule.
+Validation level
+0
+1
+2
+3
+4
+ssss
+sssm
+ssmm
+smmm
+mmmm
+ssms
+smsm
+msmm
+smss
+smms
+a unit cannot diﬀer too much from a past value of the same property of
+the same unit). Going up in level, even more complex rules are found until
+rule evaluation involves multiple variables of multiple units of multiple types
+measured at multiple instances (mmmm).
+This classiﬁcation also has an immediate interpretation for data stored
+in a data base that is normalized in the sense of Codd (1970). In such a
+data base, records represent units, columns represent variables, and tables
+represent types. The ‘time of measurement’ is represented as a variable as
+well. The classiﬁcation indicates whether a rule implementation needs to
+access multiple records, columns or tables.
+3
+Properties of validation rule sets
+Deﬁnition 4 implies that a validation rule is a predicate over a data set
+that is not a tautology nor a contradiction. This means that combining two
+validation rules with ∧or ∨does not automatically yield a new validation
+rule. Consider for example the rules x ≥0 and x ≤1 (using shorter notation
+for brevity). The rule x ≥0∨x ≤1 is a tautology. The rule x ≥0∧x ≤−1 is
+a contradiction. In fact, the only operation that is guaranteed to transform
+a validation rule into another validation rule is negation.
+The fact that validation rules are not closed under conjugation (∧) or
+disjunction (∨) has practical consequences. After all, deﬁning a set of vali-
+dation rules amounts to conjugating them together into a single rule since
+a data set is valid only when all validation rules are satisﬁed. A set of rules
+may be such that their conjugation is a contradiction. Such a rule set is
+called infeasible. More subtle problems involve unintended consequences,
+including partial infeasibility (Bruni and Bianchi, 2012), and introduction
+on ﬁxed values or range restrictions.
+Other problems involve the intro-
+duction of several types of redundancies (Dillig et al., 2010; Paulraj and
+8
+
+Sumathi, 2010), which make rule sets both harder to maintain and ham-
+per solving problems such as error localization (Bruni, 2005; De Jonge and
+Van der Loo, 2019a). In the following, some examples of unintended eﬀects
+and redundancies are discussed. The examples shown here are selected from
+a more extensive discussion in Van der Loo and De Jonge (2018, Chapter
+8). For simplicity of presentation the rules are expressed as simple clauses,
+neglecting the key-value pair representation.
+Partial inconsistency is (often) an unintended consequence implied by a
+pair of rules. For example the rule set
+gender = "male" ⇒income > 2000
+gender = "male" ⇒income < 1000,
+is feasible, but it can only be satisﬁed when gender ̸= "male". Thus, the
+combination of rules (unintentionally) excludes an otherwise valid gender
+category.
+A simple redundancy is introduced when one rule deﬁnes a subset of
+valid values with respect to another rule. For example if x ≥0 and x ≥1,
+then x ≥0 is redundant with respect to x ≥1. More complex cases arise
+in sets with multiple rules. A more subtle redundancy, called ‘nonrelaxing
+clause’ occurs in the following situation.
+x ≥0 ⇒y ≥0
+x ≥0.
+Here, the second rule implies that the condition in the ﬁrst rule must always
+be true. Hence the rule set can be simpliﬁed to
+y ≥0
+x ≥0.
+Another subtle redundancy, called a ‘nonconstraining clause’ occurs in the
+following situation.
+x > 0 ⇒y > 0
+x < 1 ⇒y > 1
+Now, letting x vary from −∞to ∞, the rule set ﬁrst implies that y > 1. As
+x becomes positive, the rule set implies that y > 0 until x reaches ∞. In
+other words, the rule set implies that y must be positive regardless of x and
+9
+
+can therefore be replaced with
+y > 0
+x < 1 ⇒y > 1
+Methods for algorithmically removing such issues and simplifying rule sets
+have recently been discussed by Daalmans (2018), and have been imple-
+mented by De Jonge and Van der Loo (2019b). In short, the methods are
+based on formulating Mixed Integer Programming (MIP) problems and de-
+tecting their (non)-convergence after certain manipulations of the rule sets.
+General theory and methods for rule manipulation have also been discussed
+by Chandru and Hooker (1999) and Hooker (2000) in the context of opti-
+mization.
+4
+Conclusion
+Data validation can be formalized equivalently in terms of certain predicates
+over a data set or as a surjective Boolean function over a well-deﬁned set
+of observable data sets.
+It is possible to deﬁne a very general classiﬁca-
+tion of validation rules, based on a generic decomposition of the metadata.
+Combining validation rules into a set can lead to subtle and unintended
+consequences that can be solved in some cases with algorithmic methods.
+Related articles
+• stat04233
+• stat06088
+• stat06776
+• stat04018
+References
+Bruni, R. (2005). Error correction for massive datasets. Optimization Meth-
+ods and Software 20(2-3), 297–316.
+Bruni, R. and G. Bianchi (2012). A formal procedure for ﬁnding contradic-
+tions into a set of rules. Applied Mathematical Sciences 6(126), 6253–6271.
+10
+
+Chandru, V. and J. Hooker (1999). Optimization methods for logical infer-
+ence, Volume 34 of Wiley Series in Discrete Mathematics and Optimiza-
+tion). John Wiley & Sons.
+Codd, E. F. (1970). A relational model of data for large shared data banks.
+Communications of the ACM 13(6), 377–387.
+Daalmans, J. (2018). Constraint simpliﬁcation for data editing of numerical
+variables. Journal of Oﬃcial Statistics 34(1), 27–39.
+De Jonge, E. and M. Van der Loo (2019a). Error Localization. John Wiley
+& Sons, Inc. to be published.
+De Jonge, E. and M. Van der Loo (2019b). validatetools: Checking and
+Simplifying Validation Rule Sets. R package version 0.4.6.
+De Waal, T., J. Pannekoek, and S. Scholtus (2011). Handbook of statistical
+data editing and imputation. Wiley handbooks in survey methodology.
+John Wiley & Sons.
+Dillig, I., T. Dillig, and A. Aiken (2010). Small formulas for large programs:
+On-line constraint simpliﬁcation in scalable static analysis. In Interna-
+tional Static Analysis Symposium, pp. 236–252. Springer.
+Hooker, J. (2000). Logic-based methods for optimization: combining opti-
+mization and constraint satisfaction, Volume 2 of Wiley Series in Discrete
+Mathematics and Optimization. John Wiley & Sons.
+Paulraj, S. and P. Sumathi (2010). A comparative study of redundant con-
+straints identiﬁcation methods in linear programming problems. Mathe-
+matical Problems in Engineering 2010.
+Van der Loo, M. and E. De Jonge (2018). Statistical data cleaning with
+applications in R. New York: John Wiley & Sons, Inc.
+Van der Loo, M. and E. De Jonge (2019). Data validation infrastructure for
+R. Journal of Statistical Software. Accepted for publication.
+Zio,
+M.
+D.,
+N.
+Fursova,
+T.
+Gelsema,
+S.
+Giessing,
+U.
+Guarnera,
+J. Ptrauskiene, L. Q. von Kalben, M. Scanu, K. ten Bosch, M. van der
+Loo, and K. Walsdorfe (2015). Methodology for data validation. Technical
+Report deliverable of Work Package 2, ESSNet on validation.
+11
