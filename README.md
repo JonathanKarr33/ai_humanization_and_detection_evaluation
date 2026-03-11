@@ -26,6 +26,8 @@ Create a `.env` file in the project root with the following variables:
 ```
 PANGRAM_API=your_pangram_api_key_here
 EMAIL=your_email@example.com
+UNDETECTABLE_USER_ID=your_user_id
+UNDETECTABLE_API_KEY=your_api_key
 ```
 
 - `PANGRAM_API`: Your PANGRAM API key for AI detection
@@ -112,6 +114,46 @@ This will display:
 - Summary statistics (min, max, mean, median)
 - Key ranges summary (Very Unlikely AI, Unlikely AI, Uncertain, Likely AI)
 
+## Step 4: Humanize Text with Undetectable.AI
+
+This step runs Undetectable.AI over the paper abstracts (original + improved/new/rewritten variants) and saves both the original and humanized text plus full API metadata.
+
+```bash
+python src/humanization_undetectable.py --collection 2025_back_2023
+```
+
+This will:
+- Read original abstracts from `papers/{collection}/{domain}/paper_jsons/`
+- Read improved/new/rewritten abstracts from `ai_improvement/{collection}/{domain}/*_abstracts/`
+- For each abstract, call the Undetectable.AI humanization API (default: model v11, Doctorate readability, Article purpose, Balanced strength)
+- Write one JSON per paper + variant to:
+  - `humanization/{collection}/{domain}/{variant}/{paper_id}.json`
+
+Each JSON includes:
+- `paper_id`, `domain`, `variant`, `humanizer` (currently `"undetectable"`)
+- `original_abstract`, `humanized_abstract`
+- `undetectable.params`: settings used for the call
+- `undetectable.document`: full response from Undetectable `/document`
+
+## Step 5: Run PANGRAM on Humanized Text
+
+To evaluate AI-detection scores on the humanized abstracts, run:
+
+```bash
+python src/humanization_pangram.py --collection 2025_back_2023
+```
+
+This will:
+- Read humanized abstracts from `humanization/{collection}/{domain}/{variant}/{paper_id}.json`
+- Send each `humanized_abstract` to the PANGRAM API
+- Save one JSON per paper + variant to:
+  - `humanization_results/{collection}/{domain}/{variant}_pangram_results/{paper_id}.json`
+
+Each JSON includes:
+- `paper_id`, `domain`, `variant`
+- `text`: the humanized abstract sent to PANGRAM
+- All fields returned by the PANGRAM SDK (scores, predictions, per-model breakdowns, etc.)
+
 ## Project Structure
 
 ```
@@ -123,11 +165,21 @@ This will display:
 │   │   │   ├── abstracts/          # Abstract text files
 │   │   │   ├── pdfs/               # PDF files
 │   │   │   └── text/               # Extracted text files
-├── pangram_abstracts_results.json  # PANGRAM detection results
+├── ai_improvement/                 # Improved/new/rewritten abstracts by domain/variant
+├── ai_improvement_results/         # Detector results on improved/new/rewritten (original pipeline)
+├── humanization/
+│   ├── {collection}/{domain}/{variant}/{paper_id}.json
+│   │   # Original + humanized abstracts + Undetectable metadata
+├── humanization_results/
+│   ├── {collection}/{domain}/{variant}_pangram_results/{paper_id}.json
+│   │   # PANGRAM results on humanized abstracts
+├── pangram_abstracts_results.json  # PANGRAM detection results on original abstracts
 ├── src/
 │   ├── paper_scrape.py             # Step 1: Scrape papers
-│   ├── pangram_abstracts.py        # Step 2: Process with PANGRAM
-│   └── analyze_pangram_results.py  # Step 3: Analyze results
+│   ├── pangram_abstracts.py        # Step 2: Process original abstracts with PANGRAM
+│   ├── analyze_pangram_results.py  # Step 3: Analyze original PANGRAM results
+│   ├── humanization_undetectable.py# Step 4: Humanize abstracts with Undetectable
+│   └── humanization_pangram.py     # Step 5: Run PANGRAM on humanized abstracts
 └── .env                            # Environment variables (create this)
 ```
 
@@ -136,4 +188,5 @@ This will display:
 - Python 3.9+
 - Virtual environment
 - PANGRAM API key
+- Undetectable.AI API key
 - Internet connection (for API calls)
