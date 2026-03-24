@@ -76,7 +76,7 @@ def load_original_pangram_scores(domain_filter: str | None = None) -> List[float
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Compare Pangram ai_likelihood distributions for original/improved/new texts "
+            "Compare Pangram score distributions for original/refine/new texts "
             "vs their humanized equivalents, and output a single chart."
         )
     )
@@ -133,12 +133,12 @@ def main() -> None:
             for var, vals in dom_scores.items():
                 human_variant_scores.setdefault(var, []).extend(vals)
 
-    # Prepare 6 series: original_raw, original_humanized, improved_raw, improved_humanized, new_raw, new_humanized
+    # Prepare 6 series: original_raw, original_humanized, refine_raw, refine_humanized, new_raw, new_humanized
     series_map = {
         "original_raw": orig_raw_scores,
         "original_humanized": human_variant_scores.get("original", []),
-        "improved_raw": raw_variant_scores.get("improved", []),
-        "improved_humanized": human_variant_scores.get("improved", []),
+        "refine_raw": raw_variant_scores.get("improved", []),
+        "refine_humanized": human_variant_scores.get("improved", []),
         "new_raw": raw_variant_scores.get("new", []),
         "new_humanized": human_variant_scores.get("new", []),
     }
@@ -147,16 +147,16 @@ def main() -> None:
         print("No Pangram scores found to plot. Make sure Pangram scripts have been run.")
         return
 
-    # 2x3 grid: row 0 = raw, row 1 = humanized; columns = original, improved, new
+    # 2x3 grid: row 0 = raw, row 1 = humanized; columns = original, refine, new
     fig, axes = plt.subplots(2, 3, figsize=(12, 6), sharey=True)
     fig.subplots_adjust(hspace=0.35, wspace=0.25)
 
     layout = [
         ("original_raw", 0, 0),
-        ("improved_raw", 0, 1),
+        ("refine_raw", 0, 1),
         ("new_raw", 0, 2),
         ("original_humanized", 1, 0),
-        ("improved_humanized", 1, 1),
+        ("refine_humanized", 1, 1),
         ("new_humanized", 1, 2),
     ]
 
@@ -176,15 +176,39 @@ def main() -> None:
                 color="gray",
                 transform=ax.transAxes,
             )
-        ax.set_title(label.replace("_", " "))
+        # Remove default single-category x tick label ("1")
+        ax.set_xticks([])
+        # Show sample size below each subplot
+        ax.text(
+            0.5,
+            -0.18,
+            f"n={len(vals)}",
+            transform=ax.transAxes,
+            ha="center",
+            va="top",
+            fontsize=9,
+        )
+        # Friendlier naming for titles
+        ax.set_title(
+            label.replace("improved", "refine").replace("_", " "),
+            fontweight="bold",
+        )
         ax.grid(axis="y", alpha=0.3)
         if c == 0:
-            ax.set_ylabel("PANGRAM ai_likelihood")
+            ax.set_ylabel("PANGRAM score")
 
     if domain:
-        fig.suptitle(f"PANGRAM scores (domain={domain})\noriginal/improved/new vs humanized", fontsize=12)
+        fig.suptitle(
+            f"PANGRAM scores (post-AI 2023–2025, domain={domain})\nTypes: original / polish / refine / new",
+            fontsize=12,
+            fontweight="bold",
+        )
     else:
-        fig.suptitle("PANGRAM scores (all domains)\noriginal/improved/new vs humanized", fontsize=12)
+        fig.suptitle(
+            "PANGRAM scores (post-AI 2023–2025, all domains)\nTypes: original / polish / refine / new",
+            fontsize=12,
+            fontweight="bold",
+        )
 
     out_path = ROOT / args.output
     out_path.parent.mkdir(parents=True, exist_ok=True)

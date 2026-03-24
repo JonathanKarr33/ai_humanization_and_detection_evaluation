@@ -64,6 +64,7 @@ VARIANTS = ["original", "improved", "new", "rewritten"]
 
 UNDETECTABLE_SUBMIT_URL = "https://humanize.undetectable.ai/submit"
 UNDETECTABLE_DOCUMENT_URL = "https://humanize.undetectable.ai/document"
+UNDETECTABLE_CREDITS_URL = "https://humanize.undetectable.ai/check-user-credits"
 
 # Load environment variables from .env file
 load_dotenv()
@@ -80,6 +81,47 @@ def _iter_variants(variants: Optional[Iterable[str]]) -> List[str]:
     if variants is None:
         return VARIANTS
     return list(variants)
+
+
+def _count_words(text: str) -> int:
+    if not text:
+        return 0
+    # Simple whitespace-based word count is sufficient for estimating credit use.
+    return len(text.split())
+
+
+def undetectable_check_credits() -> Optional[int]:
+    """
+    Query Undetectable for current word credits.
+
+    Returns available credits (int) or None if the check fails.
+    """
+    headers = {
+        "apikey": UNDETECTABLE_API_KEY or "",
+        "accept": "application/json",
+    }
+    try:
+        resp = requests.get(UNDETECTABLE_CREDITS_URL, headers=headers, timeout=30)
+    except Exception as e:
+        print(f"\n⚠️  Failed to check Undetectable credits: {type(e).__name__}: {e}")
+        return None
+
+    if resp.status_code != 200:
+        print(f"\n⚠️  Failed to check Undetectable credits ({resp.status_code}): {resp.text[:300]}")
+        return None
+
+    try:
+        data = resp.json()
+    except Exception as e:
+        print(f"\n⚠️  Could not parse Undetectable credits response: {e}")
+        return None
+
+    credits = data.get("credits")
+    if isinstance(credits, int):
+        return credits
+    if isinstance(credits, float):
+        return int(credits)
+    return None
 
 
 def build_input_items(
@@ -234,7 +276,32 @@ def process_humanization_with_undetectable(
 
     items = build_input_items(collection, domains, variants)
     total_inputs = len(items)
-    print(f"Found {total_inputs} humanization abstracts to consider.")
+    print(f"Found {total_inputs} abstracts to consider for Undetectable humanization.")
+
+    # Pre-flight: estimate total word usage and compare to available credits, if possible.
+    if total_inputs > 0:
+        estimated_words = 0
+        for _, _, in_path in items:
+            try:
+                with in_path.open() as f:
+                    src = json.load(f)
+            except Exception:
+                continue
+            text = src.get("abstract") or src.get("text") or ""
+            estimated_words += _count_words(text)
+
+        print(f"Estimated total words to humanize: {estimated_words}")
+        credits = undetectable_check_credits()
+        if credits is not None:
+            print(f"Undetectable credits available: {credits}")
+            if credits < estimated_words:
+                shortfall = estimated_words - credits
+                print(
+                    "\n❌ Not enough Undetectable credits to humanize all requested texts.\n"
+                    f"   Needed ≈ {estimated_words} words, have {credits} (short by ≈ {shortfall}).\n"
+                    "   No requests were sent; reduce scope (domains/variants/limit) or add credits."
+                )
+                return
 
     processed = 0
     written = 0

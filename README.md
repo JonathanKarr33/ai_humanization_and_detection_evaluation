@@ -116,7 +116,11 @@ This will display:
 
 ## Step 4: Humanize Text with Undetectable.AI
 
-This step runs Undetectable.AI over the paper abstracts (original + improved/new/rewritten variants) and saves both the original and humanized text plus full API metadata.
+This step runs Undetectable.AI over the paper abstracts (original + refined/new/polished variants) and saves both the original and humanized text plus full API metadata.
+
+Naming note (important for future plots/graphs):
+- We use **refine** where older code/data may say **improve**
+- We use **polish** where older code/data may say **rewrite/rewritten**
 
 ```bash
 python src/humanization_undetectable.py --collection 2025_back_2023
@@ -124,7 +128,7 @@ python src/humanization_undetectable.py --collection 2025_back_2023
 
 This will:
 - Read original abstracts from `papers/{collection}/{domain}/paper_jsons/`
-- Read improved/new/rewritten abstracts from `ai_improvement/{collection}/{domain}/*_abstracts/`
+- Read refined/new/polished abstracts from `ai_improvement/{collection}/{domain}/*_abstracts/`
 - For each abstract, call the Undetectable.AI humanization API (default: model v11, Doctorate readability, Article purpose, Balanced strength)
 - Write one JSON per paper + variant to:
   - `humanization/{collection}/{domain}/{variant}/{paper_id}.json`
