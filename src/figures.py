@@ -233,6 +233,37 @@ def flierprops() -> dict:
     }
 
 
+def count_outliers_iqr(values: List[float]) -> int:
+    if len(values) < 4:
+        return 0
+    xs = sorted(values)
+
+    def median(arr: List[float]) -> float:
+        n = len(arr)
+        mid = n // 2
+        if n % 2 == 1:
+            return arr[mid]
+        return (arr[mid - 1] + arr[mid]) / 2.0
+
+    n = len(xs)
+    if n % 2 == 0:
+        lower = xs[: n // 2]
+        upper = xs[n // 2 :]
+    else:
+        lower = xs[: n // 2]
+        upper = xs[n // 2 + 1 :]
+
+    if not lower or not upper:
+        return 0
+
+    q1 = median(lower)
+    q3 = median(upper)
+    iqr = q3 - q1
+    low = q1 - 1.5 * iqr
+    high = q3 + 1.5 * iqr
+    return sum(1 for v in xs if v < low or v > high)
+
+
 def render_results_boxplot(input_csv: Path, outdir: Path, max_domains: int = 16) -> Path:
     df = load_results(input_csv)
     if "ai_likelihood" not in df.columns or "domain" not in df.columns or "process_canonical" not in df.columns:
@@ -407,6 +438,37 @@ def _load_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
     return out
 
 
+def _load_humanized_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
+    base = ROOT / "humanization_results" / collection
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_dirs: tuple[tuple[str, str], ...] = (
+        ("original", "original"),
+        ("rewritten", "polish"),
+        ("improved", "refine"),
+        ("new", "new"),
+    )
+
+    out: Dict[tuple[str, str], List[float]] = {}
+    for dom in domains:
+        dom_dir = base / dom
+        if not dom_dir.exists():
+            continue
+        for type_dir, type_label in type_dirs:
+            pdir = dom_dir / f"{type_dir}_pangram_results"
+            vals: List[float] = []
+            if pdir.exists():
+                for p in pdir.glob("W*.json"):
+                    try:
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    s = extract_pangram_score(data)
+                    if s is not None:
+                        vals.append(s)
+            out[(dom, type_label)] = vals
+    return out
+
+
 def render_pangram_distributions(collection: str, domain: str | None, output: Path) -> Path:
     if domain:
         raise RuntimeError("Domain filter is not supported for 4x4 pangram distribution grid.")
@@ -436,6 +498,18 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
                 ax.text(0.5, 0.5, "no data", ha="center", va="center", fontsize=9, color="gray", transform=ax.transAxes)
             ax.set_xticks([])
             ax.text(0.5, -0.20, f"n={len(xs)}", ha="center", va="top", fontsize=9, transform=ax.transAxes)
+            outlier_n = count_outliers_iqr(xs)
+            if outlier_n > 0:
+                ax.text(
+                    0.98,
+                    0.95,
+                    f"outliers = {outlier_n}",
+                    ha="right",
+                    va="top",
+                    color="red",
+                    fontsize=9,
+                    transform=ax.transAxes,
+                )
             if r == 0:
                 ax.set_title(typ)
             if c == 0:
@@ -444,6 +518,68 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
 
     fig.suptitle(
         f"PANGRAM score distributions ({_collection_range_label(collection)})\nTypes: original / polish / refine / new",
+        fontsize=12,
+        fontweight="bold",
+    )
+    fig.text(0.005, 0.5, "PANGRAM score", va="center", rotation="vertical")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
+    fig.savefig(output, dpi=200)
+    plt.close(fig)
+    return output
+
+
+def render_humanized_pangram_distributions(collection: str, domain: str | None, output: Path) -> Path:
+    if domain:
+        raise RuntimeError("Domain filter is not supported for 4x4 humanized pangram distribution grid.")
+
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    scores = _load_humanized_pangram_grid_scores(collection)
+
+    if not any(scores.values()):
+        raise RuntimeError("No humanized Pangram scores found to plot. Run humanization_pangram first.")
+
+    fig, axes = plt.subplots(
+        nrows=len(domains),
+        ncols=len(type_labels),
+        figsize=(len(type_labels) * 3.0, len(domains) * 2.2),
+        sharey=True,
+    )
+    fig.subplots_adjust(hspace=0.55, wspace=0.25)
+
+    for r, dom in enumerate(domains):
+        for c, typ in enumerate(type_labels):
+            ax = axes[r][c]
+            xs = scores.get((dom, typ), [])
+            if xs:
+                ax.boxplot(xs, showmeans=True)
+            else:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", fontsize=9, color="gray", transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.text(0.5, -0.20, f"n={len(xs)}", ha="center", va="top", fontsize=9, transform=ax.transAxes)
+            outlier_n = count_outliers_iqr(xs)
+            if outlier_n > 0:
+                ax.text(
+                    0.98,
+                    0.95,
+                    f"outliers = {outlier_n}",
+                    ha="right",
+                    va="top",
+                    color="red",
+                    fontsize=9,
+                    transform=ax.transAxes,
+                )
+            if r == 0:
+                ax.set_title(typ)
+            if c == 0:
+                ax.set_ylabel(dom, fontweight="bold")
+            ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        f"PANGRAM score distributions after humanization ({_collection_range_label(collection)})\n"
+        "Types: original / polish / refine / new",
         fontsize=12,
         fontweight="bold",
     )
@@ -571,6 +707,22 @@ def run_pangram(args: argparse.Namespace) -> None:
         print(f"Wrote: {outpath}")
 
 
+def run_humanized_pangram(args: argparse.Namespace) -> None:
+    if getattr(args, "collection", None):
+        collections = [args.collection]
+    elif getattr(args, "collections", None):
+        collections = list(args.collections)
+    else:
+        collections = default_collections(ROOT / "papers")
+
+    for collection in collections:
+        output = args.output
+        if len(collections) > 1:
+            output = output.parent / collection / output.name
+        outpath = render_humanized_pangram_distributions(collection=collection, domain=args.domain, output=output)
+        print(f"Wrote: {outpath}")
+
+
 def run_agreement(args: argparse.Namespace) -> None:
     if getattr(args, "collection", None):
         collections = [args.collection]
@@ -626,6 +778,17 @@ def run_all(args: argparse.Namespace) -> None:
     except RuntimeError as exc:
         print(f"Skipped pangram distributions: {exc}")
 
+    humanized_pangram_args = argparse.Namespace(
+        collection=getattr(args, "collection", None),
+        collections=getattr(args, "collections", None),
+        domain=args.domain,
+        output=args.humanized_pangram_output,
+    )
+    try:
+        run_humanized_pangram(humanized_pangram_args)
+    except RuntimeError as exc:
+        print(f"Skipped humanized pangram distributions: {exc}")
+
     agreement_args = argparse.Namespace(
         collection=getattr(args, "collection", None),
         collections=getattr(args, "collections", None),
@@ -660,6 +823,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_pangram.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
     p_pangram.set_defaults(func=run_pangram)
 
+    p_humanized_pangram = sub.add_parser(
+        "pangram-humanized",
+        help="Render 4x4 pangram distribution grid after humanization.",
+    )
+    p_humanized_pangram.add_argument("--collection", default=None)
+    p_humanized_pangram.add_argument("--collections", nargs="*", default=None)
+    p_humanized_pangram.add_argument("--domain", default=None)
+    p_humanized_pangram.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "results" / "figures" / "pangram_distributions_humanized.png",
+    )
+    p_humanized_pangram.set_defaults(func=run_humanized_pangram)
+
     p_agreement = sub.add_parser("agreement", help="Render Pangram vs GPTZero agreement scatter figure(s).")
     p_agreement.add_argument("--collection", default=None)
     p_agreement.add_argument("--collections", nargs="*", default=None)
@@ -677,6 +854,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--max-domains", type=int, default=16)
     p_all.add_argument("--domain", default=None)
     p_all.add_argument("--pangram-output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
+    p_all.add_argument(
+        "--humanized-pangram-output",
+        type=Path,
+        default=ROOT / "results" / "figures" / "pangram_distributions_humanized.png",
+    )
     p_all.add_argument("--agreement-threshold", type=float, default=0.5)
     p_all.set_defaults(func=run_all)
 
