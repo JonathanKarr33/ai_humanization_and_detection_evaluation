@@ -99,18 +99,30 @@ def plot_cell(
     coll_label = _collection_range_label(collection)
 
     plt.figure(figsize=(6, 4))
+    ax = plt.gca()
     if scores:
-        plt.hist(scores, bins=20, range=(0, 1), alpha=0.85, color="#1f77b4", edgecolor="white")
+        ax.boxplot(
+            scores,
+            vert=False,
+            showmeans=True,
+            patch_artist=True,
+            boxprops={"facecolor": "#9ecae1", "edgecolor": "#1f77b4"},
+            medianprops={"color": "#2c3e50", "linewidth": 1.5},
+            whiskerprops={"color": "#1f77b4"},
+            capprops={"color": "#1f77b4"},
+            meanprops={"marker": "D", "markerfacecolor": "#d62728", "markeredgecolor": "#d62728"},
+            flierprops={"marker": "o", "markersize": 3, "alpha": 0.35, "markerfacecolor": "#1f77b4"},
+        )
         mean = sum(scores) / len(scores)
         med = _median(scores)
-        plt.axvline(mean, color="black", linewidth=1, alpha=0.8, label=f"mean={mean:.3f}")
-        plt.axvline(med, color="gray", linewidth=1, alpha=0.8, linestyle="--", label=f"median={med:.3f}")
-        plt.legend(loc="upper left", fontsize=8)
+        ax.text(0.99, 0.90, f"mean={mean:.3f}", ha="right", va="top", transform=ax.transAxes, fontsize=8)
+        ax.text(0.99, 0.80, f"median={med:.3f}", ha="right", va="top", transform=ax.transAxes, fontsize=8)
     else:
-        plt.text(0.5, 0.5, "no data", ha="center", va="center", transform=plt.gca().transAxes)
+        ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
+        ax.set_yticks([])
 
     plt.xlim(0, 1)
-    plt.ylabel("count")
+    plt.ylabel("")
     plt.xlabel(f"{det_label} score")
     plt.title(
         f"{det_label} distribution — {coll_label}\n{domain} / {type_label} (n={len(scores)})",
@@ -136,8 +148,8 @@ def main() -> None:
     ap.add_argument(
         "--detector",
         default="pangram",
-        choices=["pangram", "gptzero", "llm_aid"],
-        help="Detector to plot (default: pangram).",
+        choices=["pangram", "llm_aid"],
+        help="Detector to plot (default: pangram). GPTZero is intentionally excluded for cell plots.",
     )
     args = ap.parse_args()
 
