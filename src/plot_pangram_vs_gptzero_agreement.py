@@ -24,8 +24,8 @@ TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
 
 def _collection_range_label(collection: str) -> str:
     return {
-        "2015_back_2013": "pre-AI 2013–2015",
-        "2025_back_2023": "post-AI 2023–2025",
+        "2015_back_2013": "Pre-LLMs 2013–2015",
+        "2025_back_2023": "Post-LLMs 2023–2025",
     }.get(collection, collection)
 
 
@@ -179,10 +179,14 @@ def plot_scatter(
     domain_labels: List[str],
     threshold: float,
     out_path: Path,
+    title_suffix: str = "",
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 2x2 grid, one panel per type (original/polish/refine/new)
+    def _title_domain(d: str) -> str:
+        return (d or "").replace("_", " ").title()
+
+    # 2x2 grid, one panel per type (Original/Polish/Refine/New)
     type_order = ("original", "polish", "refine", "new")
     # Color by domain
     domain_palette = {
@@ -192,13 +196,14 @@ def plot_scatter(
         "theology": "#d62728",
     }
 
-    # Slightly shorter figure (reduce unused whitespace below)
-    fig, axes = plt.subplots(2, 2, figsize=(9, 8), sharex=True, sharey=True)
-    fig.subplots_adjust(hspace=0.35, wspace=0.25)
+    # Compact figure: reduce excess whitespace while preserving readability.
+    fig, axes = plt.subplots(2, 2, figsize=(9, 6.8), sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.11, right=0.96, bottom=0.16, top=0.78, hspace=0.55, wspace=0.25)
 
     title_range = _collection_range_label(collection)
+    suffix = f" - {title_suffix}" if title_suffix else ""
     fig.suptitle(
-        f"PANGRAM vs GPTZero agreement ({title_range})",
+        f"Pangram vs GPTZero Agreement ({title_range}){suffix}",
         fontweight="bold",
         fontsize=13,
     )
@@ -223,7 +228,7 @@ def plot_scatter(
                         s=14,
                         alpha=0.55,
                         color=domain_palette.get(dom),
-                        label=dom if idx == 0 else None,  # legend only once
+                        label=_title_domain(dom) if idx == 0 else None,  # legend only once
                     )
         else:
             ax.text(
@@ -242,10 +247,11 @@ def plot_scatter(
         ax.axvline(threshold, color="gray", linestyle="--", linewidth=1, alpha=0.6)
         ax.axhline(threshold, color="gray", linestyle="--", linewidth=1, alpha=0.6)
 
-        ax.set_title(typ, fontweight="bold")
+        ax.set_title(typ.replace("_", " ").title(), fontweight="bold")
         ax.grid(alpha=0.25)
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.02, 1.02)
+        ax.tick_params(axis="y", pad=6)
 
         pr = _pearsonr(xs_all, ys_all) if len(xs_all) == len(ys_all) else None
         sr = _spearmanr(xs_all, ys_all) if len(xs_all) == len(ys_all) else None
@@ -280,23 +286,24 @@ def plot_scatter(
             fontsize=9,
         )
 
-    fig.supxlabel("GPTZero AI score")
-    fig.supylabel("PANGRAM AI score")
+    fig.supxlabel("GPTZero AI Score")
+    fig.supylabel("Pangram AI Score", x=0.02)
     # Domain legend (single, from the first subplot)
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
         fig.legend(
             handles,
             labels,
-            title="domain",
+            title="Domain",
             loc="upper center",
-            bbox_to_anchor=(0.5, 0.915),
+            bbox_to_anchor=(0.5, 0.90),
             ncol=4,
             frameon=False,
+            columnspacing=1.0,
+            handletextpad=0.4,
         )
 
-    # Leave modest room for below-panel stats; legend is now at the top.
-    fig.tight_layout(rect=[0, 0.08, 1, 0.88])
+    # Subplot geometry is set explicitly above to avoid overly conservative tight_layout spacing.
     fig.savefig(out_path, dpi=200)
     plt.close(fig)
 

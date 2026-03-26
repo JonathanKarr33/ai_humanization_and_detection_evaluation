@@ -24,8 +24,8 @@ TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
 
 def _collection_range_label(collection: str) -> str:
     return {
-        "2015_back_2013": "pre-AI 2013–2015",
-        "2025_back_2023": "post-AI 2023–2025",
+        "2015_back_2013": "Pre-LLMs 2013–2015",
+        "2025_back_2023": "Post-LLMs 2023–2025",
     }.get(collection, collection)
 
 
@@ -63,7 +63,7 @@ def extract_score(detector: str, d: dict) -> Optional[float]:
 
 def detector_label(detector: str) -> str:
     return {
-        "pangram": "PANGRAM",
+        "pangram": "Pangram",
         "gptzero": "GPTZero",
         "llm_aid": "LLM-Aid (gpt-5-nano)",
     }.get(detector, detector)
@@ -150,12 +150,12 @@ def plot_grid(collection: str, detector: str, output_path: Path) -> None:
     coll_label = _collection_range_label(collection)
     det_label = detector_label(detector)
     fig.suptitle(
-        f"{det_label} score distributions ({coll_label})\n"
-        "Types: original / polish / refine / new",
+        f"{det_label} Score Distributions ({coll_label})\n"
+        "Types: Original / Polish / Refine / New",
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, f"{det_label} score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, f"{det_label} Score", va="center", rotation="vertical")
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

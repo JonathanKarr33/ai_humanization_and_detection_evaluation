@@ -30,7 +30,7 @@ def _collection_range_label(collection: str) -> str:
 
 def detector_label(detector: str) -> str:
     return {
-        "pangram": "PANGRAM",
+        "pangram": "Pangram",
         "gptzero": "GPTZero",
         "llm_aid": "LLM-Aid (gpt-5-nano)",
     }.get(detector, detector)

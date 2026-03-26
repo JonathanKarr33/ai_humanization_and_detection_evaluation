@@ -155,12 +155,12 @@ def main() -> None:
                 ax.grid(axis="y", alpha=0.3)
 
         title_range = {
-            "2015_back_2013": "pre-AI 2013–2015",
-            "2025_back_2023": "post-AI 2023–2025",
+            "2015_back_2013": "pre-LLMs 2013–2015",
+            "2025_back_2023": "post-LLMs 2023–2025",
         }.get(collection, collection)
 
         fig.suptitle(
-            f"PANGRAM score distributions ({title_range})\n"
+            f"Pangram score distributions ({title_range})\n"
             "Types: original / polish / refine / new",
             fontsize=12,
             fontweight="bold",

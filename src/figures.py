@@ -165,7 +165,7 @@ def render_abstract_coverage(collection: str, min_words: int, outdir: Path) -> P
 
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.bar(domain_counts.index.tolist(), domain_counts.values.tolist(), color="#4c78a8")
-    ax1.set_title(f"{collection}: abstracts >= {min_words} words - count by domain", pad=10)
+    ax1.set_title(f"{collection}: Abstracts >= {min_words} Words - Count by Domain", pad=10)
     ax1.set_xlabel("domain")
     ax1.set_ylabel("count")
     ax1.tick_params(axis="x", rotation=20)
@@ -182,7 +182,7 @@ def render_abstract_coverage(collection: str, min_words: int, outdir: Path) -> P
         ax2.set_axis_off()
     else:
         month_pivot.plot(kind="bar", stacked=True, ax=ax2, width=0.9)
-        ax2.set_title(f"{collection}: abstracts >= {min_words} words - count by month (stacked)", pad=12)
+        ax2.set_title(f"{collection}: Abstracts >= {min_words} Words - Count by Month (Stacked)", pad=12)
         ax2.set_xlabel("month (YYYY-MM)")
         ax2.set_ylabel("count")
         if len(month_pivot.index) > 36:
@@ -194,7 +194,7 @@ def render_abstract_coverage(collection: str, min_words: int, outdir: Path) -> P
             ax2.tick_params(axis="x", rotation=45)
         ax2.legend(title="domain", bbox_to_anchor=(1.01, 1.0), loc="upper left")
 
-    fig.suptitle(f"Abstract coverage - {collection}", y=0.995, fontsize=14)
+    fig.suptitle(f"Abstract Coverage - {collection}", y=0.995, fontsize=14)
     fig.subplots_adjust(top=0.93, right=0.80)
     fig.savefig(outpath, dpi=200)
     plt.close(fig)
@@ -316,7 +316,7 @@ def render_results_boxplot(input_csv: Path, outdir: Path, max_domains: int = 16)
         ax.axis("off")
 
     fig.suptitle(
-        f"AI likelihood by domain, faceted by process (top {len(domains)} domains; fliers are > 1.5xIQR)",
+        f"AI Likelihood by Domain, Faceted by Process (Top {len(domains)} Domains; Fliers Are > 1.5xIQR)",
         y=1.02,
         fontsize=14,
     )
@@ -377,6 +377,13 @@ def extract_pangram_score(data: dict) -> Optional[float]:
     return None
 
 
+def extract_gptzero_score(data: dict) -> Optional[float]:
+    score = data.get("ai")
+    if isinstance(score, (int, float)):
+        return float(score)
+    return None
+
+
 def load_scores_from_dir(base: Path) -> Dict[str, List[float]]:
     scores: Dict[str, List[float]] = {}
     if not base.exists():
@@ -402,9 +409,17 @@ def load_scores_from_dir(base: Path) -> Dict[str, List[float]]:
 
 def _collection_range_label(collection: str) -> str:
     return {
-        "2015_back_2013": "pre-AI 2013-2015",
-        "2025_back_2023": "post-AI 2023-2025",
+        "2015_back_2013": "Pre-LLMs 2013-2015",
+        "2025_back_2023": "Post-LLMs 2023-2025",
     }.get(collection, collection)
+
+
+def _title_domain(dom: str) -> str:
+    return (dom or "").replace("_", " ").title()
+
+
+def _title_type(typ: str) -> str:
+    return (typ or "").replace("_", " ").title()
 
 
 def _load_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
@@ -469,6 +484,37 @@ def _load_humanized_pangram_grid_scores(collection: str) -> Dict[tuple[str, str]
     return out
 
 
+def _load_humanized_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
+    base = ROOT / "humanization_results" / collection
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_dirs: tuple[tuple[str, str], ...] = (
+        ("original", "original"),
+        ("rewritten", "polish"),
+        ("improved", "refine"),
+        ("new", "new"),
+    )
+
+    out: Dict[tuple[str, str], List[float]] = {}
+    for dom in domains:
+        dom_dir = base / dom
+        if not dom_dir.exists():
+            continue
+        for type_dir, type_label in type_dirs:
+            pdir = dom_dir / f"{type_dir}_gptzero_results"
+            vals: List[float] = []
+            if pdir.exists():
+                for p in pdir.glob("W*.json"):
+                    try:
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    s = extract_gptzero_score(data)
+                    if s is not None:
+                        vals.append(s)
+            out[(dom, type_label)] = vals
+    return out
+
+
 def render_pangram_distributions(collection: str, domain: str | None, output: Path) -> Path:
     if domain:
         raise RuntimeError("Domain filter is not supported for 4x4 pangram distribution grid.")
@@ -511,17 +557,17 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
                     transform=ax.transAxes,
                 )
             if r == 0:
-                ax.set_title(typ)
+                ax.set_title(_title_type(typ))
             if c == 0:
-                ax.set_ylabel(dom, fontweight="bold")
+                ax.set_ylabel(_title_domain(dom), fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        f"PANGRAM score distributions ({_collection_range_label(collection)})\nTypes: original / polish / refine / new",
+        f"Pangram Score Distributions ({_collection_range_label(collection)})\nTypes: Original / Polish / Refine / New",
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, "PANGRAM score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
@@ -572,18 +618,80 @@ def render_humanized_pangram_distributions(collection: str, domain: str | None, 
                     transform=ax.transAxes,
                 )
             if r == 0:
-                ax.set_title(typ)
+                ax.set_title(_title_type(typ))
             if c == 0:
-                ax.set_ylabel(dom, fontweight="bold")
+                ax.set_ylabel(_title_domain(dom), fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        f"PANGRAM score distributions after humanization ({_collection_range_label(collection)})\n"
-        "Types: original / polish / refine / new",
+        f"Pangram Score Distributions After Humanization ({_collection_range_label(collection)})\n"
+        "Types: Original / Polish / Refine / New",
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, "PANGRAM score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
+    fig.savefig(output, dpi=200)
+    plt.close(fig)
+    return output
+
+
+def render_humanized_gptzero_distributions(collection: str, domain: str | None, output: Path) -> Path:
+    if domain:
+        raise RuntimeError("Domain filter is not supported for 4x4 humanized gptzero distribution grid.")
+
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    scores = _load_humanized_gptzero_grid_scores(collection)
+
+    if not any(scores.values()):
+        raise RuntimeError("No humanized GPTZero scores found to plot. Run humanization_ai_detection --detector gptzero first.")
+
+    fig, axes = plt.subplots(
+        nrows=len(domains),
+        ncols=len(type_labels),
+        figsize=(len(type_labels) * 3.0, len(domains) * 2.2),
+        sharey=True,
+    )
+    fig.subplots_adjust(hspace=0.55, wspace=0.25)
+
+    for r, dom in enumerate(domains):
+        for c, typ in enumerate(type_labels):
+            ax = axes[r][c]
+            xs = scores.get((dom, typ), [])
+            if xs:
+                ax.boxplot(xs, showmeans=True)
+            else:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", fontsize=9, color="gray", transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.text(0.5, -0.20, f"n={len(xs)}", ha="center", va="top", fontsize=9, transform=ax.transAxes)
+            outlier_n = count_outliers_iqr(xs)
+            if outlier_n > 0:
+                ax.text(
+                    0.98,
+                    0.95,
+                    f"outliers = {outlier_n}",
+                    ha="right",
+                    va="top",
+                    color="red",
+                    fontsize=9,
+                    transform=ax.transAxes,
+                )
+            if r == 0:
+                ax.set_title(_title_type(typ))
+            if c == 0:
+                ax.set_ylabel(_title_domain(dom), fontweight="bold")
+            ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        f"GPTZero AI Score Distributions After Humanization ({_collection_range_label(collection)})\n"
+        "Types: Original / Polish / Refine / New",
+        fontsize=12,
+        fontweight="bold",
+    )
+    fig.text(0.005, 0.5, "GPTZero AI score", va="center", rotation="vertical")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
@@ -679,7 +787,7 @@ def render_results_boxplot_from_df(df: pd.DataFrame, outdir: Path, max_domains: 
         ax.axis("off")
 
     fig.suptitle(
-        f"AI likelihood by domain, faceted by process (top {len(domains)} domains; fliers are > 1.5xIQR)",
+        f"AI Likelihood by Domain, Faceted by Process (Top {len(domains)} Domains; Fliers Are > 1.5xIQR)",
         y=1.02,
         fontsize=14,
     )
@@ -723,6 +831,22 @@ def run_humanized_pangram(args: argparse.Namespace) -> None:
         print(f"Wrote: {outpath}")
 
 
+def run_humanized_gptzero(args: argparse.Namespace) -> None:
+    if getattr(args, "collection", None):
+        collections = [args.collection]
+    elif getattr(args, "collections", None):
+        collections = list(args.collections)
+    else:
+        collections = default_collections(ROOT / "papers")
+
+    for collection in collections:
+        output = args.output
+        if len(collections) > 1:
+            output = output.parent / collection / output.name
+        outpath = render_humanized_gptzero_distributions(collection=collection, domain=args.domain, output=output)
+        print(f"Wrote: {outpath}")
+
+
 def run_agreement(args: argparse.Namespace) -> None:
     if getattr(args, "collection", None):
         collections = [args.collection]
@@ -745,6 +869,80 @@ def run_agreement(args: argparse.Namespace) -> None:
         )
         print(f"Wrote: {out} (n={len(x)})")
 
+
+def load_pairs_humanized(collection: str) -> tuple[list[float], list[float], list[str], list[str]]:
+    """
+    Load matched (gptzero_ai, pangram_ai) pairs from humanization_results/{collection}/...
+    across domains and types. Matches by filename W*.json.
+    """
+    base = ROOT / "humanization_results" / collection
+    x: list[float] = []
+    y: list[float] = []
+    type_labels: list[str] = []
+    domain_labels: list[str] = []
+
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_dirs: tuple[tuple[str, str], ...] = (
+        ("original", "original"),
+        ("rewritten", "polish"),
+        ("improved", "refine"),
+        ("new", "new"),
+    )
+
+    for dom in domains:
+        dom_dir = base / dom
+        if not dom_dir.exists():
+            continue
+        for type_dir, type_label in type_dirs:
+            pang_dir = dom_dir / f"{type_dir}_pangram_results"
+            gptz_dir = dom_dir / f"{type_dir}_gptzero_results"
+            if not pang_dir.exists() or not gptz_dir.exists():
+                continue
+
+            for p in pang_dir.glob("W*.json"):
+                g = gptz_dir / p.name
+                if not g.exists():
+                    continue
+                try:
+                    pang = json.loads(p.read_text(encoding="utf-8"))
+                    gptz = json.loads(g.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+
+                ps = extract_pangram_score(pang)
+                gs = extract_gptzero_score(gptz)
+                if ps is None or gs is None:
+                    continue
+                x.append(gs)
+                y.append(ps)
+                type_labels.append(type_label)
+                domain_labels.append(dom)
+
+    return x, y, type_labels, domain_labels
+
+
+def run_agreement_humanized(args: argparse.Namespace) -> None:
+    if getattr(args, "collection", None):
+        collections = [args.collection]
+    elif getattr(args, "collections", None):
+        collections = list(args.collections)
+    else:
+        collections = default_collections(ROOT / "papers")
+
+    for collection in collections:
+        x, y, type_labels, domain_labels = load_pairs_humanized(collection)
+        out = args.outdir / collection / "pangram_vs_gptzero_humanized.png"
+        plot_scatter(
+            collection=collection,
+            x=x,
+            y=y,
+            type_labels=type_labels,
+            domain_labels=domain_labels,
+            threshold=args.agreement_threshold,
+            out_path=out,
+            title_suffix="Post Humanization",
+        )
+        print(f"Wrote: {out} (n={len(x)})")
 
 def run_all(args: argparse.Namespace) -> None:
     abstracts_args = argparse.Namespace(
@@ -789,6 +987,17 @@ def run_all(args: argparse.Namespace) -> None:
     except RuntimeError as exc:
         print(f"Skipped humanized pangram distributions: {exc}")
 
+    humanized_gptzero_args = argparse.Namespace(
+        collection=getattr(args, "collection", None),
+        collections=getattr(args, "collections", None),
+        domain=args.domain,
+        output=args.humanized_gptzero_output,
+    )
+    try:
+        run_humanized_gptzero(humanized_gptzero_args)
+    except RuntimeError as exc:
+        print(f"Skipped humanized gptzero distributions: {exc}")
+
     agreement_args = argparse.Namespace(
         collection=getattr(args, "collection", None),
         collections=getattr(args, "collections", None),
@@ -796,6 +1005,8 @@ def run_all(args: argparse.Namespace) -> None:
         agreement_threshold=args.agreement_threshold,
     )
     run_agreement(agreement_args)
+
+    run_agreement_humanized(agreement_args)
 
 
 
@@ -833,9 +1044,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_humanized_pangram.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "results" / "figures" / "pangram_distributions_humanized.png",
+        default=ROOT / "results" / "figures" / "post_huminization_ai_detection.png",
     )
     p_humanized_pangram.set_defaults(func=run_humanized_pangram)
+
+    p_humanized_gptzero = sub.add_parser(
+        "gptzero-humanized",
+        help="Render 4x4 GPTZero distribution grid after humanization.",
+    )
+    p_humanized_gptzero.add_argument("--collection", default=None)
+    p_humanized_gptzero.add_argument("--collections", nargs="*", default=None)
+    p_humanized_gptzero.add_argument("--domain", default=None)
+    p_humanized_gptzero.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "results" / "figures" / "post_huminization_ai_detection_gptzero.png",
+    )
+    p_humanized_gptzero.set_defaults(func=run_humanized_gptzero)
 
     p_agreement = sub.add_parser("agreement", help="Render Pangram vs GPTZero agreement scatter figure(s).")
     p_agreement.add_argument("--collection", default=None)
@@ -843,6 +1068,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_agreement.add_argument("--outdir", type=Path, default=ROOT / "results" / "figures")
     p_agreement.add_argument("--agreement-threshold", type=float, default=0.5)
     p_agreement.set_defaults(func=run_agreement)
+
+    p_agreement_h = sub.add_parser(
+        "agreement-humanized",
+        help="Render Pangram vs GPTZero agreement scatter figure(s) after humanization.",
+    )
+    p_agreement_h.add_argument("--collection", default=None)
+    p_agreement_h.add_argument("--collections", nargs="*", default=None)
+    p_agreement_h.add_argument("--outdir", type=Path, default=ROOT / "results" / "figures")
+    p_agreement_h.add_argument("--agreement-threshold", type=float, default=0.5)
+    p_agreement_h.set_defaults(func=run_agreement_humanized)
 
 
     p_all = sub.add_parser("all", help="Run all figure generators.")
@@ -857,7 +1092,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument(
         "--humanized-pangram-output",
         type=Path,
-        default=ROOT / "results" / "figures" / "pangram_distributions_humanized.png",
+        default=ROOT / "results" / "figures" / "post_huminization_ai_detection.png",
+    )
+    p_all.add_argument(
+        "--humanized-gptzero-output",
+        type=Path,
+        default=ROOT / "results" / "figures" / "post_huminization_ai_detection_gptzero.png",
     )
     p_all.add_argument("--agreement-threshold", type=float, default=0.5)
     p_all.set_defaults(func=run_all)
