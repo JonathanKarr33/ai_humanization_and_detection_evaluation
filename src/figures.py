@@ -384,6 +384,16 @@ def extract_gptzero_score(data: dict) -> Optional[float]:
     return None
 
 
+def extract_llm_aid_score(data: dict) -> Optional[float]:
+    score = data.get("ai_probability")
+    if isinstance(score, (int, float)):
+        return float(score)
+    score = data.get("ai_likelihood")
+    if isinstance(score, (int, float)):
+        return float(score)
+    return None
+
+
 def load_scores_from_dir(base: Path) -> Dict[str, List[float]]:
     scores: Dict[str, List[float]] = {}
     if not base.exists():
@@ -515,6 +525,68 @@ def _load_humanized_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str]
     return out
 
 
+def _load_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
+    base = ROOT / "ai_improvement_results" / collection
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_dirs: tuple[tuple[str, str], ...] = (
+        ("original", "original"),
+        ("rewritten", "polish"),
+        ("improved", "refine"),
+        ("new", "new"),
+    )
+
+    out: Dict[tuple[str, str], List[float]] = {}
+    for dom in domains:
+        dom_dir = base / dom
+        if not dom_dir.exists():
+            continue
+        for type_dir, type_label in type_dirs:
+            pdir = dom_dir / f"{type_dir}_gptzero_results"
+            vals: List[float] = []
+            if pdir.exists():
+                for p in pdir.glob("W*.json"):
+                    try:
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    s = extract_gptzero_score(data)
+                    if s is not None:
+                        vals.append(s)
+            out[(dom, type_label)] = vals
+    return out
+
+
+def _load_llm_aid_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
+    base = ROOT / "ai_improvement_results" / collection
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_dirs: tuple[tuple[str, str], ...] = (
+        ("original", "original"),
+        ("rewritten", "polish"),
+        ("improved", "refine"),
+        ("new", "new"),
+    )
+
+    out: Dict[tuple[str, str], List[float]] = {}
+    for dom in domains:
+        dom_dir = base / dom
+        if not dom_dir.exists():
+            continue
+        for type_dir, type_label in type_dirs:
+            pdir = dom_dir / f"{type_dir}_llm_aid_results"
+            vals: List[float] = []
+            if pdir.exists():
+                for p in pdir.glob("W*.json"):
+                    try:
+                        data = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    s = extract_llm_aid_score(data)
+                    if s is not None:
+                        vals.append(s)
+            out[(dom, type_label)] = vals
+    return out
+
+
 def render_pangram_distributions(collection: str, domain: str | None, output: Path) -> Path:
     if domain:
         raise RuntimeError("Domain filter is not supported for 4x4 pangram distribution grid.")
@@ -557,7 +629,7 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
                     transform=ax.transAxes,
                 )
             if r == 0:
-                ax.set_title(_title_type(typ))
+                ax.set_title(_title_type(typ), fontweight="bold")
             if c == 0:
                 ax.set_ylabel(_title_domain(dom), fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
@@ -567,7 +639,7 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical", fontweight="bold")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
@@ -618,7 +690,7 @@ def render_humanized_pangram_distributions(collection: str, domain: str | None, 
                     transform=ax.transAxes,
                 )
             if r == 0:
-                ax.set_title(_title_type(typ))
+                ax.set_title(_title_type(typ), fontweight="bold")
             if c == 0:
                 ax.set_ylabel(_title_domain(dom), fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
@@ -629,7 +701,7 @@ def render_humanized_pangram_distributions(collection: str, domain: str | None, 
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, "Pangram Score", va="center", rotation="vertical", fontweight="bold")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
@@ -680,7 +752,7 @@ def render_humanized_gptzero_distributions(collection: str, domain: str | None, 
                     transform=ax.transAxes,
                 )
             if r == 0:
-                ax.set_title(_title_type(typ))
+                ax.set_title(_title_type(typ), fontweight="bold")
             if c == 0:
                 ax.set_ylabel(_title_domain(dom), fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
@@ -691,7 +763,130 @@ def render_humanized_gptzero_distributions(collection: str, domain: str | None, 
         fontsize=12,
         fontweight="bold",
     )
-    fig.text(0.005, 0.5, "GPTZero AI score", va="center", rotation="vertical")
+    fig.text(0.005, 0.5, "GPTZero AI score", va="center", rotation="vertical", fontweight="bold")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
+    fig.savefig(output, dpi=200)
+    plt.close(fig)
+    return output
+
+
+def render_gptzero_distributions(collection: str, domain: str | None, output: Path) -> Path:
+    if domain:
+        raise RuntimeError("Domain filter is not supported for 4x4 gptzero distribution grid.")
+
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    scores = _load_gptzero_grid_scores(collection)
+
+    if not any(scores.values()):
+        raise RuntimeError("No GPTZero scores found to plot. Run gptzero result generation first.")
+
+    fig, axes = plt.subplots(
+        nrows=len(domains),
+        ncols=len(type_labels),
+        figsize=(len(type_labels) * 3.0, len(domains) * 2.2),
+        sharey=True,
+    )
+    fig.subplots_adjust(hspace=0.55, wspace=0.25)
+
+    for r, dom in enumerate(domains):
+        for c, typ in enumerate(type_labels):
+            ax = axes[r][c]
+            xs = scores.get((dom, typ), [])
+            if xs:
+                ax.boxplot(xs, showmeans=True)
+            else:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", fontsize=9, color="gray", transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.text(0.5, -0.20, f"n={len(xs)}", ha="center", va="top", fontsize=9, transform=ax.transAxes)
+            outlier_n = count_outliers_iqr(xs)
+            if outlier_n > 0:
+                ax.text(
+                    0.98,
+                    0.95,
+                    f"outliers = {outlier_n}",
+                    ha="right",
+                    va="top",
+                    color="red",
+                    fontsize=9,
+                    transform=ax.transAxes,
+                )
+            if r == 0:
+                ax.set_title(_title_type(typ), fontweight="bold")
+            if c == 0:
+                ax.set_ylabel(_title_domain(dom), fontweight="bold")
+            ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        f"GPTZero AI Score Distributions ({_collection_range_label(collection)})\nTypes: Original / Polish / Refine / New",
+        fontsize=12,
+        fontweight="bold",
+    )
+    fig.text(0.005, 0.5, "GPTZero AI Score", va="center", rotation="vertical", fontweight="bold")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
+    fig.savefig(output, dpi=200)
+    plt.close(fig)
+    return output
+
+
+def render_llm_aid_distributions(collection: str, domain: str | None, output: Path) -> Path:
+    if domain:
+        raise RuntimeError("Domain filter is not supported for 4x4 llm_aid distribution grid.")
+
+    domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
+    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    scores = _load_llm_aid_grid_scores(collection)
+
+    if not any(scores.values()):
+        raise RuntimeError("No LLM Aid scores found to plot. Run llm_aid result generation first.")
+
+    fig, axes = plt.subplots(
+        nrows=len(domains),
+        ncols=len(type_labels),
+        figsize=(len(type_labels) * 3.0, len(domains) * 2.2),
+        sharey=True,
+    )
+    fig.subplots_adjust(hspace=0.55, wspace=0.25)
+
+    for r, dom in enumerate(domains):
+        for c, typ in enumerate(type_labels):
+            ax = axes[r][c]
+            xs = scores.get((dom, typ), [])
+            if xs:
+                ax.boxplot(xs, showmeans=True)
+            else:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", fontsize=9, color="gray", transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.text(0.5, -0.20, f"n={len(xs)}", ha="center", va="top", fontsize=9, transform=ax.transAxes)
+            outlier_n = count_outliers_iqr(xs)
+            if outlier_n > 0:
+                ax.text(
+                    0.98,
+                    0.95,
+                    f"outliers = {outlier_n}",
+                    ha="right",
+                    va="top",
+                    color="red",
+                    fontsize=9,
+                    transform=ax.transAxes,
+                )
+            if r == 0:
+                ax.set_title(_title_type(typ), fontweight="bold")
+            if c == 0:
+                ax.set_ylabel(_title_domain(dom), fontweight="bold")
+            ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        f"LLM Aid AI Score Distributions (GPT-5 Nano; {_collection_range_label(collection)})\n"
+        "Types: Original / Polish / Refine / New",
+        fontsize=12,
+        fontweight="bold",
+    )
+    fig.text(0.005, 0.5, "LLM Aid AI Score (GPT-5 Nano)", va="center", rotation="vertical", fontweight="bold")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout(rect=[0.06, 0.03, 1, 0.93])
@@ -847,6 +1042,38 @@ def run_humanized_gptzero(args: argparse.Namespace) -> None:
         print(f"Wrote: {outpath}")
 
 
+def run_gptzero(args: argparse.Namespace) -> None:
+    if getattr(args, "collection", None):
+        collections = [args.collection]
+    elif getattr(args, "collections", None):
+        collections = list(args.collections)
+    else:
+        collections = default_collections(ROOT / "papers")
+
+    for collection in collections:
+        output = args.output
+        if len(collections) > 1:
+            output = output.parent / collection / output.name
+        outpath = render_gptzero_distributions(collection=collection, domain=args.domain, output=output)
+        print(f"Wrote: {outpath}")
+
+
+def run_llm_aid(args: argparse.Namespace) -> None:
+    if getattr(args, "collection", None):
+        collections = [args.collection]
+    elif getattr(args, "collections", None):
+        collections = list(args.collections)
+    else:
+        collections = default_collections(ROOT / "papers")
+
+    for collection in collections:
+        output = args.output
+        if len(collections) > 1:
+            output = output.parent / collection / output.name
+        outpath = render_llm_aid_distributions(collection=collection, domain=args.domain, output=output)
+        print(f"Wrote: {outpath}")
+
+
 def run_agreement(args: argparse.Namespace) -> None:
     if getattr(args, "collection", None):
         collections = [args.collection]
@@ -976,6 +1203,28 @@ def run_all(args: argparse.Namespace) -> None:
     except RuntimeError as exc:
         print(f"Skipped pangram distributions: {exc}")
 
+    gptzero_args = argparse.Namespace(
+        collection=getattr(args, "collection", None),
+        collections=getattr(args, "collections", None),
+        domain=args.domain,
+        output=args.gptzero_output,
+    )
+    try:
+        run_gptzero(gptzero_args)
+    except RuntimeError as exc:
+        print(f"Skipped gptzero distributions: {exc}")
+
+    llm_aid_args = argparse.Namespace(
+        collection=getattr(args, "collection", None),
+        collections=getattr(args, "collections", None),
+        domain=args.domain,
+        output=args.llm_aid_output,
+    )
+    try:
+        run_llm_aid(llm_aid_args)
+    except RuntimeError as exc:
+        print(f"Skipped llm_aid distributions: {exc}")
+
     humanized_pangram_args = argparse.Namespace(
         collection=getattr(args, "collection", None),
         collections=getattr(args, "collections", None),
@@ -1034,6 +1283,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_pangram.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
     p_pangram.set_defaults(func=run_pangram)
 
+    p_gptzero = sub.add_parser("gptzero", help="Render 4x4 GPTZero distribution grid before humanization.")
+    p_gptzero.add_argument("--collection", default=None)
+    p_gptzero.add_argument("--collections", nargs="*", default=None)
+    p_gptzero.add_argument("--domain", default=None)
+    p_gptzero.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "gptzero_distributions.png")
+    p_gptzero.set_defaults(func=run_gptzero)
+
+    p_llm_aid = sub.add_parser("llm-aid", help="Render 4x4 LLM Aid distribution grid before humanization.")
+    p_llm_aid.add_argument("--collection", default=None)
+    p_llm_aid.add_argument("--collections", nargs="*", default=None)
+    p_llm_aid.add_argument("--domain", default=None)
+    p_llm_aid.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "llm_aid_distributions.png")
+    p_llm_aid.set_defaults(func=run_llm_aid)
+
     p_humanized_pangram = sub.add_parser(
         "pangram-humanized",
         help="Render 4x4 pangram distribution grid after humanization.",
@@ -1089,6 +1352,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--max-domains", type=int, default=16)
     p_all.add_argument("--domain", default=None)
     p_all.add_argument("--pangram-output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
+    p_all.add_argument("--gptzero-output", type=Path, default=ROOT / "results" / "figures" / "gptzero_distributions.png")
+    p_all.add_argument("--llm-aid-output", type=Path, default=ROOT / "results" / "figures" / "llm_aid_distributions.png")
     p_all.add_argument(
         "--humanized-pangram-output",
         type=Path,
