@@ -22,11 +22,13 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Annotated, Iterable, List, Optional, Tuple
 
 import requests
 from dotenv import load_dotenv
+from openai import OpenAI
 from pangram import Pangram
+from pydantic import BaseModel, Field
 from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,10 +40,48 @@ DEFAULT_COLLECTION = "2025_back_2023"
 DOMAINS = ["chemistry", "computer_science", "political_science", "theology"]
 VARIANTS = ["original", "improved", "new", "rewritten"]
 
-load_dotenv()
-PANGRAM_API_KEY = os.getenv("PANGRAM_API")
-GPT_ZERO_API_KEY = os.getenv("GPT_ZERO_API_KEY") or os.getenv("GPTZERO_API_KEY")
+def _read_env(name: str) -> Optional[str]:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    cleaned = value.strip().strip('"').strip("'")
+    return cleaned or None
+
+
+# Prefer project .env values over inherited shell env values.
+load_dotenv(override=True)
+PANGRAM_API_KEY = _read_env("PANGRAM_API")
+GPT_ZERO_API_KEY = _read_env("GPT_ZERO_API_KEY") or _read_env("GPTZERO_API_KEY")
 GPTZERO_ENDPOINT = "https://api.gptzero.me/v2/predict/text"
+OPENROUTER_API_KEY = _read_env("OPENROUTER_API_KEY")
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"
+LLM_ASSISTED_MODEL_NAME = "openai/gpt-5-nano"
+
+
+class LLMAiDetectionResult(BaseModel):
+    result_explanation: str = Field(
+        description="Explanation of why this probability was chosen. 1-2 short sentences",
+    )
+    ai_probability: Annotated[
+        int,
+        Field(
+            strict=True,
+            ge=0,
+            le=100,
+            description="Probability that the input text is AI-generated, percentage (0-100)",
+        ),
+    ]
+
+
+LLM_AI_DETECTION_PROMPT = (
+    """
+You are an expert scientist who excels in detecting AI in texts. Your task is to check whether the text given to you in the user's message is AI-generated or not.
+Provide a probability (whole number, 0-100) and a short explanation.
+Respond as JSON only, following this schema:
+""".strip()
+    + "\n"
+    + json.dumps(LLMAiDetectionResult.model_json_schema())
+)
 
 
 def _iter_domains(domains: Optional[Iterable[str]]) -> List[str]:
@@ -88,6 +128,56 @@ def get_gptzero_result(text: str, api_key: str) -> Optional[dict]:
         return None
 
 
+def get_llm_assisted_result(text: str, client: OpenAI) -> Optional[dict]:
+    if not text or not text.strip():
+        return None
+    try:
+        response = client.chat.completions.create(
+            model=LLM_ASSISTED_MODEL_NAME,
+            messages=[
+                {"role": "system", "content": LLM_AI_DETECTION_PROMPT},
+                {"role": "user", "content": text.strip()},
+            ],
+            response_format={"type": "json_object"},
+        )
+        if not response.choices:
+            return None
+        content = response.choices[0].message.content
+        if not content:
+            return None
+        parsed = LLMAiDetectionResult.model_validate(json.loads(content))
+        return {
+            "ai_probability": parsed.ai_probability / 100,
+            "explanation": parsed.result_explanation,
+            "model_name": LLM_ASSISTED_MODEL_NAME,
+        }
+    except Exception as e:
+        print(f"\n❌ LLM-assisted detection error: {type(e).__name__}: {e}")
+        return None
+
+
+def check_llm_assisted_auth(client: OpenAI) -> bool:
+    """
+    Make a tiny probe request so we fail fast on invalid OpenRouter auth.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=LLM_ASSISTED_MODEL_NAME,
+            messages=[{"role": "user", "content": "Return a JSON object with ai_probability=50 and result_explanation='test'."}],
+            response_format={"type": "json_object"},
+            max_tokens=64,
+        )
+        return bool(response.choices)
+    except Exception as e:
+        print(
+            "\n❌ LLM-assisted auth probe failed.\n"
+            f"   Error: {type(e).__name__}: {e}\n"
+            "   OpenRouter is rejecting this key for chat completions.\n"
+            "   Please verify OPENROUTER_API_KEY has active credits and valid generation access."
+        )
+        return False
+
+
 def build_input_items(
     collection: str,
     domains: Optional[Iterable[str]],
@@ -114,6 +204,7 @@ def process_humanization_with_detector(
     overwrite: bool = False,
 ) -> None:
     client: Optional[Pangram] = None
+    llm_client: Optional[OpenAI] = None
     if detector == "pangram":
         if not PANGRAM_API_KEY:
             print("Error: PANGRAM_API key not found in .env file")
@@ -125,6 +216,17 @@ def process_humanization_with_detector(
             print("Error: GPT_ZERO_API_KEY not found in .env file")
             return
         print("✅ GPTZero API key found\n")
+    elif detector == "llm_assisted":
+        if not OPENROUTER_API_KEY:
+            print("Error: OPENROUTER_API_KEY not found in .env file")
+            return
+        llm_client = OpenAI(
+            api_key=OPENROUTER_API_KEY,
+            base_url=OPENROUTER_ENDPOINT,
+        )
+        if not check_llm_assisted_auth(llm_client):
+            return
+        print(f"✅ LLM-assisted detector initialized ({LLM_ASSISTED_MODEL_NAME})\n")
     else:
         print(f"Error: Unsupported detector '{detector}'")
         return
@@ -133,7 +235,12 @@ def process_humanization_with_detector(
     print(f"Found {len(items)} humanization abstracts to consider.")
 
     processed = written = skipped = failed = 0
-    desc = "PANGRAM humanization" if detector == "pangram" else "GPTZero humanization"
+    if detector == "pangram":
+        desc = "PANGRAM humanization"
+    elif detector == "gptzero":
+        desc = "GPTZero humanization"
+    else:
+        desc = "LLM-assisted humanization"
     for dom, var, in_path in tqdm(items, desc=desc, unit="abstract"):
         if limit is not None and processed >= limit:
             break
@@ -163,8 +270,11 @@ def process_humanization_with_detector(
         if detector == "pangram":
             assert client is not None
             detector_result = get_pangram_result(humanized_abstract, client)
-        else:
+        elif detector == "gptzero":
             detector_result = get_gptzero_result(humanized_abstract, GPT_ZERO_API_KEY or "")
+        else:
+            assert llm_client is not None
+            detector_result = get_llm_assisted_result(humanized_abstract, llm_client)
         if not detector_result:
             failed += 1
             continue
@@ -199,7 +309,11 @@ def parse_args() -> argparse.Namespace:
             "under humanization_results/{collection}/{domain}/{variant}_{detector}_results/."
         )
     )
-    parser.add_argument("--detector", default="pangram", choices=["pangram", "gptzero"])
+    parser.add_argument(
+        "--detector",
+        default="pangram",
+        choices=["pangram", "gptzero", "llm_assisted"],
+    )
     parser.add_argument("--collection", default=DEFAULT_COLLECTION)
     parser.add_argument("--domains", nargs="*", choices=DOMAINS)
     parser.add_argument("--variants", nargs="*", choices=VARIANTS)
