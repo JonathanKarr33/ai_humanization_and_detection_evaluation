@@ -17,10 +17,24 @@ DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science"
 # Column order (left->right): original, polish, refine, new
 TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
     ("original", "original"),
-    ("rewritten", "polish"),  # rewritten -> polish
-    ("improved", "refine"),   # improve -> refine
-    ("new", "new"),
+    ("rewritten", "refine (abstract only)"),
+    ("improved", "refine (abstract + paper)"),
+    ("new", "new (article only)"),
 )
+
+
+def _title_type(typ: str) -> str:
+    short = {
+        "original": "Original",
+        "refine (abstract only)": "Refine (abs. only)",
+        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "new (article only)": "New (article only)",
+    }
+    return short.get(typ, typ)
+
+
+def _types_suptitle_line() -> str:
+    return " / ".join(_title_type(t[1]) for t in TYPE_DIRS)
 
 
 def extract_pangram_score(d: dict) -> Optional[float]:
@@ -104,7 +118,7 @@ def main() -> None:
         out_path = (
             ROOT / args.output
             if args.output
-            else ROOT / "results" / "figures" / collection / "pangram_grid.png"
+            else ROOT / "figures" / collection / "pangram_grid.png"
         )
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -149,19 +163,19 @@ def main() -> None:
                     transform=ax.transAxes,
                 )
                 if r == 0:
-                    ax.set_title(typ)
+                    ax.set_title(_title_type(typ), fontweight="bold")
                 if c == 0:
                     ax.set_ylabel(dom, fontweight="bold")
                 ax.grid(axis="y", alpha=0.3)
 
         title_range = {
-            "2015_back_2013": "pre-LLMs 2013–2015",
-            "2025_back_2023": "post-LLMs 2023–2025",
+            "2015_back_2013": "pre-LLMs 2013-2015",
+            "2025_back_2023": "post-LLMs 2023-2025",
         }.get(collection, collection)
 
         fig.suptitle(
             f"Pangram score distributions ({title_range})\n"
-            "Types: original / polish / refine / new",
+            f"{_types_suptitle_line()}",
             fontsize=12,
             fontweight="bold",
         )

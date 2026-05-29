@@ -16,16 +16,27 @@ DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science"
 # Column/type order used everywhere else
 TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
     ("original", "original"),
-    ("rewritten", "polish"),
-    ("improved", "refine"),
-    ("new", "new"),
+    ("rewritten", "refine (abstract only)"),
+    ("improved", "refine (abstract + paper)"),
+    ("new", "new (article only)"),
 )
+TYPE_ORDER: Tuple[str, ...] = tuple(label for _, label in TYPE_DIRS)
+
+
+def _title_type(typ: str) -> str:
+    short = {
+        "original": "Original",
+        "refine (abstract only)": "Refine (abs. only)",
+        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "new (article only)": "New (article only)",
+    }
+    return short.get(typ, typ)
 
 
 def _collection_range_label(collection: str) -> str:
     return {
-        "2015_back_2013": "Pre-LLMs 2013–2015",
-        "2025_back_2023": "Post-LLMs 2023–2025",
+        "2015_back_2013": "Pre-LLMs 2013-2015",
+        "2025_back_2023": "Post-LLMs 2023-2025",
     }.get(collection, collection)
 
 
@@ -186,8 +197,7 @@ def plot_scatter(
     def _title_domain(d: str) -> str:
         return (d or "").replace("_", " ").title()
 
-    # 2x2 grid, one panel per type (Original/Polish/Refine/New)
-    type_order = ("original", "polish", "refine", "new")
+    type_order = TYPE_ORDER
     # Color by domain
     domain_palette = {
         "chemistry": "#1f77b4",
@@ -247,7 +257,7 @@ def plot_scatter(
         ax.axvline(threshold, color="gray", linestyle="--", linewidth=1, alpha=0.6)
         ax.axhline(threshold, color="gray", linestyle="--", linewidth=1, alpha=0.6)
 
-        ax.set_title(typ.replace("_", " ").title(), fontweight="bold")
+        ax.set_title(_title_type(typ), fontweight="bold")
         ax.grid(alpha=0.25)
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.02, 1.02)

@@ -24,25 +24,45 @@ DEFAULT_COLLECTIONS = ["2025_back_2023", "2015_back_2013"]
 CANONICAL_PROCESS_ORDER = ["original", "rewritten", "improved", "new"]
 PROCESS_LABELS = {
     "original": "original",
-    "rewritten": "polish",
-    "improved": "refine",
-    "new": "new",
+    "rewritten": "refine (abstract only)",
+    "improved": "refine (abstract + paper)",
+    "new": "new (article only)",
 }
+# Grid column keys (match paper condition names)
+GRID_TYPE_LABELS: tuple[str, ...] = tuple(PROCESS_LABELS[k] for k in CANONICAL_PROCESS_ORDER)
+TYPE_DIR_MAP: tuple[tuple[str, str], ...] = tuple(
+    (raw, PROCESS_LABELS[raw]) for raw in CANONICAL_PROCESS_ORDER
+)
+FIGURES_DIR = ROOT / "results" / "figures"
 
 
 def canonical_process(value: str) -> str:
     v = (value or "").strip().lower()
-    if v in {"polish", "rewritten"}:
+    if v in {"polish", "rewritten", "refine (abstract only)"}:
         return "rewritten"
-    if v in {"refine", "improve", "improved"}:
+    if v in {"refine", "improve", "improved", "refine (abstract + paper)"}:
         return "improved"
-    if v in {"original", "new"}:
-        return v
+    if v in {"original", "new", "new (article only)"}:
+        return v if v in {"original", "new"} else "new"
     return v
 
 
 def display_process(value: str) -> str:
     return PROCESS_LABELS.get(value, value)
+
+
+def _title_type(typ: str) -> str:
+    short = {
+        "original": "Original",
+        "refine (abstract only)": "Refine (abs. only)",
+        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "new (article only)": "New (article only)",
+    }
+    return short.get(typ, (typ or "").replace("_", " ").title())
+
+
+def _types_suptitle_line() -> str:
+    return " / ".join(_title_type(t) for t in GRID_TYPE_LABELS)
 
 
 def discover_collections(papers_dir: Path) -> list[str]:
@@ -428,19 +448,10 @@ def _title_domain(dom: str) -> str:
     return (dom or "").replace("_", " ").title()
 
 
-def _title_type(typ: str) -> str:
-    return (typ or "").replace("_", " ").title()
-
-
 def _load_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
     base = ROOT / "ai_improvement_results" / collection
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     out: Dict[tuple[str, str], List[float]] = {}
     for dom in domains:
@@ -466,12 +477,7 @@ def _load_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
 def _load_humanized_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
     base = ROOT / "humanization_results" / collection
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     out: Dict[tuple[str, str], List[float]] = {}
     for dom in domains:
@@ -497,12 +503,7 @@ def _load_humanized_pangram_grid_scores(collection: str) -> Dict[tuple[str, str]
 def _load_humanized_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
     base = ROOT / "humanization_results" / collection
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     out: Dict[tuple[str, str], List[float]] = {}
     for dom in domains:
@@ -528,12 +529,7 @@ def _load_humanized_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str]
 def _load_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
     base = ROOT / "ai_improvement_results" / collection
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     out: Dict[tuple[str, str], List[float]] = {}
     for dom in domains:
@@ -559,12 +555,7 @@ def _load_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
 def _load_llm_aid_grid_scores(collection: str) -> Dict[tuple[str, str], List[float]]:
     base = ROOT / "ai_improvement_results" / collection
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     out: Dict[tuple[str, str], List[float]] = {}
     for dom in domains:
@@ -592,7 +583,7 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
         raise RuntimeError("Domain filter is not supported for 4x4 pangram distribution grid.")
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    type_labels = GRID_TYPE_LABELS
     scores = _load_pangram_grid_scores(collection)
 
     if not any(scores.values()):
@@ -635,7 +626,7 @@ def render_pangram_distributions(collection: str, domain: str | None, output: Pa
             ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        f"Pangram Score Distributions ({_collection_range_label(collection)})\nTypes: Original / Polish / Refine / New",
+        f"Pangram Score Distributions ({_collection_range_label(collection)})\n{_types_suptitle_line()}",
         fontsize=12,
         fontweight="bold",
     )
@@ -653,7 +644,7 @@ def render_humanized_pangram_distributions(collection: str, domain: str | None, 
         raise RuntimeError("Domain filter is not supported for 4x4 humanized pangram distribution grid.")
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    type_labels = GRID_TYPE_LABELS
     scores = _load_humanized_pangram_grid_scores(collection)
 
     if not any(scores.values()):
@@ -697,7 +688,7 @@ def render_humanized_pangram_distributions(collection: str, domain: str | None, 
 
     fig.suptitle(
         f"Pangram Score Distributions After Humanization ({_collection_range_label(collection)})\n"
-        "Types: Original / Polish / Refine / New",
+        f"{_types_suptitle_line()}",
         fontsize=12,
         fontweight="bold",
     )
@@ -715,7 +706,7 @@ def render_humanized_gptzero_distributions(collection: str, domain: str | None, 
         raise RuntimeError("Domain filter is not supported for 4x4 humanized gptzero distribution grid.")
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    type_labels = GRID_TYPE_LABELS
     scores = _load_humanized_gptzero_grid_scores(collection)
 
     if not any(scores.values()):
@@ -759,7 +750,7 @@ def render_humanized_gptzero_distributions(collection: str, domain: str | None, 
 
     fig.suptitle(
         f"GPTZero AI Score Distributions After Humanization ({_collection_range_label(collection)})\n"
-        "Types: Original / Polish / Refine / New",
+        f"{_types_suptitle_line()}",
         fontsize=12,
         fontweight="bold",
     )
@@ -777,7 +768,7 @@ def render_gptzero_distributions(collection: str, domain: str | None, output: Pa
         raise RuntimeError("Domain filter is not supported for 4x4 gptzero distribution grid.")
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    type_labels = GRID_TYPE_LABELS
     scores = _load_gptzero_grid_scores(collection)
 
     if not any(scores.values()):
@@ -820,7 +811,7 @@ def render_gptzero_distributions(collection: str, domain: str | None, output: Pa
             ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        f"GPTZero AI Score Distributions ({_collection_range_label(collection)})\nTypes: Original / Polish / Refine / New",
+        f"GPTZero AI Score Distributions ({_collection_range_label(collection)})\n{_types_suptitle_line()}",
         fontsize=12,
         fontweight="bold",
     )
@@ -838,7 +829,7 @@ def render_llm_aid_distributions(collection: str, domain: str | None, output: Pa
         raise RuntimeError("Domain filter is not supported for 4x4 llm_aid distribution grid.")
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_labels: tuple[str, ...] = ("original", "polish", "refine", "new")
+    type_labels = GRID_TYPE_LABELS
     scores = _load_llm_aid_grid_scores(collection)
 
     if not any(scores.values()):
@@ -882,7 +873,7 @@ def render_llm_aid_distributions(collection: str, domain: str | None, output: Pa
 
     fig.suptitle(
         f"LLM Aid AI Score Distributions (GPT-5 Nano; {_collection_range_label(collection)})\n"
-        "Types: Original / Polish / Refine / New",
+        f"{_types_suptitle_line()}",
         fontsize=12,
         fontweight="bold",
     )
@@ -1109,12 +1100,7 @@ def load_pairs_humanized(collection: str) -> tuple[list[float], list[float], lis
     domain_labels: list[str] = []
 
     domains: tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
-    type_dirs: tuple[tuple[str, str], ...] = (
-        ("original", "original"),
-        ("rewritten", "polish"),
-        ("improved", "refine"),
-        ("new", "new"),
-    )
+    type_dirs = TYPE_DIR_MAP
 
     for dom in domains:
         dom_dir = base / dom
@@ -1280,21 +1266,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_pangram.add_argument("--collection", default=None)
     p_pangram.add_argument("--collections", nargs="*", default=None)
     p_pangram.add_argument("--domain", default=None)
-    p_pangram.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
+    p_pangram.add_argument("--output", type=Path, default=FIGURES_DIR / "pangram_distributions.png")
     p_pangram.set_defaults(func=run_pangram)
 
     p_gptzero = sub.add_parser("gptzero", help="Render 4x4 GPTZero distribution grid before humanization.")
     p_gptzero.add_argument("--collection", default=None)
     p_gptzero.add_argument("--collections", nargs="*", default=None)
     p_gptzero.add_argument("--domain", default=None)
-    p_gptzero.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "gptzero_distributions.png")
+    p_gptzero.add_argument("--output", type=Path, default=FIGURES_DIR / "gptzero_distributions.png")
     p_gptzero.set_defaults(func=run_gptzero)
 
     p_llm_aid = sub.add_parser("llm-aid", help="Render 4x4 LLM Aid distribution grid before humanization.")
     p_llm_aid.add_argument("--collection", default=None)
     p_llm_aid.add_argument("--collections", nargs="*", default=None)
     p_llm_aid.add_argument("--domain", default=None)
-    p_llm_aid.add_argument("--output", type=Path, default=ROOT / "results" / "figures" / "llm_aid_distributions.png")
+    p_llm_aid.add_argument("--output", type=Path, default=FIGURES_DIR / "llm_aid_distributions.png")
     p_llm_aid.set_defaults(func=run_llm_aid)
 
     p_humanized_pangram = sub.add_parser(
@@ -1307,7 +1293,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_humanized_pangram.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "results" / "figures" / "post_huminization_ai_detection.png",
+        default=FIGURES_DIR / "post_huminization_ai_detection.png",
     )
     p_humanized_pangram.set_defaults(func=run_humanized_pangram)
 
@@ -1321,7 +1307,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_humanized_gptzero.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "results" / "figures" / "post_huminization_ai_detection_gptzero.png",
+        default=FIGURES_DIR / "post_huminization_ai_detection_gptzero.png",
     )
     p_humanized_gptzero.set_defaults(func=run_humanized_gptzero)
 
@@ -1347,22 +1333,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--collection", default=None)
     p_all.add_argument("--collections", nargs="*", default=None)
     p_all.add_argument("--min-words", type=int, default=25)
-    p_all.add_argument("--outdir", type=Path, default=ROOT / "results" / "figures")
+    p_all.add_argument("--outdir", type=Path, default=FIGURES_DIR)
     p_all.add_argument("--input", type=Path, default=ROOT / "results" / "results.csv")
     p_all.add_argument("--max-domains", type=int, default=16)
     p_all.add_argument("--domain", default=None)
-    p_all.add_argument("--pangram-output", type=Path, default=ROOT / "results" / "figures" / "pangram_distributions.png")
-    p_all.add_argument("--gptzero-output", type=Path, default=ROOT / "results" / "figures" / "gptzero_distributions.png")
-    p_all.add_argument("--llm-aid-output", type=Path, default=ROOT / "results" / "figures" / "llm_aid_distributions.png")
+    p_all.add_argument("--pangram-output", type=Path, default=FIGURES_DIR / "pangram_distributions.png")
+    p_all.add_argument("--gptzero-output", type=Path, default=FIGURES_DIR / "gptzero_distributions.png")
+    p_all.add_argument("--llm-aid-output", type=Path, default=FIGURES_DIR / "llm_aid_distributions.png")
     p_all.add_argument(
         "--humanized-pangram-output",
         type=Path,
-        default=ROOT / "results" / "figures" / "post_huminization_ai_detection.png",
+        default=FIGURES_DIR / "post_huminization_ai_detection.png",
     )
     p_all.add_argument(
         "--humanized-gptzero-output",
         type=Path,
-        default=ROOT / "results" / "figures" / "post_huminization_ai_detection_gptzero.png",
+        default=FIGURES_DIR / "post_huminization_ai_detection_gptzero.png",
     )
     p_all.add_argument("--agreement-threshold", type=float, default=0.5)
     p_all.set_defaults(func=run_all)

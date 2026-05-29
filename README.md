@@ -1,6 +1,9 @@
 # AI Humanization and Detection Evaluation
 
-This project scrapes academic papers from OpenAlex, processes them through PANGRAM AI detection, and analyzes the results.
+Controlled evaluation of commercial AI detectors on **published English abstracts** from OpenAlex. The pipeline samples four domains across two time windows (2013–2015 vs. 2023–2025), generates three LLM rewrite conditions per paper, scores text with Pangram, GPTZero, and an LLM-assisted baseline, optionally humanizes outputs with Undetectable.AI, and produces reproducible statistics and figures for error-analysis.
+
+**Primary collections:** `2015_back_2013`, `2025_back_2023`  
+**Domains:** `chemistry`, `computer_science`, `political_science`, `theology`
 
 ## Step 0: Setup
 
@@ -8,9 +11,8 @@ This project scrapes academic papers from OpenAlex, processes them through PANGR
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # On macOS/Linux
-# or
-.venv\Scripts\activate  # On Windows
+source .venv/bin/activate   # macOS/Linux
+# .venv\Scripts\activate    # Windows
 ```
 
 ### 2. Install dependencies
@@ -19,9 +21,11 @@ source .venv/bin/activate  # On macOS/Linux
 pip install -r requirements.txt
 ```
 
+Key packages: `pandas`, `matplotlib`, `seaborn`, `pangram-sdk`, `openai`, `requests`, `python-dotenv`, `nltk`.
+
 ### 3. Create `.env` file
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the project root:
 
 ```
 PANGRAM_API=your_pangram_api_key_here
@@ -32,125 +36,113 @@ UNDETECTABLE_USER_ID=your_user_id
 UNDETECTABLE_API_KEY=your_api_key
 ```
 
-- `PANGRAM_API`: Your PANGRAM API key for AI detection
-- `GPT_ZERO_API_KEY`: Your GPTZero API key for AI detection
-- `OPENROUTER_API_KEY`: Your OpenRouter key for LLM-assisted AI detection (used with `openai/gpt-5-nano`)
-- `EMAIL`: Your email address (used for OpenAlex API requests)
+| Variable | Used for |
+|----------|----------|
+| `PANGRAM_API` | Pangram AI detection |
+| `GPT_ZERO_API_KEY` | GPTZero API |
+| `OPENROUTER_API_KEY` | LLM-assisted detector (`openai/gpt-5-nano`) and LLM abstract rewrites |
+| `EMAIL` | OpenAlex API requests |
+| `UNDETECTABLE_*` | Undetectable.AI humanization |
 
-`.env` formatting tips:
-- Do not wrap values in quotes.
-- Do not add spaces around `=`.
-- Keep one key/value per line.
+Formatting: one `KEY=value` per line, no quotes, no spaces around `=`.
 
-## Step 1: Paper Scrape
+## Rewrite conditions and on-disk names
 
-Scrape papers from OpenAlex where the domain is the #1 concept. Collects 100 papers per domain (political_science, theology, computer_science, chemistry).
+Analysis and figures use these **display labels**. On disk, variant folders still use legacy directory names:
 
-```bash
-python src/paper_scrape.py
-```
+| Display label | Directory / `variant_raw` | Description |
+|---------------|---------------------------|-------------|
+| **original** | `original` | Unmodified abstract from OpenAlex |
+| **refine (abstract only)** | `rewritten` / `rewritten_abstracts` | LLM rewrites abstract text only |
+| **refine (abstract + paper)** | `improved` / `improved_abstracts` | LLM rewrites abstract using full paper |
+| **new (article only)** | `new` / `new_abstracts` | LLM writes new abstract from full paper |
 
-This will:
-- Fetch papers from OpenAlex API
-- Filter for papers where the domain is the #1 concept
-- Download PDFs and extract text
-- Save metadata to `papers/{collection}/metadata_{collection}.jsonl` (default collection: `2020_back`)
-- Save abstracts to `papers/{collection}/{domain}/abstracts/{paper_id}.txt`
+`src/paper_stats.py` and `src/figures.py` map raw names to display labels automatically.
 
-**Note**: The script will automatically resume from previous runs and only collect the remaining papers needed to reach 100 per domain.
+## Step 1: Scrape papers (OpenAlex)
 
-## Step 2: PANGRAM Abstracts
-
-Process all paper abstracts through PANGRAM API for AI detection.
-
-If you scraped into a non-default collection folder, pass `--collection` to match:
+Collect abstracts and full text for each domain × collection:
 
 ```bash
-python src/paper_scrape.py --collection 2020_back
+python src/paper_scrape.py --collection 2015_back_2013 --from-date 2013-01-01 --to-date 2015-12-31
+python src/paper_scrape.py --collection 2025_back_2023 --from-date 2023-01-01 --to-date 2025-12-31
 ```
 
-To scrape a specific publication date range (inclusive), use:
+Writes:
+
+- `papers/{collection}/metadata_{collection}.jsonl`
+- `papers/{collection}/{domain}/abstracts/{paper_id}.txt`
+- `papers/{collection}/{domain}/paper_jsons/{paper_id}.json` (abstract + metadata for downstream steps)
+- PDFs and extracted text under `pdfs/`, `text/`
+
+The scraper resumes until ~100 papers per domain (before quality filtering).
+
+### Abstract coverage figure
 
 ```bash
-python src/paper_scrape.py --collection 2025_to_2023 --from-date 2023-01-01 --to-date 2025-12-31
+python src/figures.py abstracts --collection 2025_back_2023 --min-words 25
+# or: python src/visualize_abstracts.py --collection 2025_back_2023 --min-words 25
 ```
 
-## Visualize abstract coverage
+Output: `results/figures/{collection}/abstract_counts_min{min_words}.png`
 
-Create a summary figure (counts by domain + by month) for any collection:
+## Step 2: LLM abstract rewrites
 
-```bash
-python src/visualize_abstracts.py --collection 2020_back --min-words 25
+Rewritten abstracts live under:
+
+```
+ai_improvement/{collection}/{domain}/
+  improved_abstracts/{paper_id}.json
+  new_abstracts/{paper_id}.json
+  rewritten_abstracts/{paper_id}.json
 ```
 
-This writes to:
+Each JSON should include at least `id` (or paper id), `domain`, and `abstract` (rewrite text).
 
-- `results/figures/{collection}/abstract_counts_min{min_words}.png`
+## Step 3: Detector scoring (pre-humanization)
 
-```bash
-python src/pangram_abstracts.py
+Detector JSONs for **original + all rewrites** are stored under:
+
+```
+ai_improvement_results/{collection}/{domain}/
+  {original|rewritten|improved|new}_{pangram|gptzero|llm_aid}_results/{paper_id}.json
 ```
 
-Options:
-- `--test`: Test mode - process only first 10 abstracts
-- `--limit N`: Process only first N abstracts (use with `--test`)
+Each file should include a detector score (`ai_likelihood` or `fraction_ai` for Pangram; `ai` for GPTZero; `ai_probability` for LLM-assisted) and ideally `text`, `paper_id`, and `domain`.
 
-This will:
-- Read abstracts from `papers/{domain}/abstracts/`
-- Send each abstract to PANGRAM API
-- Save results to `pangram_abstracts_results.json`
-- Skip abstracts already processed (resumable)
+Use the same detector APIs as Step 5 (`humanization_ai_detection.py`) against the appropriate source text paths, or your own batch job that mirrors that layout.
 
-The output JSON includes:
-- `paper_id`: Paper identifier (e.g., "W1580878179")
-- `domain`: Domain name (e.g., "political_science")
-- `ai_likelihood`: AI detection score (0-1)
-- `prediction`: Text prediction (e.g., "Unlikely AI", "Possibly AI")
-- `llm_prediction`: Breakdown by model (GPT35, GPT4, CLAUDE, etc.)
-- All other PANGRAM response fields
-
-## Step 3: Analyze Results
-
-Analyze PANGRAM results to see distribution of AI likelihood scores.
-
-```bash
-python src/analyze_pangram_results.py
-```
-
-This will display:
-- Overall distribution by 0.05 increments (0.00-0.05, 0.05-0.10, etc.)
-- Distribution broken down by domain
-- Summary statistics (min, max, mean, median)
-- Key ranges summary (Very Unlikely AI, Unlikely AI, Uncertain, Likely AI)
-
-## Step 4: Humanize Text with Undetectable.AI
-
-This step runs Undetectable.AI over the paper abstracts (original + refined/new/polished variants) and saves both the original and humanized text plus full API metadata.
-
-Naming note (important for future plots/graphs):
-- We use **refine** where older code/data may say **improve**
-- We use **polish** where older code/data may say **rewrite/rewritten**
+## Step 4: Humanize with Undetectable.AI
 
 ```bash
 python src/humanization_undetectable.py --collection 2025_back_2023
+python src/humanization_undetectable.py --collection 2015_back_2013
 ```
 
-This will:
-- Read original abstracts from `papers/{collection}/{domain}/paper_jsons/`
-- Read refined/new/polished abstracts from `ai_improvement/{collection}/{domain}/*_abstracts/`
-- For each abstract, call the Undetectable.AI humanization API (default: model v11, Doctorate readability, Article purpose, Balanced strength)
-- Write one JSON per paper + variant to:
-  - `humanization/{collection}/{domain}/{variant}/{paper_id}.json`
+Reads:
 
-Each JSON includes:
-- `paper_id`, `domain`, `variant`, `humanizer` (currently `"undetectable"`)
-- `original_abstract`, `humanized_abstract`
-- `undetectable.params`: settings used for the call
-- `undetectable.document`: full response from Undetectable `/document`
+- Originals: `papers/{collection}/{domain}/paper_jsons/`
+- Rewrites: `ai_improvement/{collection}/{domain}/*_abstracts/`
 
-## Step 5: Run AI Detection on Humanized Text
+Writes:
 
-To evaluate AI-detection scores on the humanized abstracts, run:
+```
+humanization/{collection}/{domain}/{original|improved|new|rewritten}/{paper_id}.json
+```
+
+Each file contains `original_abstract`, `humanized_abstract`, and full Undetectable API metadata (`undetectable`).
+
+Default settings: model v11, Balanced strength, Doctorate readability, Article purpose.
+
+### Optional: stage humanization inputs only
+
+```bash
+python src/humanization.py --collection 2025_back_2023
+```
+
+Copies abstracts into `humanization/...` without calling Undetectable (useful for inspection).
+
+## Step 5: Detector scoring (post-humanization)
 
 ```bash
 python src/humanization_ai_detection.py --detector pangram --collection 2025_back_2023
@@ -158,57 +150,155 @@ python src/humanization_ai_detection.py --detector gptzero --collection 2025_bac
 python src/humanization_ai_detection.py --detector llm_assisted --collection 2025_back_2023
 ```
 
-This will:
-- Read humanized abstracts from `humanization/{collection}/{domain}/{variant}/{paper_id}.json`
-- Send each `humanized_abstract` to the selected detector API (`pangram`, `gptzero`, or `llm_assisted`)
-- Save one JSON per paper + variant to:
-- `humanization_results/{collection}/{domain}/{variant}_{detector}_results/{paper_id}.json`
+Reads `humanization/{collection}/{domain}/{variant}/{paper_id}.json` and scores `humanized_abstract`.
 
-Each JSON includes:
-- `paper_id`, `domain`, `variant`
-- `text`: the humanized abstract sent to the detector
-- All fields returned by the selected detector API
+Writes:
 
-For `llm_assisted`:
-- Endpoint: `https://openrouter.ai/api/v1`
-- Model: `openai/gpt-5-nano`
-- Output includes `ai_probability` (0-1), `explanation`, and `model_name`
+```
+humanization_results/{collection}/{domain}/
+  {variant}_{detector}_results/{paper_id}.json
+```
 
-## Project Structure
+Options: `--domains`, `--variants`, `--limit`, `--overwrite`.
+
+## Step 6: Statistics and robustness
+
+### Core statistical tests
+
+Runs permutation tests, FDR-corrected feature correlations, domain-adjusted associations, length-partial correlations, and auto-selects one extreme pre/post example per collection:
+
+```bash
+python src/paper_stats.py
+python src/paper_stats.py --collections 2015_back_2013 2025_back_2023 --n-perm 5000 --threshold 0.5
+```
+
+Outputs per collection under `results/statistics/{collection}/`:
+
+| File | Contents |
+|------|----------|
+| `tests_humanization.json` | Matched pre/post humanization |
+| `tests_domain_stem_vs_nonstem.json` | STEM vs non-STEM score contrasts |
+| `tests_variant_effect.json` | Rewrite-condition ANOVA |
+| `tests_detector_agreement.json` | Pangram vs GPTZero agreement |
+| `tests_text_features.json` | Spearman + FDR text-feature tests |
+| `example_case.json` | Auto-selected flip example |
+| `robustness_threshold_sensitivity.csv` | FPR/FNR at τ ∈ {0.4, 0.5, 0.6} |
+| `robustness_error_rates_ci.json` | Bootstrap CIs at τ = 0.5 |
+| `robustness_paired_polish.json` | Paired original → refine (abstract only) |
+| `robustness_coverage.json` | Pipeline completeness |
+| `robustness_summary.md` | Combined robustness prose |
+| `error_rates_all_detectors.csv` | Error rates by detector |
+| `pr_curve_metrics.json` | AUC-PR per detector |
+| `length_partial_correlations.csv` | Length-controlled ρ |
+
+`paper_stats.py` also invokes `robustness_analysis.py` when available (writes PR figure path below).
+
+### Robustness-only rerun
+
+```bash
+PYTHONPATH=src python src/robustness_analysis.py --collections 2015_back_2013 2025_back_2023
+```
+
+Adds/updates threshold tables, paired-shift stats, PR curves, and appends to `robustness_summary.md`.
+
+## Step 7: Figures (`results/figures/`)
+
+All plots are written under **`results/figures/{collection}/`**.
+
+### Generate everything (recommended)
+
+```bash
+PYTHONPATH=src python src/figures.py all --collections 2015_back_2013 2025_back_2023
+```
+
+Runs abstract coverage (if configured), distribution grids, agreement scatters, and related outputs.
+
+### Individual figure commands
+
+```bash
+# Pre-humanization 4×4 score distributions (domains × rewrite conditions)
+PYTHONPATH=src python src/figures.py pangram --collections 2015_back_2013 2025_back_2023
+PYTHONPATH=src python src/figures.py gptzero --collections 2015_back_2013 2025_back_2023
+PYTHONPATH=src python src/figures.py llm-aid --collections 2015_back_2013 2025_back_2023
+
+# Post-humanization distributions
+PYTHONPATH=src python src/figures.py pangram-humanized --collections 2015_back_2013 2025_back_2023
+PYTHONPATH=src python src/figures.py gptzero-humanized --collections 2015_back_2013 2025_back_2023
+
+# Pangram vs GPTZero agreement (2×2 panels by condition)
+PYTHONPATH=src python src/figures.py agreement --collections 2015_back_2013 2025_back_2023
+PYTHONPATH=src python src/figures.py agreement-humanized --collections 2015_back_2013 2025_back_2023
+```
+
+### Standard output filenames
+
+| File | Description |
+|------|-------------|
+| `pangram_distributions.png` | Pangram scores before humanization |
+| `gptzero_distributions.png` | GPTZero scores before humanization |
+| `llm_aid_distributions.png` | LLM-assisted scores before humanization |
+| `post_huminization_ai_detection.png` | Pangram after humanization |
+| `post_huminization_ai_detection_gptzero.png` | GPTZero after humanization |
+| `pr_curves_pre.png` | Precision–recall (proxy labels, pre-humanization) |
+| `pangram_vs_gptzero.png` | Agreement scatter, pre-humanization |
+| `pangram_vs_gptzero_humanized.png` | Agreement scatter, post-humanization |
+| `abstract_counts_min25.png` | Scrape coverage (from `abstracts` subcommand) |
+
+With multiple `--collections`, files are placed in `results/figures/{collection}/` automatically.
+
+### Alternate / legacy plot entry points
+
+These wrap the same logic or older layouts:
+
+```bash
+python src/plot_pangram_grid.py --collections 2015_back_2013 2025_back_2023
+python src/plot_detector_grids.py --collections 2015_back_2013 2025_back_2023
+python src/plot_pangram_vs_gptzero_agreement.py --collections 2015_back_2013 2025_back_2023
+python src/compare_pangram_distributions.py --collections 2015_back_2013 2025_back_2023
+```
+
+If matplotlib warns about cache permissions, set `export MPLCONFIGDIR=.mplconfig` (or another writable directory) before plotting.
+
+## Legacy / exploratory scripts
+
+Earlier workflow steps remain in `src/` for one-off use:
+
+| Script | Purpose |
+|--------|---------|
+| `pangram_abstracts.py` | Batch Pangram on scraped abstracts only |
+| `analyze_pangram_results.py` | Histogram summaries of early Pangram JSON |
+| `pangram_test.py` | Ad-hoc Pangram API tests |
+| `summarize_preai_pangram.py` | Domain × type summaries of `ai_improvement_results` |
+
+## Project structure
 
 ```
 .
-├── papers/
-│   ├── {collection}/
-│   │   ├── metadata_{collection}.jsonl  # Paper metadata
-│   │   ├── {domain}/
-│   │   │   ├── abstracts/          # Abstract text files
-│   │   │   ├── pdfs/               # PDF files
-│   │   │   └── text/               # Extracted text files
-├── ai_improvement/                 # Improved/new/rewritten abstracts by domain/variant
-├── ai_improvement_results/         # Detector results on improved/new/rewritten (original pipeline)
-├── humanization/
-│   ├── {collection}/{domain}/{variant}/{paper_id}.json
-│   │   # Original + humanized abstracts + Undetectable metadata
-├── humanization_results/
-│   ├── {collection}/{domain}/{variant}_{detector}_results/{paper_id}.json
-│   │   # Detector results (PANGRAM/GPTZero/LLM-assisted) on humanized abstracts
-├── pangram_abstracts_results.json  # PANGRAM detection results on original abstracts
+├── papers/                         # OpenAlex scrape per collection/domain
+├── ai_improvement/                 # LLM rewrite JSONs (*_abstracts/)
+├── ai_improvement_results/         # Detector scores before humanization
+├── humanization/                   # Original + humanized text (Undetectable)
+├── humanization_results/           # Detector scores after humanization
+├── results/
+│   ├── figures/{collection}/       # All generated plots
+│   └── statistics/{collection}/  # Tests, tables, example snippets
 ├── src/
-│   ├── paper_scrape.py             # Step 1: Scrape papers
-│   ├── pangram_abstracts.py        # Step 2: Process original abstracts with PANGRAM
-│   ├── analyze_pangram_results.py  # Step 3: Analyze original PANGRAM results
-│   ├── humanization_undetectable.py# Step 4: Humanize abstracts with Undetectable
-│   └── humanization_ai_detection.py# Step 5: Run detector on humanized abstracts
-└── .env                            # Environment variables (create this)
+│   ├── paper_scrape.py
+│   ├── humanization_undetectable.py
+│   ├── humanization_ai_detection.py
+│   ├── humanization.py             # Stage humanization folders (no API)
+│   ├── paper_stats.py              # Main analysis + triggers robustness
+│   ├── robustness_analysis.py      # Threshold/PR/paired robustness
+│   ├── figures.py                  # Unified figure generator
+│   ├── plot_pangram_grid.py
+│   ├── plot_detector_grids.py
+│   ├── plot_pangram_vs_gptzero_agreement.py
+│   └── visualize_abstracts.py
+└── .env
 ```
 
 ## Requirements
 
 - Python 3.9+
-- Virtual environment
-- PANGRAM API key
-- GPTZero API key
-- OpenRouter API key (for `llm_assisted`)
-- Undetectable.AI API key
-- Internet connection (for API calls)
+- API keys listed above
+- Internet access for OpenAlex and detector APIs
