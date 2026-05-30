@@ -193,6 +193,16 @@ Outputs per collection under `results/statistics/{collection}/`:
 
 `paper_stats.py` also invokes `robustness_analysis.py` when available (writes PR figure path below).
 
+### Humanization linguistic mechanisms
+
+Paired pre/post analysis of `original_abstract` vs `humanized_abstract` (AWL, long-token ratio, type-token ratio, sentence length, etc.):
+
+```bash
+PYTHONPATH=src python3 src/humanization_linguistic_analysis.py
+```
+
+Writes `results/statistics/humanization_linguistics/` (`paired_feature_rows.csv`, `tests_humanization_features.json`, `summary.md`, `appendix_snippet.tex`).
+
 ### Robustness-only rerun
 
 ```bash
