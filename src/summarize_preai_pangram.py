@@ -13,12 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DOMAINS = ["chemistry", "computer_science", "political_science", "theology"]
 
 # New naming for reporting/plots
-TYPE_ALIAS = {
-    "original": "original",
-    "improved": "refine",   # improve -> refine
-    "new": "new",
-    "rewritten": "polish",  # rewrite -> polish
-}
+from variants import VARIANT_LABEL, normalize_variant_raw, parse_result_dir
 
 
 def _extract_score(d: dict) -> Optional[float]:
@@ -33,11 +28,12 @@ def _extract_score(d: dict) -> Optional[float]:
 
 
 def _infer_type_from_dirname(dirname: str) -> Optional[str]:
-    # dirname looks like "<type>_pangram_results"
-    if not dirname.endswith("_pangram_results"):
-        return None
-    t = dirname.replace("_pangram_results", "")
-    return t if t in TYPE_ALIAS else None
+    parsed = parse_result_dir(dirname)
+    if parsed:
+        return normalize_variant_raw(parsed[0])
+    if dirname.endswith("_pangram_results"):
+        return normalize_variant_raw(dirname.replace("_pangram_results", ""))
+    return None
 
 
 @dataclass
@@ -72,13 +68,13 @@ def summarize_collection(collection: str) -> List[SummaryRow]:
             continue
 
         # Gather scores by old-type name (original/improved/new/rewritten)
-        scores_by_type: Dict[str, List[float]] = {t: [] for t in TYPE_ALIAS.keys()}
+        scores_by_type: Dict[str, List[float]] = {}
 
         for subdir in dom_dir.iterdir():
             if not subdir.is_dir():
                 continue
-            old_type = _infer_type_from_dirname(subdir.name)
-            if old_type is None:
+            variant_raw = _infer_type_from_dirname(subdir.name)
+            if variant_raw is None:
                 continue
             for p in subdir.glob("W*.json"):
                 try:
@@ -87,9 +83,9 @@ def summarize_collection(collection: str) -> List[SummaryRow]:
                     continue
                 s = _extract_score(d)
                 if s is not None:
-                    scores_by_type[old_type].append(s)
+                    scores_by_type.setdefault(variant_raw, []).append(s)
 
-        for old_type, xs in scores_by_type.items():
+        for variant_raw, xs in scores_by_type.items():
             if not xs:
                 continue
             n = len(xs)
@@ -102,7 +98,7 @@ def summarize_collection(collection: str) -> List[SummaryRow]:
                 SummaryRow(
                     collection=collection,
                     domain=dom,
-                    type=TYPE_ALIAS[old_type],
+                    type=VARIANT_LABEL.get(variant_raw, variant_raw),
                     n=n,
                     mean=mean,
                     median=med,

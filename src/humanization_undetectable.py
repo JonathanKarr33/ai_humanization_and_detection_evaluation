@@ -13,10 +13,10 @@ Inputs (discovered from existing project structure; no prior minimal humanizatio
         ...
       }
 
-- Improved / new / rewritten abstracts:
-    ai_improvement/{collection}/{domain}/improved_abstracts/{paper_id}.json
-    ai_improvement/{collection}/{domain}/new_abstracts/{paper_id}.json
-    ai_improvement/{collection}/{domain}/rewritten_abstracts/{paper_id}.json
+- Rewrite abstracts:
+    ai_improvement/{collection}/{domain}/refine_abstract_only/{paper_id}.json
+    ai_improvement/{collection}/{domain}/refine_abstract_article/{paper_id}.json
+    ai_improvement/{collection}/{domain}/new_article_only/{paper_id}.json
       {
         "id": "...",
         "domain": "...",
@@ -29,7 +29,7 @@ Outputs (one combined JSON per paper/variant, under humanization/):
     {
       "paper_id": "...",
       "domain": "...",
-      "variant": "original" | "improved" | "new" | "rewritten",
+      "variant": "original" | "refine_abstract_only" | "refine_abstract_article" | "new_article_only",
       "original_abstract": "...",
       "humanized_abstract": "...",
       "undetectable": {
@@ -51,6 +51,7 @@ from typing import Iterable, List, Optional, Tuple
 import requests
 from dotenv import load_dotenv
 from tqdm import tqdm
+from variants import AI_IMPROVEMENT_SUBDIRS, VARIANTS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,8 +61,6 @@ HUMANIZATION_DIR = ROOT / "humanization"
 
 DEFAULT_COLLECTION = "2025_back_2023"
 DOMAINS = ["chemistry", "computer_science", "political_science", "theology"]
-VARIANTS = ["original", "improved", "new", "rewritten"]
-
 UNDETECTABLE_SUBMIT_URL = "https://humanize.undetectable.ai/submit"
 UNDETECTABLE_DOCUMENT_URL = "https://humanize.undetectable.ai/document"
 UNDETECTABLE_CREDITS_URL = "https://humanize.undetectable.ai/check-user-credits"
@@ -133,45 +132,30 @@ def build_input_items(
     Collect all (domain, variant, input_path) triples to process directly from the existing structure:
 
     - original:  papers/{collection}/{domain}/paper_jsons/W*.json
-    - improved:  ai_improvement/{collection}/{domain}/improved_abstracts/W*.json
-    - new:       ai_improvement/{collection}/{domain}/new_abstracts/W*.json
-    - rewritten: ai_improvement/{collection}/{domain}/rewritten_abstracts/W*.json
+    - refine_* / new_article_only: ai_improvement/{collection}/{domain}/{variant}/W*.json
     """
     items: List[Tuple[str, str, Path]] = []
 
     papers_base = ROOT / "papers" / collection
     ai_imp_base = ROOT / "ai_improvement" / collection
+    selected = set(_iter_variants(variants))
 
     for dom in _iter_domains(domains):
-        # Original abstracts from paper_jsons
-        if "original" in _iter_variants(variants):
+        if "original" in selected:
             paper_json_dir = papers_base / dom / "paper_jsons"
             if paper_json_dir.exists():
                 for path in sorted(paper_json_dir.glob("W*.json")):
                     if path.is_file():
                         items.append((dom, "original", path))
 
-        # Improved / new / rewritten from ai_improvement
-        if "improved" in _iter_variants(variants):
-            imp_dir = ai_imp_base / dom / "improved_abstracts"
-            if imp_dir.exists():
-                for path in sorted(imp_dir.glob("W*.json")):
+        for variant in AI_IMPROVEMENT_SUBDIRS:
+            if variant not in selected:
+                continue
+            var_dir = ai_imp_base / dom / variant
+            if var_dir.exists():
+                for path in sorted(var_dir.glob("W*.json")):
                     if path.is_file():
-                        items.append((dom, "improved", path))
-
-        if "new" in _iter_variants(variants):
-            new_dir = ai_imp_base / dom / "new_abstracts"
-            if new_dir.exists():
-                for path in sorted(new_dir.glob("W*.json")):
-                    if path.is_file():
-                        items.append((dom, "new", path))
-
-        if "rewritten" in _iter_variants(variants):
-            rew_dir = ai_imp_base / dom / "rewritten_abstracts"
-            if rew_dir.exists():
-                for path in sorted(rew_dir.glob("W*.json")):
-                    if path.is_file():
-                        items.append((dom, "rewritten", path))
+                        items.append((dom, variant, path))
 
     return items
 

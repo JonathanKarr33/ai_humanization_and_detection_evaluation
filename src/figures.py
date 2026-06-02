@@ -16,19 +16,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from plot_pangram_vs_gptzero_agreement import load_pairs, plot_scatter
+from variants import VARIANT_LABEL, VARIANTS, normalize_variant_raw, parse_result_dir, result_dir_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_COLLECTIONS = ["2025_back_2023", "2015_back_2013"]
 
-CANONICAL_PROCESS_ORDER = ["original", "rewritten", "improved", "new"]
-PROCESS_LABELS = {
-    "original": "original",
-    "rewritten": "refine (abstract only)",
-    "improved": "refine (abstract + paper)",
-    "new": "new (article only)",
-}
-# Grid column keys (match paper condition names)
+CANONICAL_PROCESS_ORDER = list(VARIANTS)
+PROCESS_LABELS = VARIANT_LABEL
 GRID_TYPE_LABELS: tuple[str, ...] = tuple(PROCESS_LABELS[k] for k in CANONICAL_PROCESS_ORDER)
 TYPE_DIR_MAP: tuple[tuple[str, str], ...] = tuple(
     (raw, PROCESS_LABELS[raw]) for raw in CANONICAL_PROCESS_ORDER
@@ -37,25 +32,19 @@ FIGURES_DIR = ROOT / "results" / "figures"
 
 
 def canonical_process(value: str) -> str:
-    v = (value or "").strip().lower()
-    if v in {"polish", "rewritten", "refine (abstract only)"}:
-        return "rewritten"
-    if v in {"refine", "improve", "improved", "refine (abstract + paper)"}:
-        return "improved"
-    if v in {"original", "new", "new (article only)"}:
-        return v if v in {"original", "new"} else "new"
-    return v
+    return normalize_variant_raw(value)
 
 
 def display_process(value: str) -> str:
-    return PROCESS_LABELS.get(value, value)
+    return PROCESS_LABELS.get(value, VARIANT_LABEL.get(normalize_variant_raw(value), value))
 
 
 def _title_type(typ: str) -> str:
     short = {
         "original": "Original",
         "refine (abstract only)": "Refine (abs. only)",
-        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "refine (abstract + article)": "Refine (abs.+article)",
+        "refine (abstract + paper)": "Refine (abs.+article)",
         "new (article only)": "New (article only)",
     }
     return short.get(typ, (typ or "").replace("_", " ").title())
@@ -361,7 +350,8 @@ def build_results_dataframe_from_json(collections: list[str]) -> pd.DataFrame:
             for var_dir in domain_dir.glob("*_pangram_results"):
                 if not var_dir.is_dir():
                     continue
-                process = var_dir.name.replace("_pangram_results", "")
+                parsed = parse_result_dir(var_dir.name)
+                process = parsed[0] if parsed else var_dir.name
                 for p in var_dir.glob("W*.json"):
                     try:
                         data = json.loads(p.read_text(encoding="utf-8"))
@@ -422,7 +412,8 @@ def load_scores_from_dir(base: Path) -> Dict[str, List[float]]:
     for var_dir in base.glob("*_pangram_results"):
         if not var_dir.is_dir():
             continue
-        var = canonical_process(var_dir.name.replace("_pangram_results", ""))
+        parsed = parse_result_dir(var_dir.name)
+        var = canonical_process(parsed[0]) if parsed else canonical_process(var_dir.name)
         vals: List[float] = []
         for p in var_dir.glob("W*.json"):
             try:
@@ -459,7 +450,7 @@ def _load_pangram_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pdir = dom_dir / f"{type_dir}_pangram_results"
+            pdir = dom_dir / result_dir_name(type_dir, "pangram")
             vals: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):
@@ -485,7 +476,7 @@ def _load_humanized_pangram_grid_scores(collection: str) -> Dict[tuple[str, str]
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pdir = dom_dir / f"{type_dir}_pangram_results"
+            pdir = dom_dir / result_dir_name(type_dir, "pangram")
             vals: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):
@@ -511,7 +502,7 @@ def _load_humanized_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str]
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pdir = dom_dir / f"{type_dir}_gptzero_results"
+            pdir = dom_dir / result_dir_name(type_dir, "gptzero")
             vals: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):
@@ -537,7 +528,7 @@ def _load_gptzero_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pdir = dom_dir / f"{type_dir}_gptzero_results"
+            pdir = dom_dir / result_dir_name(type_dir, "gptzero")
             vals: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):
@@ -563,7 +554,7 @@ def _load_llm_aid_grid_scores(collection: str) -> Dict[tuple[str, str], List[flo
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pdir = dom_dir / f"{type_dir}_llm_aid_results"
+            pdir = dom_dir / result_dir_name(type_dir, "llm_assisted")
             vals: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):
@@ -833,7 +824,9 @@ def render_llm_aid_distributions(collection: str, domain: str | None, output: Pa
     scores = _load_llm_aid_grid_scores(collection)
 
     if not any(scores.values()):
-        raise RuntimeError("No LLM Aid scores found to plot. Run llm_aid result generation first.")
+        raise RuntimeError(
+            "No LLM-assisted scores found to plot. Run llm_assisted result generation first."
+        )
 
     fig, axes = plt.subplots(
         nrows=len(domains),
@@ -1107,8 +1100,8 @@ def load_pairs_humanized(collection: str) -> tuple[list[float], list[float], lis
         if not dom_dir.exists():
             continue
         for type_dir, type_label in type_dirs:
-            pang_dir = dom_dir / f"{type_dir}_pangram_results"
-            gptz_dir = dom_dir / f"{type_dir}_gptzero_results"
+            pang_dir = dom_dir / result_dir_name(type_dir, "pangram")
+            gptz_dir = dom_dir / result_dir_name(type_dir, "gptzero")
             if not pang_dir.exists() or not gptz_dir.exists():
                 continue
 
@@ -1280,7 +1273,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_llm_aid.add_argument("--collection", default=None)
     p_llm_aid.add_argument("--collections", nargs="*", default=None)
     p_llm_aid.add_argument("--domain", default=None)
-    p_llm_aid.add_argument("--output", type=Path, default=FIGURES_DIR / "llm_aid_distributions.png")
+    p_llm_aid.add_argument("--output", type=Path, default=FIGURES_DIR / "llm_assisted_distributions.png")
     p_llm_aid.set_defaults(func=run_llm_aid)
 
     p_humanized_pangram = sub.add_parser(
@@ -1293,7 +1286,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_humanized_pangram.add_argument(
         "--output",
         type=Path,
-        default=FIGURES_DIR / "post_huminization_ai_detection.png",
+        default=FIGURES_DIR / "post_humanization_ai_detection.png",
     )
     p_humanized_pangram.set_defaults(func=run_humanized_pangram)
 
@@ -1307,7 +1300,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_humanized_gptzero.add_argument(
         "--output",
         type=Path,
-        default=FIGURES_DIR / "post_huminization_ai_detection_gptzero.png",
+        default=FIGURES_DIR / "post_humanization_ai_detection_gptzero.png",
     )
     p_humanized_gptzero.set_defaults(func=run_humanized_gptzero)
 
@@ -1339,16 +1332,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--domain", default=None)
     p_all.add_argument("--pangram-output", type=Path, default=FIGURES_DIR / "pangram_distributions.png")
     p_all.add_argument("--gptzero-output", type=Path, default=FIGURES_DIR / "gptzero_distributions.png")
-    p_all.add_argument("--llm-aid-output", type=Path, default=FIGURES_DIR / "llm_aid_distributions.png")
+    p_all.add_argument("--llm-aid-output", type=Path, default=FIGURES_DIR / "llm_assisted_distributions.png")
     p_all.add_argument(
         "--humanized-pangram-output",
         type=Path,
-        default=FIGURES_DIR / "post_huminization_ai_detection.png",
+        default=FIGURES_DIR / "post_humanization_ai_detection.png",
     )
     p_all.add_argument(
         "--humanized-gptzero-output",
         type=Path,
-        default=FIGURES_DIR / "post_huminization_ai_detection_gptzero.png",
+        default=FIGURES_DIR / "post_humanization_ai_detection_gptzero.png",
     )
     p_all.add_argument("--agreement-threshold", type=float, default=0.5)
     p_all.set_defaults(func=run_all)

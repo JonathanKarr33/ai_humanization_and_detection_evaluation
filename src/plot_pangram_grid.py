@@ -8,26 +8,22 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
+from variants import VARIANT_LABEL, VARIANTS, result_dir_name
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
 
-# Folder names on disk (legacy) -> label names for plots (new)
-# Column order (left->right): original, polish, refine, new
-TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
-    ("original", "original"),
-    ("rewritten", "refine (abstract only)"),
-    ("improved", "refine (abstract + paper)"),
-    ("new", "new (article only)"),
-)
+TYPE_DIRS: Tuple[Tuple[str, str], ...] = tuple((v, VARIANT_LABEL[v]) for v in VARIANTS)
 
 
 def _title_type(typ: str) -> str:
     short = {
         "original": "Original",
         "refine (abstract only)": "Refine (abs. only)",
-        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "refine (abstract + article)": "Refine (abs.+article)",
+        "refine (abstract + paper)": "Refine (abs.+article)",
         "new (article only)": "New (article only)",
     }
     return short.get(typ, typ)
@@ -69,7 +65,7 @@ def load_scores(collection: str) -> Dict[Tuple[str, str], List[float]]:
         if not dom_dir.exists():
             continue
         for type_dir, type_label in TYPE_DIRS:
-            pdir = dom_dir / f"{type_dir}_pangram_results"
+            pdir = dom_dir / result_dir_name(type_dir, "pangram")
             scores: List[float] = []
             if pdir.exists():
                 for p in pdir.glob("W*.json"):

@@ -36,6 +36,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from nltk.stem import PorterStemmer
+from variants import DETECTORS, VARIANT_LABEL, VARIANTS, normalize_detector, result_dir_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,16 +57,6 @@ OUT_BASE = ROOT / "results" / "statistics"
 DOMAINS = ("chemistry", "computer_science", "political_science", "theology")
 STEM = {"chemistry", "computer_science"}
 NON_STEM = {"political_science", "theology"}
-VARIANTS = ("original", "rewritten", "improved", "new")
-VARIANT_LABEL = {
-    "original": "original",
-    "rewritten": "refine (abstract only)",
-    "improved": "refine (abstract + paper)",
-    "new": "new (article only)",
-}
-DETECTORS = ("pangram", "gptzero", "llm_aid", "llm_assisted")
-
-
 @dataclass
 class TestResult:
     n: int
@@ -168,7 +159,7 @@ def score_for_detector(detector: str, payload: dict) -> Optional[float]:
         return _safe_float(payload.get("ai_likelihood")) or _safe_float(payload.get("fraction_ai"))
     if detector == "gptzero":
         return _safe_float(payload.get("ai"))
-    if detector in {"llm_aid", "llm_assisted"}:
+    if detector == "llm_assisted":
         return _safe_float(payload.get("ai_probability")) or _safe_float(payload.get("ai_likelihood"))
     return None
 
@@ -186,7 +177,7 @@ def load_rows(collection: str, phase: str) -> pd.DataFrame:
             continue
         for variant in VARIANTS:
             for detector in DETECTORS:
-                result_dir = dom_dir / f"{variant}_{detector}_results"
+                result_dir = dom_dir / result_dir_name(variant, detector)
                 if not result_dir.exists():
                     continue
                 for p in sorted(result_dir.glob("W*.json")):
@@ -207,7 +198,7 @@ def load_rows(collection: str, phase: str) -> pd.DataFrame:
                             "domain_group": "stem" if domain in STEM else "non_stem",
                             "variant_raw": variant,
                             "variant": VARIANT_LABEL.get(variant, variant),
-                            "detector": detector,
+                            "detector": normalize_detector(detector),
                             "paper_id": paper_id,
                             "score": float(score),
                             "path": str(p.relative_to(ROOT)),

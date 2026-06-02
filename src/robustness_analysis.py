@@ -13,7 +13,7 @@ Addresses:
 Outputs per collection under results/statistics/{collection}/:
   - robustness_threshold_sensitivity.json / .csv
   - robustness_error_rates_ci.json
-  - robustness_paired_polish.json
+  - robustness_paired_refine_abstract_only.json
   - robustness_coverage.json
   - robustness_summary.md
 """
@@ -28,20 +28,20 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from paper_stats import (
-    OUT_BASE,
-    PRE_BASE,
-    POST_BASE,
-    VARIANT_LABEL,
-    load_rows,
-)
+from paper_stats import OUT_BASE, POST_BASE, PRE_BASE, VARIANT_LABEL, load_rows
+from variants import DETECTORS, VARIANTS, result_dir_name
 
 DEFAULT_THRESHOLDS = (0.3, 0.4, 0.5, 0.6, 0.7)
 HUMAN_VARIANT = "original"
-AI_VARIANTS = ("rewritten", "improved", "new")
+REFINE_ABSTRACT_ONLY = "refine_abstract_only"
+AI_VARIANTS = tuple(v for v in VARIANTS if v != HUMAN_VARIANT)
 DETECTORS_PRIMARY = ("pangram", "gptzero")
-DETECTORS_ALL = ("pangram", "gptzero", "llm_aid")
-DETECTOR_LABEL = {"pangram": "Pangram", "gptzero": "GPTZero", "llm_aid": "LLM-assisted"}
+DETECTORS_ALL = DETECTORS
+DETECTOR_LABEL = {
+    "pangram": "Pangram",
+    "gptzero": "GPTZero",
+    "llm_assisted": "LLM-assisted",
+}
 
 FIGURES_BASE = Path(__file__).resolve().parents[1] / "results" / "figures"
 
@@ -96,8 +96,9 @@ def compute_threshold_sensitivity(df_pre: pd.DataFrame, df_post: pd.DataFrame) -
                     ai = sub[
                         (sub["detector"] == det) & (sub["variant_raw"].isin(AI_VARIANTS))
                     ]["score"].to_numpy(dtype=float)
-                    polish = sub[
-                        (sub["detector"] == det) & (sub["variant_raw"] == "rewritten")
+                    refine_only = sub[
+                        (sub["detector"] == det)
+                        & (sub["variant_raw"] == REFINE_ABSTRACT_ONLY)
                     ]["score"].to_numpy(dtype=float)
                     rows.append(
                         {
@@ -108,10 +109,10 @@ def compute_threshold_sensitivity(df_pre: pd.DataFrame, df_post: pd.DataFrame) -
                             "threshold": tau,
                             "fpr_original": _flag_rate(human, tau),
                             "fnr_ai_labeled": _fnr_rate(ai, tau),
-                            "polish_flagged_rate": _flag_rate(polish, tau),
+                            "refine_abstract_only_flagged_rate": _flag_rate(refine_only, tau),
                             "n_human": int(human.size),
                             "n_ai": int(ai.size),
-                            "n_polish": int(polish.size),
+                            "n_refine_abstract_only": int(refine_only.size),
                         }
                     )
     return rows
@@ -163,11 +164,8 @@ def compute_error_rate_cis(
     return rows
 
 
-def compute_paired_polish_shifts(df_pre: pd.DataFrame, tau: float = 0.5) -> List[dict]:
-    """
-    For each paper, compare original vs polish scores (same detector).
-  Measures how often light editing flips a below-threshold human text to flagged.
-    """
+def compute_paired_refine_abstract_only_shifts(df_pre: pd.DataFrame, tau: float = 0.5) -> List[dict]:
+    """For each paper, compare original vs refine (abstract only) scores (same detector)."""
     rows: List[dict] = []
     for collection in df_pre["collection"].unique():
         period = _period_label(collection)
@@ -176,19 +174,17 @@ def compute_paired_polish_shifts(df_pre: pd.DataFrame, tau: float = 0.5) -> List
             orig = sub[(sub["detector"] == det) & (sub["variant_raw"] == HUMAN_VARIANT)][
                 ["paper_id", "domain", "score"]
             ].rename(columns={"score": "score_orig"})
-            polish = sub[(sub["detector"] == det) & (sub["variant_raw"] == "rewritten")][
-                ["paper_id", "domain", "score"]
-            ].rename(columns={"score": "score_polish"})
-            merged = orig.merge(polish, on=["paper_id", "domain"], how="inner")
+            refine = sub[
+                (sub["detector"] == det) & (sub["variant_raw"] == REFINE_ABSTRACT_ONLY)
+            ][["paper_id", "domain", "score"]].rename(columns={"score": "score_refine"})
+            merged = orig.merge(refine, on=["paper_id", "domain"], how="inner")
             if merged.empty:
                 continue
-            delta = merged["score_polish"] - merged["score_orig"]
+            delta = merged["score_refine"] - merged["score_orig"]
             orig_flag = merged["score_orig"] >= tau
-            polish_flag = merged["score_polish"] >= tau
-            # Human below threshold -> polish flagged (assisted-writing false positive)
-            assisted_fp = (~orig_flag & polish_flag).mean()
-            # Human flagged -> polish not flagged (unusual)
-            flip_down = (orig_flag & ~polish_flag).mean()
+            refine_flag = merged["score_refine"] >= tau
+            assisted_fp = (~orig_flag & refine_flag).mean()
+            flip_down = (orig_flag & ~refine_flag).mean()
             rows.append(
                 {
                     "collection": collection,
@@ -196,10 +192,10 @@ def compute_paired_polish_shifts(df_pre: pd.DataFrame, tau: float = 0.5) -> List
                     "detector": det,
                     "threshold": tau,
                     "n_pairs": int(len(merged)),
-                    "mean_score_delta_polish_minus_orig": float(delta.mean()),
+                    "mean_score_delta_refine_minus_orig": float(delta.mean()),
                     "median_score_delta": float(delta.median()),
                     "fraction_orig_flagged": float(orig_flag.mean()),
-                    "fraction_polish_flagged": float(polish_flag.mean()),
+                    "fraction_refine_flagged": float(refine_flag.mean()),
                     "assisted_fp_rate": float(assisted_fp),
                     "fraction_flag_removed": float(flip_down),
                 }
@@ -209,7 +205,7 @@ def compute_paired_polish_shifts(df_pre: pd.DataFrame, tau: float = 0.5) -> List
 
 def compute_coverage(collection: str) -> dict:
     """Estimate how many papers have full pre-detection vs post-humanization coverage."""
-    expected_variants = ("original", "rewritten", "improved", "new")
+    expected_variants = VARIANTS
     paper_sets: Dict[str, set] = {v: set() for v in expected_variants}
     post_paper_ids: set = set()
 
@@ -221,7 +217,7 @@ def compute_coverage(collection: str) -> dict:
             continue
         for variant in expected_variants:
             for det in ("pangram",):
-                rdir = domain_dir / f"{variant}_{det}_results"
+                rdir = domain_dir / result_dir_name(variant, det)
                 if rdir.exists():
                     for p in rdir.glob("W*.json"):
                         paper_sets[variant].add(p.stem)
@@ -278,7 +274,7 @@ def write_summary_md(
         lines.append(
             f"- {r['detector']} tau={r['threshold']:.1f}: "
             f"FPR={r['fpr_original']*100:.1f}%, FNR={r['fnr_ai_labeled']*100:.1f}%, "
-            f"polish flagged={r['polish_flagged_rate']*100:.1f}%"
+            f"refine (abs. only) flagged={r['refine_abstract_only_flagged_rate']*100:.1f}%"
         )
 
     lines.append("")
@@ -293,13 +289,13 @@ def write_summary_md(
         )
 
     lines.append("")
-    lines.append("## Paired original->polish (2023--2025, pre, tau=0.5)")
+    lines.append("## Paired original->refine (abstract only) (2023--2025, pre, tau=0.5)")
     for r in paired_rows:
         if r["period"] != "2023--2025":
             continue
         lines.append(
-            f"- {r['detector']}: n={r['n_pairs']}, mean Δscore={r['mean_score_delta_polish_minus_orig']:.3f}, "
-            f"assisted-FP rate (human clear, polish flagged)={r['assisted_fp_rate']*100:.1f}%"
+            f"- {r['detector']}: n={r['n_pairs']}, mean Δscore={r['mean_score_delta_refine_minus_orig']:.3f}, "
+            f"assisted-FP rate (human clear, refine flagged)={r['assisted_fp_rate']*100:.1f}%"
         )
 
     lines.append("")
@@ -400,7 +396,7 @@ def plot_pr_curves(pr_rows: List[dict], collection: str, out_path: Path) -> None
     if not period_rows:
         return
     fig, ax = plt.subplots(figsize=(5, 4))
-    colors = {"pangram": "#2563eb", "gptzero": "#dc2626", "llm_aid": "#16a34a"}
+    colors = {"pangram": "#2563eb", "gptzero": "#dc2626", "llm_assisted": "#16a34a"}
     for r in period_rows:
         if "recall_curve" not in r:
             continue
@@ -515,7 +511,7 @@ def run_collection(collection: str, tau: float, n_boot: int, seed: int) -> None:
 
     threshold_rows = compute_threshold_sensitivity(df_pre, df_post)
     ci_rows = compute_error_rate_cis(df_pre, df_post, tau=tau, n_boot=n_boot, seed=seed)
-    paired_rows = compute_paired_polish_shifts(df_pre, tau=tau)
+    paired_rows = compute_paired_refine_abstract_only_shifts(df_pre, tau=tau)
     coverage = compute_coverage(collection)
 
     (out_dir / "robustness_threshold_sensitivity.json").write_text(
@@ -526,7 +522,7 @@ def run_collection(collection: str, tau: float, n_boot: int, seed: int) -> None:
     (out_dir / "robustness_error_rates_ci.json").write_text(
         json.dumps(ci_rows, indent=2) + "\n", encoding="utf-8"
     )
-    (out_dir / "robustness_paired_polish.json").write_text(
+    (out_dir / "robustness_paired_refine_abstract_only.json").write_text(
         json.dumps(paired_rows, indent=2) + "\n", encoding="utf-8"
     )
     (out_dir / "robustness_coverage.json").write_text(
@@ -577,7 +573,7 @@ def run_collection(collection: str, tau: float, n_boot: int, seed: int) -> None:
 
     print(f"Robustness: {collection}")
     print(f"  Threshold grid: {len(threshold_rows)} rows")
-    print(f"  Paired polish: {len(paired_rows)} detector summaries")
+    print(f"  Paired refine (abstract only): {len(paired_rows)} detector summaries")
     print(f"  Coverage: {coverage['fraction_complete_pre_among_original']:.1%} complete pre pipeline")
     print(f"  PR figure: {fig_path}")
     if pr_rows:

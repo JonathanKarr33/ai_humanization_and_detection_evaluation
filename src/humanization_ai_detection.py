@@ -13,7 +13,7 @@ Inputs (per paper_id/domain, already split by variant):
     }
 
 Outputs (same folder structure as ai_improvement_results, but under humanization_results/):
-  humanization_results/{collection}/{domain}/{original|improved|new|rewritten}_{detector}_results/{paper_id}.json
+  humanization_results/{collection}/{domain}/{variant}_{detector}_results/{paper_id}.json
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from openai import OpenAI
 from pangram import Pangram
 from pydantic import BaseModel, Field
 from tqdm import tqdm
+from variants import VARIANTS, normalize_variant_raw, result_dir_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,8 +39,6 @@ HUMANIZATION_DIR = ROOT / "humanization"
 
 DEFAULT_COLLECTION = "2025_back_2023"
 DOMAINS = ["chemistry", "computer_science", "political_science", "theology"]
-VARIANTS = ["original", "improved", "new", "rewritten"]
-
 def _read_env(name: str) -> Optional[str]:
     value = os.getenv(name)
     if value is None:
@@ -260,7 +259,8 @@ def process_humanization_with_detector(
             failed += 1
             continue
 
-        out_dir = HUMANIZATION_RESULTS_DIR / collection / domain / f"{var}_{detector}_results"
+        var = normalize_variant_raw(var)
+        out_dir = HUMANIZATION_RESULTS_DIR / collection / domain / result_dir_name(var, detector)
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"{paper_id}.json"
         if out_path.exists() and not overwrite:

@@ -25,14 +25,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from paper_stats import (
-    VARIANT_LABEL,
-    VARIANTS,
-    _perm_paired_mean,
-    _perm_spearman,
-    _text_features,
-    load_rows,
-)
+from paper_stats import _perm_paired_mean, _perm_spearman, _text_features, load_rows
+from variants import VARIANT_LABEL, VARIANTS
 
 ROOT = Path(__file__).resolve().parents[1]
 HUMANIZATION_DIR = ROOT / "humanization"

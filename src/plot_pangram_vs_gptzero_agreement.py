@@ -9,17 +9,13 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
+from variants import VARIANT_LABEL, VARIANTS, result_dir_name
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
 
-# Column/type order used everywhere else
-TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
-    ("original", "original"),
-    ("rewritten", "refine (abstract only)"),
-    ("improved", "refine (abstract + paper)"),
-    ("new", "new (article only)"),
-)
+TYPE_DIRS: Tuple[Tuple[str, str], ...] = tuple((v, VARIANT_LABEL[v]) for v in VARIANTS)
 TYPE_ORDER: Tuple[str, ...] = tuple(label for _, label in TYPE_DIRS)
 
 
@@ -27,7 +23,8 @@ def _title_type(typ: str) -> str:
     short = {
         "original": "Original",
         "refine (abstract only)": "Refine (abs. only)",
-        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "refine (abstract + article)": "Refine (abs.+article)",
+        "refine (abstract + paper)": "Refine (abs.+article)",
         "new (article only)": "New (article only)",
     }
     return short.get(typ, typ)
@@ -155,8 +152,8 @@ def load_pairs(collection: str) -> Tuple[List[float], List[float], List[str], Li
             continue
 
         for type_dir, type_label in TYPE_DIRS:
-            pang_dir = dom_dir / f"{type_dir}_pangram_results"
-            gptz_dir = dom_dir / f"{type_dir}_gptzero_results"
+            pang_dir = dom_dir / result_dir_name(type_dir, "pangram")
+            gptz_dir = dom_dir / result_dir_name(type_dir, "gptzero")
             if not pang_dir.exists() or not gptz_dir.exists():
                 continue
 

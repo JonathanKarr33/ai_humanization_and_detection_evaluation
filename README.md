@@ -46,18 +46,29 @@ UNDETECTABLE_API_KEY=your_api_key
 
 Formatting: one `KEY=value` per line, no quotes, no spaces around `=`.
 
-## Rewrite conditions and on-disk names
+## Four rewrite conditions
 
-Analysis and figures use these **display labels**. On disk, variant folders still use legacy directory names:
+Every sampled work has four text conditions (this order in distribution grids and policy figures):
 
-| Display label | Directory / `variant_raw` | Description |
-|---------------|---------------------------|-------------|
-| **original** | `original` | Unmodified abstract from OpenAlex |
-| **refine (abstract only)** | `rewritten` / `rewritten_abstracts` | LLM rewrites abstract text only |
-| **refine (abstract + paper)** | `improved` / `improved_abstracts` | LLM rewrites abstract using full paper |
-| **new (article only)** | `new` / `new_abstracts` | LLM writes new abstract from full paper |
+| Condition | Description |
+|-----------|-------------|
+| **original** | Unmodified abstract from OpenAlex |
+| **refine (abstract only)** | LLM rewrites the abstract text only |
+| **refine (abstract + article)** | LLM rewrites the abstract using the full article (PDF/body) |
+| **new (article only)** | LLM writes a new abstract from the article body only |
 
-`src/paper_stats.py` and `src/figures.py` map raw names to display labels automatically.
+### On-disk names (`variant_raw`)
+
+Folder names match the conditions below (snake_case). `src/variants.py` is the single source of truth; older names (`rewritten`, `improved`, `new`, `llm_aid`) are accepted when reading legacy JSON via `normalize_variant_raw()`.
+
+| Condition | `variant_raw` / humanization folder | Rewrite JSON folder (`ai_improvement/`) |
+|-----------|-------------------------------------|----------------------------------------|
+| original | `original` | — (scraped under `papers/.../abstracts/`) |
+| refine (abstract only) | `refine_abstract_only` | `refine_abstract_only/` |
+| refine (abstract + article) | `refine_abstract_article` | `refine_abstract_article/` |
+| new (article only) | `new_article_only` | `new_article_only/` |
+
+Detector outputs: `{variant_raw}_{detector}_results/` with `detector` ∈ `pangram`, `gptzero`, `llm_assisted` (under `ai_improvement_results/` and `humanization_results/`).
 
 ## Step 1: Scrape papers (OpenAlex)
 
@@ -92,9 +103,9 @@ Rewritten abstracts live under:
 
 ```
 ai_improvement/{collection}/{domain}/
-  improved_abstracts/{paper_id}.json
-  new_abstracts/{paper_id}.json
-  rewritten_abstracts/{paper_id}.json
+  refine_abstract_only/{paper_id}.json
+  refine_abstract_article/{paper_id}.json
+  new_article_only/{paper_id}.json
 ```
 
 Each JSON should include at least `id` (or paper id), `domain`, and `abstract` (rewrite text).
@@ -105,7 +116,7 @@ Detector JSONs for **original + all rewrites** are stored under:
 
 ```
 ai_improvement_results/{collection}/{domain}/
-  {original|rewritten|improved|new}_{pangram|gptzero|llm_aid}_results/{paper_id}.json
+  {variant_raw}_{pangram|gptzero|llm_assisted}_results/{paper_id}.json
 ```
 
 Each file should include a detector score (`ai_likelihood` or `fraction_ai` for Pangram; `ai` for GPTZero; `ai_probability` for LLM-assisted) and ideally `text`, `paper_id`, and `domain`.
@@ -122,12 +133,12 @@ python src/humanization_undetectable.py --collection 2015_back_2013
 Reads:
 
 - Originals: `papers/{collection}/{domain}/paper_jsons/`
-- Rewrites: `ai_improvement/{collection}/{domain}/*_abstracts/`
+- Rewrites: `ai_improvement/{collection}/{domain}/{refine_abstract_only|refine_abstract_article|new_article_only}/`
 
 Writes:
 
 ```
-humanization/{collection}/{domain}/{original|improved|new|rewritten}/{paper_id}.json
+humanization/{collection}/{domain}/{variant_raw}/{paper_id}.json
 ```
 
 Each file contains `original_abstract`, `humanized_abstract`, and full Undetectable API metadata (`undetectable`).
@@ -184,7 +195,7 @@ Outputs per collection under `results/statistics/{collection}/`:
 | `example_case.json` | Auto-selected flip example |
 | `robustness_threshold_sensitivity.csv` | FPR/FNR at τ ∈ {0.4, 0.5, 0.6} |
 | `robustness_error_rates_ci.json` | Bootstrap CIs at τ = 0.5 |
-| `robustness_paired_polish.json` | Paired original → refine (abstract only) |
+| `robustness_paired_refine_abstract_only.json` | Paired original → refine (abstract only) |
 | `robustness_coverage.json` | Pipeline completeness |
 | `robustness_summary.md` | Combined robustness prose |
 | `error_rates_all_detectors.csv` | Error rates by detector |
@@ -202,6 +213,16 @@ PYTHONPATH=src python3 src/humanization_linguistic_analysis.py
 ```
 
 Writes `results/statistics/humanization_linguistics/` (`paired_feature_rows.csv`, `tests_humanization_features.json`, `summary.md`, `appendix_snippet.tex`).
+
+### Policy-oriented figures (recommended over PR curves for reporting)
+
+Flag rates by condition, domain, pre/post evasion FNR, and humanization feature shifts:
+
+```bash
+PYTHONPATH=src python3 src/plot_policy_figures.py --collections 2015_back_2013 2025_back_2023
+```
+
+Writes `results/figures/{collection}/flag_rates_by_condition.png`, `domain_flag_rates.png`, `evasion_pre_post_fnr.png`, `humanization_feature_shift.png`, `assisted_editing_roc.png`, `assisted_editing_roc_pr.png`, `rewrite_condition_roc_pr.png`, `threshold_tradeoff.png`.
 
 ### Robustness-only rerun
 
@@ -246,9 +267,9 @@ PYTHONPATH=src python src/figures.py agreement-humanized --collections 2015_back
 |------|-------------|
 | `pangram_distributions.png` | Pangram scores before humanization |
 | `gptzero_distributions.png` | GPTZero scores before humanization |
-| `llm_aid_distributions.png` | LLM-assisted scores before humanization |
-| `post_huminization_ai_detection.png` | Pangram after humanization |
-| `post_huminization_ai_detection_gptzero.png` | GPTZero after humanization |
+| `llm_assisted_distributions.png` | LLM-assisted scores before humanization |
+| `post_humanization_ai_detection.png` | Pangram after humanization |
+| `post_humanization_ai_detection_gptzero.png` | GPTZero after humanization |
 | `pr_curves_pre.png` | Precision–recall (proxy labels, pre-humanization) |
 | `pangram_vs_gptzero.png` | Agreement scatter, pre-humanization |
 | `pangram_vs_gptzero_humanized.png` | Agreement scatter, post-humanization |
@@ -293,6 +314,7 @@ Earlier workflow steps remain in `src/` for one-off use:
 │   ├── figures/{collection}/       # All generated plots
 │   └── statistics/{collection}/  # Tests, tables, example snippets
 ├── src/
+│   ├── variants.py                 # Canonical variant/detector names
 │   ├── paper_scrape.py
 │   ├── humanization_undetectable.py
 │   ├── humanization_ai_detection.py

@@ -13,12 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
 
 # Left->right order used elsewhere
-TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
-    ("original", "original"),
-    ("rewritten", "polish"),
-    ("improved", "refine"),
-    ("new", "new"),
-)
+from variants import VARIANT_LABEL, VARIANTS, result_dir_name
+
+TYPE_DIRS: Tuple[Tuple[str, str], ...] = tuple((v, VARIANT_LABEL[v]) for v in VARIANTS)
 
 
 def _collection_range_label(collection: str) -> str:
@@ -50,7 +47,7 @@ def extract_score(detector: str, d: dict) -> Optional[float]:
         if isinstance(s, (int, float)):
             return float(s)
         return None
-    if detector == "llm_aid":
+    if detector in {"llm_aid", "llm_assisted"}:
         s = d.get("ai_probability")
         if isinstance(s, (int, float)):
             return float(s)
@@ -62,7 +59,8 @@ def load_cell_scores(collection: str, detector: str, domain: str, type_dir: str)
     """
     Read ai_improvement_results/{collection}/{domain}/{type_dir}_{detector}_results/W*.json
     """
-    base = ROOT / "ai_improvement_results" / collection / domain / f"{type_dir}_{detector}_results"
+    det = "llm_assisted" if detector == "llm_aid" else detector
+    base = ROOT / "ai_improvement_results" / collection / domain / result_dir_name(type_dir, det)
     if not base.exists():
         return []
     xs: List[float] = []

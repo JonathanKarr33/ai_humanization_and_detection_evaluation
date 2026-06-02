@@ -8,24 +8,22 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
+from variants import VARIANT_LABEL, VARIANTS, result_dir_name
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 DOMAINS: Tuple[str, ...] = ("chemistry", "computer_science", "political_science", "theology")
 
-TYPE_DIRS: Tuple[Tuple[str, str], ...] = (
-    ("original", "original"),
-    ("rewritten", "refine (abstract only)"),
-    ("improved", "refine (abstract + paper)"),
-    ("new", "new (article only)"),
-)
+TYPE_DIRS: Tuple[Tuple[str, str], ...] = tuple((v, VARIANT_LABEL[v]) for v in VARIANTS)
 
 
 def _title_type(typ: str) -> str:
     short = {
         "original": "Original",
         "refine (abstract only)": "Refine (abs. only)",
-        "refine (abstract + paper)": "Refine (abs.+paper)",
+        "refine (abstract + article)": "Refine (abs.+article)",
+        "refine (abstract + paper)": "Refine (abs.+article)",
         "new (article only)": "New (article only)",
     }
     return short.get(typ, typ)
@@ -64,7 +62,7 @@ def extract_score(detector: str, d: dict) -> Optional[float]:
             return float(s)
         return None
 
-    if detector == "llm_aid":
+    if detector in {"llm_aid", "llm_assisted"}:
         # Observed schema: {"ai_probability": 0.65, "model_name": "openai/gpt-5-nano", ...}
         s = d.get("ai_probability")
         if isinstance(s, (int, float)):
@@ -78,7 +76,8 @@ def detector_label(detector: str) -> str:
     return {
         "pangram": "Pangram",
         "gptzero": "GPTZero",
-        "llm_aid": "LLM-Aid (gpt-5-nano)",
+        "llm_assisted": "LLM-assisted (gpt-5-nano)",
+        "llm_aid": "LLM-assisted (gpt-5-nano)",
     }.get(detector, detector)
 
 
@@ -86,7 +85,7 @@ def load_scores(collection: str, detector: str) -> Dict[Tuple[str, str], List[fl
     """
     Load detector scores for a collection from:
       ai_improvement_results/{collection}/{domain}/{type}_{detector}_results/W*.json
-    with {type} in {original, improved, new, rewritten}.
+    with variants in VARIANTS.
 
     Returns mapping (domain, plot_type_label) -> list[score].
     """
@@ -98,7 +97,8 @@ def load_scores(collection: str, detector: str) -> Dict[Tuple[str, str], List[fl
         if not dom_dir.exists():
             continue
         for type_dir, type_label in TYPE_DIRS:
-            rdir = dom_dir / f"{type_dir}_{detector}_results"
+            det = "llm_assisted" if detector == "llm_aid" else detector
+            rdir = dom_dir / result_dir_name(type_dir, det)
             scores: List[float] = []
             if rdir.exists():
                 for p in rdir.glob("W*.json"):
@@ -189,9 +189,9 @@ def main() -> None:
     ap.add_argument(
         "--detectors",
         nargs="+",
-        default=["pangram", "gptzero", "llm_aid"],
-        choices=["pangram", "gptzero", "llm_aid"],
-        help="Detectors to plot (default: pangram gptzero llm_aid).",
+        default=["pangram", "gptzero", "llm_assisted"],
+        choices=["pangram", "gptzero", "llm_assisted", "llm_aid"],
+        help="Detectors to plot (default: pangram gptzero llm_assisted).",
     )
     args = ap.parse_args()
 
